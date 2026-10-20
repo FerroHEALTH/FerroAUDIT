@@ -11,6 +11,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-20
+
+A patch release with no API change: a product pins `=0.1.1` in place of
+`=0.1.0` and changes nothing else.
+
+### Fixed
+
+- Both crates declare `rust-version = "1.97"`, the FerroHEALTH family floor,
+  in place of 1.98, which no feature needed. A product whose MSRV is 1.97,
+  such as FerroEHR, can now take them, and its `cargo hack check
+  --rust-version` lane passes. CI checks the declared MSRV on every pull
+  request with no feature and with `atna`, so a change that needs a newer
+  toolchain fails before it merges. The `balp` feature of both crates takes
+  `fhir-types`, which declares `rust-version = "1.98"` itself, so a build
+  with `balp` still needs 1.98, and Cargo says so by naming `fhir-types`
+  (#14).
+
 ## [0.1.0] - 2026-10-20
 
 The first release: the shared IHE audit crate of the FerroHEALTH products,
@@ -54,5 +71,6 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/FerroHEALTH/FerroAUDIT/releases/tag/v0.1.0
