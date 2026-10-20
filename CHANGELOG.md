@@ -11,6 +11,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
 The audit content the FerroFED and FerroEHR migrations found missing, the
 correctness of the EHDS retention, and the packaging those migrations asked
 for. Public APIs of both crates break, so a product changes what the
@@ -162,6 +164,7 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/FerroHEALTH/FerroAUDIT/releases/tag/v0.1.0
