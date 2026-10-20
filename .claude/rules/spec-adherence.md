@@ -20,9 +20,14 @@ version `docs/VERSIONS.md` pins, and the design of record,
    `docs/specs/ihe-balp-pages/`, the Volume 1 and Volume 3 text): the audit
    patterns, their slices and fixed codings, and the token-to-agent mapping
    of §3:5.7.5.4.
-4. **The texts they cite**, by link: DICOM PS3.15 Annex A.5, RFC 5424, RFC
+4. **For `ehds-logging`, Regulation (EU) 2025/327** (`docs/specs/eu-ehds/`,
+   with Implementing Regulation (EU) 2026/2099, the eHealth Network Patient
+   Summary and General Guidelines and the reuse Decision), and the HL7 Europe
+   and MyHealth@EU packages the Article 14(1) categories are held to
+   (`docs/specs/eu-hl7-*/`, `docs/specs/ehdsi-mvc/`).
+5. **The texts they cite**, by link: DICOM PS3.15 Annex A.5, RFC 5424, RFC
    5425, RFC 6587 and FHIR R4 (4.0.1).
-5. **The docs.rs pages of the pinned crates** (`quick-xml`, `rustls`,
+6. **The docs.rs pages of the pinned crates** (`quick-xml`, `rustls`,
    `tokio-rustls`, `reqwest`, `secrecy`, `fhir-types`), the Rust book and
    reference, for every question about the tools.
 

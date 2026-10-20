@@ -26,6 +26,7 @@ cd "$(dirname "$0")/../.."
 # The published members, in dependency order.
 readonly CRATES=(
   ihe-atna
+  ehds-logging
 )
 
 # The version cargo resolves for one member: its own, or the workspace's when

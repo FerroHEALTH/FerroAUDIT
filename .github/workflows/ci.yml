@@ -283,7 +283,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache: "false"
-      - run: cargo publish -p ihe-atna --dry-run --locked
+      - run: cargo publish --workspace --dry-run --locked
 
   crate-version-guard:
     name: crate-version-guard

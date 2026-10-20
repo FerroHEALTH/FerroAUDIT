@@ -13,8 +13,10 @@
 #   2. the BALP package  the PROVENANCE.md names the pinned version and
 #                        tarball sha256, and the tree still hashes to the
 #                        digest it records.
-#   3. the BALP pages    the PROVENANCE.md names the row's pin-set digest, and
-#                        the tree still hashes to the digest it records.
+#   3. the pinned corpora  the BALP pages, the EHDS acts and the four packages
+#                        the categories are read against: each PROVENANCE.md
+#                        names its row's pin-set digest, and each tree still
+#                        hashes to the digest it records.
 #   4. the design        the pin table of docs/architecture.md names the
 #                        same BALP version as the matrix.
 #   5. the licence       no first-party file claims a licence other than
@@ -120,17 +122,28 @@ else
   fail "$balp/PROVENANCE.md is missing"
 fi
 
-# ---- 3. the BALP pages ------------------------------------------------------
-pages="docs/specs/ihe-balp-pages"
-if [ -f "$pages/PROVENANCE.md" ]; then
-  want="$(hashes "$(corpus_pin_cell "IHE BALP narrative pages")" | sed -n 1p)"
-  got="$(provenance_digest "$pages/PROVENANCE.md" "Pin-set digest")"
-  [ "$got" = "$want" ] || fail "$pages/PROVENANCE.md records pin-set digest ${got:-nothing}, docs/VERSIONS.md $want"
-  tree_at "$pages"
-  ok "the BALP pages at pin-set digest $want"
-else
-  fail "$pages/PROVENANCE.md is missing"
-fi
+# ---- 3. the corpora pinned file by file -------------------------------------
+# pinned_at DIR ITEM: the PROVENANCE.md of DIR names the pin-set digest of the
+# ITEM row, and the tree still hashes to the digest it records.
+pinned_at() {
+  local dir="$1" item="$2" want got
+  if [ ! -f "$dir/PROVENANCE.md" ]; then
+    fail "$dir/PROVENANCE.md is missing"
+    return 0
+  fi
+  want="$(hashes "$(corpus_pin_cell "$item")" | sed -n 1p)"
+  got="$(provenance_digest "$dir/PROVENANCE.md" "Pin-set digest")"
+  [ "$got" = "$want" ] || fail "$dir/PROVENANCE.md records pin-set digest ${got:-nothing}, docs/VERSIONS.md $want"
+  tree_at "$dir"
+  ok "$item at pin-set digest $want"
+}
+
+pinned_at docs/specs/ihe-balp-pages "IHE BALP narrative pages"
+pinned_at docs/specs/eu-ehds "EU EHDS Regulation"
+pinned_at docs/specs/eu-hl7-health-data-api "HL7 Europe EU Health Data API"
+pinned_at docs/specs/eu-hl7-imaging "HL7 Europe Imaging Report"
+pinned_at docs/specs/eu-hl7-hdr "HL7 Europe Hospital Discharge Report"
+pinned_at docs/specs/ehdsi-mvc "MyHealth@EU Master Value Sets Catalogue"
 
 # ---- 4. the design ----------------------------------------------------------
 architecture="docs/architecture.md"

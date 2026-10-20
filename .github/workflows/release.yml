@@ -192,9 +192,11 @@ jobs:
           assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           printf '%s\n' "$assets"
           missing=""
-          for suffix in ".crate" ".crate.sha256sum" ".crate.sigstore.json"; do
-            printf '%s\n' "$assets" | grep -Fxq "ihe-atna-${VERSION}${suffix}" \
-              || missing="$missing ihe-atna-${VERSION}${suffix}"
+          for name in ihe-atna ehds-logging; do
+            for suffix in ".crate" ".crate.sha256sum" ".crate.sigstore.json"; do
+              printf '%s\n' "$assets" | grep -Fxq "${name}-${VERSION}${suffix}" \
+                || missing="$missing ${name}-${VERSION}${suffix}"
+            done
           done
           if [ -n "$missing" ]; then
             echo "::error::the draft is missing assets, so it will not be published:$missing" >&2

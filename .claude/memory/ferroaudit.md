@@ -1,6 +1,6 @@
 ---
 name: ferroaudit
-description: "FerroAUDIT is the shared IHE audit library of the FerroHEALTH products: the ATNA ITI-20 sender and BALP over the ATX: FHIR Feed, moved from FerroFED's ihe-iti; every product sends audit through it, FerroSYS builds the Audit Record Repository on it; owner 2026-10-20"
+description: "FerroAUDIT is the shared audit library of the FerroHEALTH products: ihe-atna (the ATNA ITI-20 sender and BALP over the ATX: FHIR Feed, moved from FerroFED's ihe-iti) and ehds-logging (the EHDS logging component); every product sends audit through it, FerroSYS builds the Audit Record Repository on it; owner 2026-10-20"
 metadata:
   type: project
 ---
@@ -21,6 +21,11 @@ SMART crate (owner, 2026-10-20, recorded on FerroHEALTH/FerroFED#367).
   Manager-side BALP records and the profile audit writers of FerroPIX's
   `ihe-iti`. FerroSYS, the control plane, later builds the receiving Audit
   Record Repository on this crate, as a feature of it.
+- **`ehds-logging`** (owner decision 2026-10-20): the EHDS Regulation
+  (EU) 2025/327 logging component moved here from FerroFED (0.0.26 there) as
+  the second crate on the same version line, its `balp` feature on
+  `ihe-atna`. FerroEHR, which implemented the same law in its server, adopts
+  it in its own issue.
 - **No product reimplements audit again.** A behaviour a product needs is
   filed here and built here.
 - **Where it came from:** FerroFED's `ihe-iti` features `atna` and `balp`,

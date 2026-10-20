@@ -6,8 +6,11 @@
 **FerroAUDIT** is the shared IHE audit library of the FerroHEALTH products:
 the ATNA Record Audit Event sender (ITI-20) and the Basic Audit Log Patterns
 (BALP) `AuditEvent` sent over ITI-20's ATX: FHIR Feed. It is one Cargo
-workspace with the library crate `ihe-atna` (Rust path `ihe_atna`, published
-to crates.io), the way FerroSMART is the family's shared SMART crate.
+workspace with two library crates on one version line, both published to
+crates.io: `ihe-atna` (Rust path `ihe_atna`) and `ehds-logging`, the EHDS
+logging component (Regulation (EU) 2025/327), whose access record travels as
+a BALP `AuditEvent` through `ihe-atna`. FerroSMART is the family's shared
+SMART crate in the same way.
 
 FerroAUDIT in prose, `ihe-atna` in identifiers. The repository, the crate
 name and its licence are the owner's decision of 2026-10-20
@@ -36,6 +39,11 @@ Audit Record Repository on it. The code came from FerroFED's `ihe-iti`
   client records through, and the ATX: FHIR Feed client (`atna::feed`).
 - `user` (always): whom an audited exchange is made for, a user an OAuth
   2.0 access token names or the system.
+- `ehds-logging`: the Annex II 3.2 access record, the Article 14(1)
+  categories and the map that classifies an access, the Article 9(2)
+  retention, the security labels, and (feature `balp`) the record as a BALP
+  `AuditEvent` with a sink over an `ihe-atna` recorder. It moved from FerroFED
+  (0.0.26 there); FerroEHR adopts it in place of its own implementation.
 
 ## The design is recorded in `docs/architecture.md`
 
@@ -53,8 +61,13 @@ the oracle, pinned in `docs/VERSIONS.md` and held to their provenance by
   spool and the forwarder against local listeners, the FHIR Feed against a
   `wiremock` repository, the records against the vendored BALP corpus, the
   feature boundaries; every patient identifier synthetic).
+- `crates/ehds-logging`: the EHDS logging component. `src/` (`record`,
+  `category`, `map`, `classify`, `retention`, `label`, `emergency`,
+  `transformation`, `sink`, and `balp` behind its feature), `tests/it/`.
 - `docs/`: `architecture.md`, `VERSIONS.md`, `specs/` (the vendored ITI-20
-  page and RESTful ATNA supplement, the BALP package and pages, each with a
+  page and RESTful ATNA supplement, the BALP package and pages, the EHDS
+  Regulation with the acts and guidelines `ehds-logging` cites, and the HL7
+  Europe and MyHealth@EU packages the categories are held to, each with a
   `PROVENANCE.md`).
 - `scripts/`: `vendor/` (the corpus fetchers), `checks/` (the committed
   guards), `release/` (the crate publish and the milestone check), `gh/`
@@ -69,8 +82,9 @@ the oracle, pinned in `docs/VERSIONS.md` and held to their provenance by
 
 - **The specifications are the authority**: ITI-20 Record Audit Event (ITI
   TF-2 §3.20, Revision 20.2), the RESTful ATNA supplement (Rev. 3.6) and BALP
-  1.1.4, as vendored under `docs/specs/`, with the DICOM PS3.15, RFC 5424,
-  RFC 5425 and FHIR R4 texts they cite. Cite the section in every
+  1.1.4, and for `ehds-logging` Regulation (EU) 2025/327, as vendored under
+  `docs/specs/`, with the DICOM PS3.15, RFC 5424, RFC 5425 and FHIR R4 texts
+  they cite. Cite the section in every
   `// NOTE:`; never resolve a question from memory or from another
   implementation's behaviour. Where none governs a decision, say so: "no
   specification governs this: our own design"

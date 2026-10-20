@@ -38,9 +38,10 @@ allow = [
   "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
-# The project's own crate is BUSL-1.1 (LICENSE).
+# The project's own crates are BUSL-1.1 (LICENSE).
 exceptions = [
   { allow = ["BUSL-1.1"], crate = "ihe-atna" },
+  { allow = ["BUSL-1.1"], crate = "ehds-logging" },
 ]
 
 [bans]

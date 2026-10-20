@@ -4,9 +4,10 @@
 
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
 
-The shared IHE audit library of the FerroHEALTH products, in pure Rust,
-`ihe-atna` on crates.io. Every product sends its audit trail through it, so
-no product implements audit on its own.
+The shared audit library of the FerroHEALTH products, in pure Rust: the IHE
+audit trail as `ihe-atna` and the EHDS logging component as `ehds-logging`
+on crates.io. Every product sends its audit trail through them, so no
+product implements audit on its own.
 
 - **ATNA, ITI-20 Record Audit Event** (feature `atna`): the DICOM PS3.15
   audit message, the RFC 5424 syslog message it travels in with the header
@@ -18,6 +19,11 @@ no product implements audit on its own.
   `AuditEvent` an IHE FHIR transaction is audited as, written from one
   `Exchange` per transaction, and the ATX: FHIR Feed that posts it to an
   Audit Record Repository through the same spool and forwarder.
+- **EHDS logging** (crate `ehds-logging`): the record of every access to
+  personal electronic health data that Regulation (EU) 2025/327 Annex II 3.2
+  asks of an EHR system, its Article 14(1) categories and the map that
+  classifies an access, its Article 9(2) retention and security labels, and
+  the record written as a BALP `AuditEvent` sent through `ihe-atna`.
 
 A record names a patient toward its repository and nowhere else: no `Debug`
 rendering, log line or error carries an identifier, a search, a user's values
@@ -35,12 +41,13 @@ record of both.
 ```toml
 [dependencies]
 ihe-atna = { version = "=0.1.0", features = ["balp"] }
+ehds-logging = { version = "=0.1.0", features = ["balp"] }
 ```
 
 The crate documentation on docs.rs is the integration guide; the design is
 in [`docs/architecture.md`](docs/architecture.md). The specifications the
-crate implements, ITI-20 Record Audit Event, the RESTful ATNA supplement and
-BALP 1.1.4, are vendored under [`docs/specs/`](docs/specs/) at the versions
+crates implement, ITI-20 Record Audit Event, the RESTful ATNA supplement,
+BALP 1.1.4 and Regulation (EU) 2025/327, are vendored under [`docs/specs/`](docs/specs/) at the versions
 [`docs/VERSIONS.md`](docs/VERSIONS.md) pins.
 
 ## Build and test
@@ -65,7 +72,7 @@ FerroAUDIT is source-available under the Business Source License 1.1. The
 parameters that apply, the Licensor, the Licensed Work, the Additional Use
 Grant and the Change Date, are in [LICENSE](LICENSE): free for non-commercial
 production use, a commercial licence for any other production use, and Apache
-2.0 four years after each version is published. The crate is hand-written
+2.0 four years after each version is published. The crates are hand-written
 code that implements the specifications above, which is why it is under the
 family's own licence and not the Apache-2.0 of the family's generated crates.
 
