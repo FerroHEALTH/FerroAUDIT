@@ -3,14 +3,16 @@
 
 # Published crate discipline (crates.io)
 
-`crates/ihe-atna` is published on crates.io as `ihe-atna`
-so the FerroHEALTH products can depend on it. The crate is BUSL-1.1.
+`crates/ihe-atna` and `crates/ehds-logging` are published on crates.io under
+their directory names so the FerroHEALTH products can depend on them. Both
+are BUSL-1.1, and `ehds-logging` pins `ihe-atna` exactly at the workspace
+version.
 Published versions are immutable, so version hygiene is a hard rule.
 
 ## One version line
 
-The workspace `version` in the root `Cargo.toml` is the library's version and
-the release tag `vX.Y.Z`. The library inherits it (`version.workspace =
+The workspace `version` in the root `Cargo.toml` is both crates' version and
+the release tag `vX.Y.Z`. Each crate inherits it (`version.workspace =
 true`), so the tag, the crate and the changelog section always agree.
 
 ## The bump rule
@@ -37,14 +39,16 @@ authenticate with crates.io Trusted Publishing (OIDC through
 `rust-lang/crates-io-auth-action`); no long-lived crates.io token exists in
 the repository. Neither lane restores a build cache (`ci-cd.md`).
 
-`cargo publish -p ihe-atna --dry-run --locked` runs on every pull
-request as the `publish-dry-run` job.
+`cargo publish --workspace --dry-run --locked` runs on every pull request as
+the `publish-dry-run` job, `ehds-logging` packaged against the `ihe-atna`
+beside it.
 
 ## Owner steps (done once)
 
-1. The name was reserved at `0.0.0` on 2026-10-20, since a first version
-   cannot use Trusted Publishing.
-2. On crates.io, the crate's Trusted Publishing carries two GitHub entries:
+1. `ihe-atna` was reserved at `0.0.0` on 2026-10-20, since a first version
+   cannot use Trusted Publishing; `ehds-logging` was reserved at `0.0.0` on
+   2026-10-06 from FerroFED, whose 0.0.x line never published past it.
+2. On crates.io, each crate's Trusted Publishing carries two GitHub entries:
    repository owner `FerroHEALTH`, repository `FerroAUDIT`, workflows
    `release.yml` and `publish-crates.yml`, environment `crates-io`.
 3. The `crates-io` GitHub environment carries the owner as required reviewer

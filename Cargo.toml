@@ -43,9 +43,20 @@ fhir-types = { version = "0.1.113", default-features = false }
 http = "1.5.0"
 reqwest = { version = "0.13.5", default-features = false }
 serde_json = "1.0.154"
-# Test-only: the JSON reader of the written records, the spool directories,
-# the log capture of the forwarder tests, and the stub FHIR Feed repository.
+# The serde form of the access record (ehds-logging), and test-only the JSON
+# reader of the written records.
 serde = { version = "1.0.229", features = ["derive"] }
+# Test-only: the vendored HL7 Europe packages the priority categories are held
+# to (flate2, tar), the property tests of the classification map (proptest),
+# and the TOML form of the map (toml).
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+proptest = "1.12.0"
+tar = { version = "0.4.46", default-features = false }
+toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
+# The workspace's own crates, each at the workspace version.
+ihe-atna = { path = "crates/ihe-atna", version = "=0.1.0" }
+# Test-only: the spool directories, the log capture of the forwarder tests,
+# and the stub FHIR Feed repository.
 tempfile = "3.27.0"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt"] }
 wiremock = "0.6.5"

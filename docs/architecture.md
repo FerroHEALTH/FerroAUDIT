@@ -3,15 +3,20 @@
 
 # Architecture
 
-FerroAUDIT is the shared IHE audit library, `ihe-atna`, through which every
-FerroHEALTH product sends its audit trail: FerroFED's mandatory access log,
-FerroEHR's FHIR audit feed and FerroPIX's Manager-side BALP records. FerroSYS
-later builds the receiving Audit Record Repository on the same crate. It is
-the owner's decision of 2026-10-20 (FerroHEALTH/FerroFED#367), and this
-document is the design of record. No product implements audit again.
+FerroAUDIT is the shared audit library of the FerroHEALTH products. It
+publishes two crates on one version line: `ihe-atna`, through which every
+product sends its audit trail (FerroFED's mandatory access log, FerroEHR's
+FHIR audit feed and FerroPIX's Manager-side BALP records), and
+`ehds-logging`, the logging software component of an EHR system under the
+European Health Data Space Regulation, whose access record travels as a BALP
+`AuditEvent` through `ihe-atna`. FerroSYS later builds the receiving Audit
+Record Repository on the same crates. It is the owner's decision of
+2026-10-20 (FerroHEALTH/FerroFED#367), and this document is the design of
+record. No product implements audit, or the EHDS access record, again.
 
-The code was written in FerroFED's `ihe-iti` crate, behind its `atna` and
-`balp` features, and moved here with its history and its tests. Every
+The code was written in FerroFED: `ihe-atna` in the `ihe-iti` crate behind
+its `atna` and `balp` features, `ehds-logging` as its own crate at 0.0.26.
+Both moved here with their tests. Every
 decision below names its ground in a vendored specification (`docs/specs/`,
 pinned in `docs/VERSIONS.md`), and where no specification governs a decision
 the text says so: "no specification governs this: our own design".
@@ -64,6 +69,8 @@ gains its server half as a feature of the same crate.
 | RESTful ATNA | Rev. 3.6 Trial Implementation | the supplement that defines the ATX: FHIR Feed Option |
 | BALP | 1.1.4 | the version the PIXm, PDQm, mCSD and PMIR audit profiles build on |
 | FHIR | R4 (4.0.1) | BALP 1.1.4 declares FHIR 4.0.1 |
+| EHDS Regulation | Regulation (EU) 2025/327 as published, with Implementing Regulation (EU) 2026/2099 | the law `ehds-logging` implements; no consolidated text exists |
+| Article 14(1) category codes | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the code system HL7 Europe publishes for the six priority categories |
 
 The corpora carry the pins FerroFED vendored them at, re-fetched here by the
 same scripts, so the two trees hold the same bytes.
@@ -195,35 +202,78 @@ specification governs this: our own design.
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
 no HTTP client. The crate depends on no product.
 
-## 8. How a product integrates
+## 8. The `ehds-logging` crate
 
-A product pins `ihe-atna` exactly (`=0.1.x`) from crates.io and enables the
-feature it sends with. The migrations, each one pull request in the
+Regulation (EU) 2025/327 asks an EHR system that gives access to personal
+electronic health data to record every access: who accessed the data, which
+natural person, the categories of the data, when, and where it came from
+(Annex II 3.2). `ehds-logging` is that record and what classifies it:
+
+- `record`: the `AccessRecord`, with the data subject and the purpose of use
+  beside the five points of Annex II 3.2.
+- `category`: the six priority categories of Article 14(1), coded with HL7
+  Europe's `EEHRxFDocumentPriorityCategoryCS`, and the national categories a
+  deployment declares.
+- `map` and `classify`: a deployment's map from openEHR template and
+  archetype ids to categories, and the classification of one access by the
+  model ids of what it reached. An access the map cannot classify is marked
+  unclassified with its evidence; it is never refused for it.
+- `retention`: how long a record is kept, never under the three years of
+  Article 9(2). `label`: the security labels per category and origin
+  (Annex II 3.4). `emergency`: the purposes of use that assert an access in
+  the vital interests of the data subject (Article 11(5)).
+  `transformation`: the record of a semantic transformation an access
+  applied (eHealth Network General Guidelines Release 3.1 Article 6(3)).
+- `sink`: where records go; `balp` (feature `balp`): the record written as a
+  BALP `AuditEvent` through `ihe-atna`'s `balp` feature, and the sink over an
+  `ihe-atna` `AuditRecorder`.
+
+The crate depends on no interoperability component and on nothing of the
+system that builds the records, so the logging component stays independent
+of the interoperability component (Article 2(2)(n), (o)). It ships no
+category map: the deployment authors it. Its tests hold the six codes to the
+vendored HL7 Europe packages and the record to the BALP patterns.
+
+## 9. How a product integrates
+
+A product pins `ihe-atna` and, where it writes the EHDS access record,
+`ehds-logging` exactly (`=0.1.x`) from crates.io and enables the feature it
+sends with. The migrations, each one pull request in the
 product's repository:
 
-- **FerroFED:** the mandatory access log (its A58) and its `ehds-logging`
-  sink move from `ihe-iti`'s `atna` and `balp` features to this crate; the
-  paths change from `ihe_iti::atna` and `ihe_iti::balp` to `ihe_atna::atna`
-  and `ihe_atna::balp`.
+- **FerroFED:** the mandatory access log (its A58) builds `ehds-logging`
+  records, which take the place of its own copy of the crate, and sends them
+  through the `balp` sink; the paths change from `ihe_iti::atna` and
+  `ihe_iti::balp` to `ihe_atna::atna` and `ihe_atna::balp`.
 - **FerroPIX:** `ihe-iti`, which moves there, takes its profile audit records
   (the PIXm, PDQm, mCSD, PMIR and ITI-55 writers) from this crate, and the
   Manager-side BALP records go through it.
-- **FerroEHR:** its `[audit.fhir_feed]` sends through `balp` and the feed.
+- **FerroEHR:** its `[audit.fhir_feed]` sends through `balp` and the feed,
+  and its own implementation of the EHDS access record moves onto
+  `ehds-logging` (its own issue).
 - **FerroSYS:** builds the Audit Record Repository on this crate.
 
-## 9. Naming and licence
+## 10. Naming and licence
 
 The crate takes the specification's name, never a product's, as every
 published crate of the family does. It is `ihe-atna` because ATNA is the
 profile whose transaction it carries; BALP is a feature of it, since BALP's
 records travel over ATNA's FHIR Feed (BALP §1:52.1.1.1). It is under
 BUSL-1.1: hand-written code implementing a specification is BUSL in this
-family, and only generator-emitted code is Apache-2.0.
+family, and only generator-emitted code is Apache-2.0. `ehds-logging` takes
+the name of the component the Regulation defines, the European logging
+software component (Article 2(2)(o)).
 
-## 10. Verification
+Both crates inherit the workspace version and release together under one
+tag; `ehds-logging` pins `ihe-atna` exactly at that version. The line starts
+at 0.1.0, above FerroFED's last `ehds-logging` 0.0.26. No specification
+governs this: our own design.
+
+## 11. Verification
 
 The tests run on every pull request (`.github/workflows/ci.yml`): the spool
 and forwarder against local listeners, the FHIR Feed against a `wiremock`
 repository, the written records against the vendored BALP Read pattern and
-capability statements, and the store-and-forward against the vendored ITI-20
-text. Every patient identifier in them is synthetic.
+capability statements, the store-and-forward against the vendored ITI-20
+text, and the Article 14(1) category codes against the vendored HL7 Europe
+packages. Every patient identifier in them is synthetic.
