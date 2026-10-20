@@ -34,7 +34,7 @@
 //! message the repository refused ([`Spool::reject`]). A quarantined message
 //! stays counted under the bounds until an operator removes it; in memory,
 //! it stays held until the process ends. A file the spool did not write refuses [`Spool::open`]
-//! instead, naming the file to move: in a directory only the gateway's user
+//! instead, naming the file to move: in a directory only the sender's user
 //! may enter, it was put there by hand.
 //!
 //! The bounds and the file layout are our own design: no specification
@@ -133,7 +133,7 @@ pub enum SpoolError {
     Exposed(PathBuf),
     /// The directory holds a file the spool did not write.
     #[error(
-        "the audit spool directory {} holds {}, which the gateway did not write: move that file out of the spool directory, keeping it if it may be an audit record, and start again",
+        "the audit spool directory {} holds {}, which the sender did not write: move that file out of the spool directory, keeping it if it may be an audit record, and start again",
         directory.display(),
         path.display()
     )]
@@ -149,7 +149,7 @@ pub enum SpoolError {
     NotADirectory(PathBuf),
     /// The mode of the directory admits no writer.
     #[error(
-        "the audit spool directory {} gives no user write access; grant the gateway's user write access to it",
+        "the audit spool directory {} gives no user write access; grant the sender's user write access to it",
         .0.display()
     )]
     Unwritable(PathBuf),

@@ -13,10 +13,10 @@
 
 use std::path::PathBuf;
 
-use ihe_iti::balp::{
+use ihe_atna::balp::{
     DESTINATION_ROLE, Direction, EventKind, Exchange, Outcome, Peer, READ, REST, SOURCE_ROLE,
 };
-use ihe_iti::user::{OnBehalfOf, PurposeOfUse, User};
+use ihe_atna::user::{OnBehalfOf, PurposeOfUse, User};
 use secrecy::ExposeSecret as _;
 use serde_json::Value;
 use url::Url;

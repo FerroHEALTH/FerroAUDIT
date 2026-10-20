@@ -135,12 +135,12 @@ mod tests {
 
     #[test]
     fn a_frame_counts_the_octets_of_the_message_it_carries() {
-        let sender = Sender::new("gateway.example.org", "ferrofed", "4242").expect("a sender");
+        let sender = Sender::new("gateway.example.org", "ihe-atna", "4242").expect("a sender");
         let at: Timestamp = "2026-10-04T01:02:03.123456789Z".parse().expect("a time");
         let xml = SecretSlice::from(b"<AuditMessage/>".to_vec());
         let frame = sender.frame(at, &xml);
         let text = std::str::from_utf8(frame.expose_secret()).expect("UTF-8");
-        let message = "<85>1 2026-10-04T01:02:03.123456Z gateway.example.org ferrofed 4242 IHE+RFC-3881 - <AuditMessage/>";
+        let message = "<85>1 2026-10-04T01:02:03.123456Z gateway.example.org ihe-atna 4242 IHE+RFC-3881 - <AuditMessage/>";
         assert_eq!(format!("{} {message}", message.len()), text);
     }
 
@@ -151,7 +151,7 @@ mod tests {
                 field: "HOSTNAME",
                 limit: 255
             }),
-            Sender::new("gate way", "ferrofed", "1")
+            Sender::new("gate way", "ihe-atna", "1")
         );
         assert_eq!(
             Err(HeaderError {
@@ -160,6 +160,6 @@ mod tests {
             }),
             Sender::new("gateway", &"a".repeat(49), "1")
         );
-        assert!(Sender::new("gateway", "ferrofed", "").is_err());
+        assert!(Sender::new("gateway", "ihe-atna", "").is_err());
     }
 }

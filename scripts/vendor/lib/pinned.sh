@@ -32,7 +32,7 @@
 #
 # Requires: curl, shasum, awk, and scripts/vendor/lib/corpus.sh sourced first.
 #
-# No specification governs this file; it is FerroFED's own design.
+# No specification governs this file; it is FerroAUDIT's own design.
 
 pinned_cache_root=".vendor-cache"
 pinned_browser_ua="Mozilla/5.0"
@@ -95,10 +95,10 @@ pinned_md() {
 # paragraphs that say what the corpus is and on what ground each part is or
 # is not redistributed, AGENT `browser` for a publisher that refuses a
 # non-browser User-Agent (empty otherwise), and READ_BY the issue and code
-# that read the corpus, the #488 country research when it is not given.
+# that read the corpus, the crate's tests when it is not given.
 pinned_corpus() {
   local dir="$1" item="$2" title="$3" about="$4" agent="${5:-}"
-  local read_by=$'#488 (the country research into identity resolution,\n  localization, consent, addressing and authentication to nodes)'
+  local read_by='the tests of crates/ihe-atna'
   [ -n "${6:-}" ] && read_by="$6"
   local pins="$pinned_table"
   local dest="docs/specs/$dir" cache="$pinned_cache_root/$dir"

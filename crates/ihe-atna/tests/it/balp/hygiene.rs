@@ -3,10 +3,10 @@
 
 //! A record names the patient toward the Audit Record Repository only: no
 //! `Debug` of an exchange, an entity or a written record shows an identifier,
-//! a patient reference or the request that carries them (§5.4, N33, as the
-//! gateway holds it for every surface but the repository).
+//! a patient reference or the request that carries them (no specification
+//! governs this: our own design).
 
-use ihe_iti::balp::{
+use ihe_atna::balp::{
     DESTINATION_ROLE, Direction, Entity, EventKind, Exchange, Outcome, Peer, REST, SEARCH,
     SOURCE_ROLE,
 };
@@ -40,7 +40,7 @@ fn exchange() -> Exchange {
                     .expect("a URL"),
             ),
         },
-        on_behalf: ihe_iti::user::OnBehalfOf::System,
+        on_behalf: ihe_atna::user::OnBehalfOf::System,
         entities: vec![
             Entity::Query(SecretString::from(format!(
                 "https://pix.example.org/fhir/Patient?identifier={SEARCHED}"
@@ -66,10 +66,9 @@ fn no_debug_shows_a_patient_or_the_request() {
     }
 }
 
-#[cfg(any(feature = "pixm", feature = "pdqm", feature = "mcsd", feature = "pmir"))]
 #[test]
 fn no_debug_shows_the_user_and_the_record_names_them_toward_the_repository() {
-    use super::profile::{AUDIENCE, CLIENT, ISSUER, SUBJECT, user};
+    use super::{AUDIENCE, CLIENT, ISSUER, SUBJECT, user};
     let exchange = Exchange {
         on_behalf: user(),
         ..exchange()

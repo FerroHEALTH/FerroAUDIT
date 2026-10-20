@@ -7,7 +7,7 @@
 //! PIXm, mCSD, PDQm and PMIR each define the audit record of their
 //! transactions as an `AuditEvent` profile built on a BALP pattern (PIXm
 //! §2:3.83.5.1, mCSD §2:3.90.5.1 and §2:3.91.5.1, PDQm §2:3.78.5.1, PMIR
-//! §2:3.93.5.1 and §2:3.94.5.1). A client of this crate that is
+//! §2:3.93.5.1 and §2:3.94.5.1). A client of those profiles that is
 //! [audited](AuditRecorder) hands its recorder one [`Exchange`] per
 //! transaction: what the transaction's audit profile fixes ([`EventKind`]),
 //! the outcome, the other party, whom the exchange was made for

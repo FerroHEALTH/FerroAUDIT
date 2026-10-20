@@ -5,8 +5,7 @@
 #
 # Vendors the IHE Basic Audit Log Patterns (BALP) 1.1.4 FHIR package into
 # docs/specs/ihe-balp/, every file of it but the package manifest: each
-# pattern an audit record of crates/ihe-iti (feature `balp`, #486) or an
-# access record can name, among them Query, Patient Query, Read, Create,
+# pattern an audit record of crates/ihe-atna (feature `balp`) can name, among them Query, Patient Query, Read, Create,
 # Update and Delete and their Patient variants, the Audit Creator and Audit
 # Record Repository capability statements, the code systems and value sets,
 # and the IG's examples. The PIXm, mCSD, PDQm and PMIR audit profiles are
@@ -70,8 +69,7 @@ rm -rf "$dest"
 mkdir -p "$dest"
 corpus_take "$tmp" "$dest" package
 
-# Each pattern the audit records and the access records name by canonical
-# URL must be here.
+# Each pattern an audit record names by canonical URL must be here.
 for pattern in Query PatientQuery Read PatientRead Create PatientCreate Update PatientUpdate Delete PatientDelete; do
   [ -f "$dest/package/StructureDefinition-IHE.BasicAudit.$pattern.json" ] \
     || die "the package has no IHE.BasicAudit.$pattern pattern"
@@ -113,12 +111,11 @@ change the pin in docs/VERSIONS.md and re-run the script.
 - Files: $files of the package's $total, listed below
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #486 (the BALP audit records of \`crates/ihe-iti\`, whose tests hold
-  each record to the pattern its transaction's audit profile derives from and
-  a search to the client-side example, and the ATNA FHIR Feed sender, held to
-  the Audit Creator's \`create\` interaction) and #696 (every pattern an access
-  record names by canonical URL). The narrative pages of the same version are
-  in docs/specs/ihe-balp-pages/.
+- Read by: the tests of \`crates/ihe-atna\` (feature \`balp\`), which hold
+  the purposes of use a record carries to the Read pattern and the ATNA FHIR
+  Feed sender to the Audit Creator's \`create\` interaction and the Audit
+  Record Repository's. The narrative pages of the same version are in
+  docs/specs/ihe-balp-pages/.
 
 ## What is here
 

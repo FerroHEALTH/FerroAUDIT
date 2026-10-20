@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+[package]
+name = "ihe-atna"
+description = "The IHE audit trail in Rust: the ATNA Record Audit Event sender (ITI-20) with the DICOM audit message, syslog over TLS, a store-and-forward spool and a forwarder, and the BALP AuditEvent sent over the ATX: FHIR Feed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+documentation = "https://docs.rs/ihe-atna"
+publish = true
+readme = "README.md"
+keywords = ["ihe", "atna", "audit", "fhir", "syslog"]
+categories = ["api-bindings", "science"]
+include = ["src/**", "tests/**", "README.md"]
+
+# One feature per layer (no specification governs this: our own design). The
+# crate depends on no product.
+[features]
+# ATNA, the audit trail (ITI-20): the DICOM PS3.15 audit message, the RFC 5424
+# syslog message it travels in, the RFC 5425 TLS connection to an Audit
+# Record Repository on rustls with the platform's roots, and the bounded
+# store-and-forward spool ITI-20 requires of a sender.
+atna = [
+  "dep:base64",
+  "dep:jiff",
+  "dep:quick-xml",
+  "dep:rustls",
+  "dep:rustls-platform-verifier",
+  "dep:secrecy",
+  "dep:thiserror",
+  "dep:tokio",
+  "dep:tokio-rustls",
+  "dep:tracing",
+  "dep:url",
+]
+# BALP, the Basic Audit Log Patterns: the FHIR R4 AuditEvent an IHE FHIR
+# transaction is audited as, and the ATX: FHIR Feed Option of ITI-20 that
+# posts it to an Audit Record Repository through the `atna` spool and
+# forwarder.
+balp = [
+  "atna",
+  "dep:async-trait",
+  "dep:fhir-types",
+  "fhir-types/r4",
+  "fhir-types/resources",
+  "dep:http",
+  "dep:reqwest",
+  "dep:serde_json",
+]
+
+[dependencies]
+async-trait = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+fhir-types = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+jiff = { workspace = true, optional = true }
+quick-xml = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true, features = ["rustls"] }
+rustls = { workspace = true, optional = true }
+rustls-platform-verifier = { workspace = true, optional = true }
+secrecy = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["fs", "io-util", "net", "rt", "sync", "time"] }
+tokio-rustls = { workspace = true, optional = true, features = ["tls12", "aws_lc_rs"] }
+tracing = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+base64 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "net", "io-util"] }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
+
+[lints]
+workspace = true
