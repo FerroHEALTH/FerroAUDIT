@@ -77,15 +77,16 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use ihe_atna::balp::{
-    APPLICATION, AuditRecorder, CREATE, CUSTODIAN, DELETE, DESTINATION_ROLE, DOMAIN_RESOURCE,
-    Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress, OTHER, Peer, READ,
-    REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT, SecurityLabel, UPDATE, What,
+    APPLICATION, AuditRecorder, CREATE, CUSTODIAN, Coded, DELETE, DESTINATION_ROLE,
+    DOMAIN_RESOURCE, Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress,
+    OTHER, Peer, READ, REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT,
+    SecurityLabel, UPDATE, What,
 };
 use ihe_atna::user::{Code, OnBehalfOf, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
 
-use crate::classify::Classification;
+use crate::classify::{Basis, Classification};
 use crate::emergency::Emergency;
 use crate::label::Label;
 use crate::record::{
@@ -115,7 +116,7 @@ pub const POPULATION_DESCRIPTION: &str = "Population access: a query over many \
 /// Audit Record Repository.
 pub struct BalpSink {
     recorder: Arc<dyn AuditRecorder>,
-    base: Url,
+    endpoint: NetworkAddress,
 }
 
 impl std::fmt::Debug for BalpSink {
@@ -126,10 +127,12 @@ impl std::fmt::Debug for BalpSink {
 
 impl BalpSink {
     /// The sink that records through `recorder`, naming the recording system
-    /// by `base`, the base its requests arrive at.
+    /// by `endpoint`, the address its requests arrive at: the base URL it
+    /// serves, or its host or IP address when it knows only that, written as
+    /// the network address of the recording system's agent.
     #[must_use]
-    pub fn new(recorder: Arc<dyn AuditRecorder>, base: Url) -> Self {
-        Self { recorder, base }
+    pub fn new(recorder: Arc<dyn AuditRecorder>, endpoint: NetworkAddress) -> Self {
+        Self { recorder, endpoint }
     }
 }
 
@@ -137,7 +140,7 @@ impl BalpSink {
 impl AccessSink for BalpSink {
     async fn store(&self, record: AccessRecord) -> Result<(), SinkError> {
         self.recorder
-            .record(exchange(&record, &self.base))
+            .record(exchange(&record, &self.endpoint))
             .await
             .map_err(|error| SinkError(Box::new(error)))
     }
@@ -151,7 +154,7 @@ impl AccessSink for BalpSink {
         Ok(Box::new(BalpReservation {
             place,
             recorder: Arc::clone(&self.recorder),
-            base: self.base.clone(),
+            endpoint: self.endpoint.clone(),
         }))
     }
 }
@@ -161,7 +164,7 @@ impl AccessSink for BalpSink {
 struct BalpReservation {
     place: Option<Box<dyn Reserved>>,
     recorder: Arc<dyn AuditRecorder>,
-    base: Url,
+    endpoint: NetworkAddress,
 }
 
 impl std::fmt::Debug for BalpReservation {
@@ -175,7 +178,7 @@ impl std::fmt::Debug for BalpReservation {
 #[async_trait::async_trait]
 impl Reservation for BalpReservation {
     async fn store(self: Box<Self>, record: AccessRecord) -> Result<(), SinkError> {
-        let exchange = exchange(&record, &self.base);
+        let exchange = exchange(&record, &self.endpoint);
         match self.place {
             Some(place) => place.record(exchange).await,
             None => self.recorder.record(exchange).await,
@@ -185,36 +188,49 @@ impl Reservation for BalpReservation {
 }
 
 /// The BALP exchange `record` is written as, the recording system named by
-/// `base`.
+/// `endpoint`, the address its requests arrive at.
 #[must_use]
-pub fn exchange(record: &AccessRecord, base: &Url) -> Exchange {
+pub fn exchange(record: &AccessRecord, endpoint: &NetworkAddress) -> Exchange {
     let accessor = &record.accessor;
-    let user = User::new(
-        accessor.issuer.clone(),
-        accessor.subject.clone(),
-        accessor.client_id.clone(),
-    )
-    .with_audience(accessor.audience.clone())
-    .with_purposes(
-        accessor
-            .purposes
-            .iter()
-            .map(|purpose| PurposeOfUse {
-                system: purpose.system.clone(),
-                code: purpose.code.clone(),
-            })
-            .collect(),
-    )
-    .with_organisation(accessor.provider.clone())
-    .with_alt_id(accessor.alt_id.clone())
-    .with_name(accessor.professional.name.clone())
-    .with_provider_identifier(accessor.professional.identifier.clone())
-    // NOTE: no specification governs these codes: our own design; BALP 1.1.4 leaves the
-    // assuranceLevel vocabulary open, and names no element for who acts.
-    .with_assurance(accessor.assurance.map(|level| code(level.code())))
-    .with_roles(vec![code(accessor.acting.code())]);
+    // NOTE: no specification governs the acting codes: our own design; BALP 1.1.4 names no element
+    // for who acts, and §3:5.7.5.4 writes the IUA subject_role at agent[user].role beside it.
+    let roles = accessor
+        .acting
+        .map(|acting| code(acting.code()))
+        .into_iter()
+        .chain(accessor.roles.iter().map(|role| Code {
+            system: role.system.clone(),
+            code: role.code.clone(),
+        }))
+        .collect();
+    let user = User::local(accessor.subject.clone())
+        .with_issuer(accessor.issuer.clone())
+        .with_client_id(accessor.client_id.clone())
+        .with_token_id(accessor.token_id.clone())
+        .with_audience(accessor.audience.clone())
+        .with_purposes(
+            accessor
+                .purposes
+                .iter()
+                .map(|purpose| PurposeOfUse {
+                    system: purpose.system.clone(),
+                    code: purpose.code.clone(),
+                })
+                .collect(),
+        )
+        .with_organisation(accessor.provider.clone())
+        .with_alt_id(accessor.alt_id.clone())
+        .with_name(accessor.professional.name.clone())
+        .with_provider_identifier(accessor.professional.identifier.clone())
+        // NOTE: no specification governs these codes: our own design; BALP 1.1.4 leaves the
+        // assuranceLevel vocabulary open.
+        .with_assurance(accessor.assurance.map(|level| code(level.code())))
+        .with_roles(roles);
     let client = Peer {
-        who: accessor.client_id.clone(),
+        who: accessor
+            .client_id
+            .clone()
+            .unwrap_or_else(|| accessor.subject.clone()),
         network: record.request.client_address.map_or_else(
             || NetworkAddress::MachineName(String::from("unknown")),
             NetworkAddress::Ip,
@@ -227,10 +243,12 @@ pub fn exchange(record: &AccessRecord, base: &Url) -> Exchange {
             Outcome::Success => ihe_atna::balp::Outcome::Success,
             Outcome::MinorFailure => ihe_atna::balp::Outcome::MinorFailure,
             Outcome::SeriousFailure => ihe_atna::balp::Outcome::SeriousFailure,
+            Outcome::MajorFailure => ihe_atna::balp::Outcome::MajorFailure,
         },
+        outcome_description: record.outcome_description.clone(),
         direction: Direction::Received {
             client,
-            endpoint: base.clone(),
+            endpoint: endpoint.clone(),
         },
         on_behalf: OnBehalfOf::User(user),
         entities: entities(record),
@@ -249,6 +267,16 @@ fn code(code: &str) -> Code {
 /// What the pattern of `record`'s action fixes.
 fn kind(record: &AccessRecord) -> EventKind {
     let patient = patients(record).len() == 1;
+    // NOTE: every BALP 1.1.4 RESTful pattern slices subtype with rules open, so the operation
+    // follows the pattern's restful-interaction code.
+    let subtypes = |fixed: Coded| {
+        let request = &record.request;
+        let mut subtypes = vec![fixed];
+        subtypes.extend(request.operation_system.as_ref().map(|system| {
+            Coded::new(system.clone(), request.operation.clone(), request.operation.clone())
+        }));
+        subtypes
+    };
     let profile = |plain: &'static str, with_patient: &'static str| {
         if patient { with_patient } else { plain }
     };
@@ -259,7 +287,7 @@ fn kind(record: &AccessRecord) -> EventKind {
                 "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
             ),
             event_type: REST,
-            subtypes: &[SEARCH],
+            subtypes: subtypes(SEARCH),
             action: "E",
             client: SOURCE_ROLE,
             server: DESTINATION_ROLE,
@@ -270,7 +298,7 @@ fn kind(record: &AccessRecord) -> EventKind {
                 "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientRead",
             ),
             event_type: REST,
-            subtypes: &[READ],
+            subtypes: subtypes(READ),
             action: "R",
             client: DESTINATION_ROLE,
             server: SOURCE_ROLE,
@@ -281,7 +309,7 @@ fn kind(record: &AccessRecord) -> EventKind {
                 "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientCreate",
             ),
             event_type: REST,
-            subtypes: &[CREATE],
+            subtypes: subtypes(CREATE),
             action: "C",
             client: SOURCE_ROLE,
             server: DESTINATION_ROLE,
@@ -292,7 +320,7 @@ fn kind(record: &AccessRecord) -> EventKind {
                 "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientUpdate",
             ),
             event_type: REST,
-            subtypes: &[UPDATE],
+            subtypes: subtypes(UPDATE),
             action: "U",
             client: SOURCE_ROLE,
             server: DESTINATION_ROLE,
@@ -307,7 +335,7 @@ fn kind(record: &AccessRecord) -> EventKind {
                 ""
             },
             event_type: REST,
-            subtypes: &[DELETE],
+            subtypes: subtypes(DELETE),
             action: "D",
             client: APPLICATION,
             server: CUSTODIAN,
@@ -319,22 +347,30 @@ fn kind(record: &AccessRecord) -> EventKind {
 /// the patient, each `ehr_id`, the categories, and each origin.
 fn entities(record: &AccessRecord) -> Vec<Entity> {
     let request = &record.request;
-    let mut entities = vec![Entity::Described(Described {
-        what: Some(What::Identifier {
-            system: None,
-            value: request.id.clone(),
-        }),
-        kind: REQUEST_ID,
-        role: None,
-        name: None,
-        description: None,
-        details: request
-            .correlation
-            .iter()
-            .map(|correlation| Detail::new(detail::CORRELATION, correlation.clone()))
-            .collect(),
-        security_labels: Vec::new(),
-    })];
+    let correlation = request
+        .correlation
+        .iter()
+        .map(|correlation| Detail::new(detail::CORRELATION, correlation.clone()));
+    // NOTE: BALP 1.1.4 entity:transaction is 0..1 and needs what.identifier.value, so a request
+    // with no id writes none, and its correlation id rides on the categories entity.
+    let mut entities: Vec<Entity> = request
+        .id
+        .iter()
+        .map(|id| {
+            Entity::Described(Described {
+                what: Some(What::Identifier {
+                    system: None,
+                    value: id.clone(),
+                }),
+                kind: REQUEST_ID,
+                role: None,
+                name: None,
+                description: None,
+                details: correlation.clone().collect(),
+                security_labels: Vec::new(),
+            })
+        })
+        .collect();
     match record.action {
         Action::Query => entities.push(Entity::Query(
             request
@@ -361,9 +397,11 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         }
     }
     for patient in patients(record) {
+        let uri = patient.namespace.as_deref().filter(|namespace| is_uri(namespace));
         entities.push(Entity::Patient {
-            system: patient.namespace.clone(),
+            system: uri.map(str::to_owned),
             value: patient.value.clone(),
+            namespace: patient.namespace.clone().filter(|_| uri.is_none()),
         });
     }
     for ehr in &record.subject.ehrs {
@@ -384,11 +422,28 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     if let Some(name) = &request.stored_query {
         details.push(Detail::new(detail::STORED_QUERY, name.clone()));
     }
+    if request.id.is_none() {
+        details.extend(correlation);
+    }
+    if let Some(count) = record.origin_count {
+        details.push(Detail::new(detail::ORIGIN_COUNT, count.to_string()));
+    }
     let retention = &record.retention;
+    let period = retention.period();
+    details.extend(
+        period
+            .years()
+            .map(|years| Detail::new(detail::RETENTION_YEARS, years.get().to_string())),
+    );
+    details.push(Detail::new(detail::RETENTION_PERIOD, period.code()));
+    details.extend(
+        retention
+            .ends()
+            .map(|ends| Detail::new(detail::RETENTION_ENDS, ends.to_string())),
+    );
     details.extend([
-        Detail::new(detail::RETENTION_YEARS, retention.years().get().to_string()),
-        Detail::new(detail::RETENTION_ENDS, retention.ends().to_string()),
         Detail::new(detail::RETENTION_GROUND, retention.ground().code()),
+        Detail::new(detail::RETENTION_FLOOR, retention.floor().code()),
     ]);
     entities.push(other(
         None,
@@ -397,10 +452,8 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         record.labels.categories(),
     ));
     for origin in &record.origins {
-        entities.push(origin_entity(
-            origin,
-            record.labels.origin(&origin.endpoint),
-        ));
+        let labels = origin.key().map_or(&[][..], |key| record.labels.origin(key));
+        entities.push(origin_entity(origin, labels));
     }
     if let Some(relayed) = &record.accessor.relayed {
         entities.push(other(None, "ehds-relayed", relayed_details(relayed), &[]));
@@ -418,7 +471,11 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
 /// `system_id`, its rows, the version a write left there, the `ehr_id` an
 /// EHR create left there and its categories.
 fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
-    let mut details = vec![Detail::new(detail::STATUS, origin.status.clone())];
+    let mut details: Vec<Detail> = origin
+        .status
+        .iter()
+        .map(|status| Detail::new(detail::STATUS, status.clone()))
+        .collect();
     details.extend(
         origin
             .node
@@ -461,7 +518,7 @@ fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
         );
     }
     details.extend(origin.categories.iter().flat_map(categories));
-    other(Some(origin.endpoint.clone()), "origin", details, labels)
+    other(origin.key().map(str::to_owned), "origin", details, labels)
 }
 
 /// The entity that marks an emergency access, naming the purposes that
@@ -593,7 +650,7 @@ fn patients(record: &AccessRecord) -> Vec<&PatientIdentifier> {
         });
     let mut named: Vec<&PatientIdentifier> = Vec::new();
     for patient in record.subject.patient.iter().chain(found) {
-        let seen = named.iter().any(|kept| {
+        let seen = named.iter().any(|kept: &&PatientIdentifier| {
             kept.namespace == patient.namespace
                 && kept.value.expose_secret() == patient.value.expose_secret()
         });
@@ -602,6 +659,12 @@ fn patients(record: &AccessRecord) -> Vec<&PatientIdentifier> {
         }
     }
     named
+}
+
+/// Whether `namespace` is an absolute URI (RFC 3986 §4.3), which FHIR R4
+/// `Identifier.system` takes.
+fn is_uri(namespace: &str) -> bool {
+    Url::parse(namespace).is_ok()
 }
 
 /// An entity of type `4` named `name`, identified by `value` when given,
@@ -645,16 +708,52 @@ fn categories(classified: &Classification) -> Vec<Detail> {
     if classified.is_no_category() {
         details.push(Detail::new(detail::NO_CATEGORY, "true"));
     }
+    let kinds = classified.no_category_kinds();
+    details.extend(
+        kinds
+            .iter()
+            .map(|kind| Detail::new(detail::NO_CATEGORY_KIND, kind.code())),
+    );
+    if !kinds.is_empty() {
+        details.push(Detail::new(
+            detail::NO_CATEGORY_BASIS,
+            Basis::ResourceKind.code(),
+        ));
+    }
     if let Some(unclassified) = classified.unclassified() {
         details.push(Detail::new(detail::UNCLASSIFIED, unclassified.code()));
     }
-    for (name, ids) in [
-        (detail::TEMPLATE_ID, classified.templates()),
-        (detail::ARCHETYPE_ID, classified.archetypes()),
-        (detail::VERSION_UID, classified.versions()),
-        (detail::UNMAPPED_ID, classified.unmapped()),
+    let counts = classified.evidence_counts();
+    for (name, count_name, ids, count) in [
+        (
+            detail::TEMPLATE_ID,
+            detail::TEMPLATE_ID_COUNT,
+            classified.templates(),
+            counts.templates,
+        ),
+        (
+            detail::ARCHETYPE_ID,
+            detail::ARCHETYPE_ID_COUNT,
+            classified.archetypes(),
+            counts.archetypes,
+        ),
+        (
+            detail::VERSION_UID,
+            detail::VERSION_UID_COUNT,
+            classified.versions(),
+            counts.versions,
+        ),
+        (
+            detail::UNMAPPED_ID,
+            detail::UNMAPPED_ID_COUNT,
+            classified.unmapped(),
+            counts.unmapped,
+        ),
     ] {
         details.extend(ids.iter().map(|id| Detail::new(name, id.clone())));
+        if count > ids.len() {
+            details.push(Detail::new(count_name, count.to_string()));
+        }
     }
     if let Some(digest) = classified.digest() {
         details.push(Detail::new(detail::MAP_DIGEST, digest));

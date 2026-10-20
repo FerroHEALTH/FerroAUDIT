@@ -59,8 +59,8 @@ fn the_default_policy_keeps_every_record_three_years() {
         &returned(&[LAB_REPORT]),
         ["node-a"],
     );
-    assert_eq!(retention.years(), Years::FLOOR);
-    assert_eq!(retention.years().get(), FLOOR_YEARS);
+    assert_eq!(retention.period().years().expect("a period in years"), Years::FLOOR);
+    assert_eq!(retention.period().years().expect("a period in years").get(), FLOOR_YEARS);
     assert_eq!(retention.ground(), &Ground::Default);
 }
 
@@ -100,7 +100,7 @@ fn a_category_the_map_does_not_declare_is_refused() {
         })
     );
     let national = policy(3, &[(NATIONAL, 10)], &[]).expect("a declared national category");
-    assert_eq!(national.longest().get(), 10);
+    assert_eq!(national.longest().years().expect("a period in years").get(), 10);
 }
 
 #[test]
@@ -122,13 +122,13 @@ fn a_record_is_kept_for_the_longest_its_categories_and_origins_call_for() {
     .expect("a policy");
     let recorded = at("2027-03-05T10:00:00Z");
     let lab = policy.retain(recorded, &returned(&[LAB_REPORT]), ["node-c"]);
-    assert_eq!(lab.years().get(), 10);
+    assert_eq!(lab.period().years().expect("a period in years").get(), 10);
     assert_eq!(lab.ground(), &Ground::Category(Category::MedicalTestResult));
     let both = policy.retain(recorded, &returned(&[LAB_REPORT, DISCHARGE]), ["node-a"]);
-    assert_eq!(both.years().get(), 20);
+    assert_eq!(both.period().years().expect("a period in years").get(), 20);
     assert_eq!(both.ground(), &Ground::Category(Category::DischargeReport));
     let origin = policy.retain(recorded, &returned(&[LAB_REPORT]), ["node-c", "node-a"]);
-    assert_eq!(origin.years().get(), 15);
+    assert_eq!(origin.period().years().expect("a period in years").get(), 15);
     assert_eq!(origin.ground(), &Ground::Origin("node-a".to_owned()));
 }
 
@@ -140,7 +140,7 @@ fn a_period_no_longer_than_the_default_leaves_the_default_as_ground() {
         &returned(&[LAB_REPORT]),
         ["node-a"],
     );
-    assert_eq!(retention.years().get(), 10);
+    assert_eq!(retention.period().years().expect("a period in years").get(), 10);
     assert_eq!(retention.ground(), &Ground::Default);
 }
 
@@ -149,13 +149,13 @@ fn a_period_no_longer_than_the_default_leaves_the_default_as_ground() {
 #[test]
 fn an_unclassified_access_takes_the_longest_period_declared() {
     let policy = policy(5, &[("Laboratory-Reports", 10)], &[("node-b", 25)]).expect("a policy");
-    assert_eq!(policy.longest().get(), 25);
+    assert_eq!(policy.longest().years().expect("a period in years").get(), 25);
     let mixed = policy.retain(
         at("2027-03-05T10:00:00Z"),
         &returned(&[LAB_REPORT, UNMAPPED]),
         ["node-a"],
     );
-    assert_eq!(mixed.years().get(), 25);
+    assert_eq!(mixed.period().years().expect("a period in years").get(), 25);
     assert_eq!(mixed.ground(), &Ground::Unclassified);
     assert_eq!(Ground::Unclassified.code(), "unclassified");
 }
@@ -164,7 +164,7 @@ fn an_unclassified_access_takes_the_longest_period_declared() {
 fn the_record_may_be_deleted_from_the_day_after_its_period_ends() {
     let policy = RetentionPolicy::default();
     let lab = returned(&[LAB_REPORT]);
-    let ends = |text: &str| policy.retain(at(text), &lab, []).ends();
+    let ends = |text: &str| policy.retain(at(text), &lab, []).ends().expect("a finite period");
     assert_eq!(ends("2027-03-05T10:00:00Z"), date(2030, 3, 6));
     // An access just after midnight east of UTC is dated by its UTC day.
     assert_eq!(ends("2027-03-06T00:30:00+02:00"), date(2030, 3, 6));
@@ -213,12 +213,12 @@ proptest! {
         if reached_discharge {
             expected = expected.max(discharge);
         }
-        prop_assert_eq!(retention.years().get(), expected);
-        prop_assert!(retention.years() >= Years::FLOOR);
+        prop_assert_eq!(retention.period().years().expect("a period in years").get(), expected);
+        prop_assert!(retention.period().years().expect("a period in years") >= Years::FLOOR);
         let accessed = jiff::tz::Offset::UTC.to_datetime(recorded).date();
         let kept = accessed
             .checked_add(jiff::Span::new().years(i64::from(expected)))
             .expect("a date");
-        prop_assert!(retention.ends() > kept);
+        prop_assert!(retention.ends().expect("a finite period") > kept);
     }
 }

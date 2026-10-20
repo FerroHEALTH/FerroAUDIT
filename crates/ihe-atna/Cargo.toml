@@ -24,8 +24,9 @@ include = ["src/**", "tests/**", "README.md"]
 # ATNA, the audit trail (ITI-20): the DICOM PS3.15 audit message, the RFC 5424
 # syslog message it travels in, the RFC 5425 TLS connection to an Audit
 # Record Repository on rustls with the platform's roots, and the bounded
-# store-and-forward spool ITI-20 requires of a sender.
+# store-and-forward spool and forwarder ITI-20 requires of a sender.
 atna = [
+  "dep:async-trait",
   "dep:base64",
   "dep:jiff",
   "dep:quick-xml",
@@ -40,11 +41,20 @@ atna = [
 ]
 # BALP, the Basic Audit Log Patterns: the FHIR R4 AuditEvent an IHE FHIR
 # transaction is audited as, and the ATX: FHIR Feed Option of ITI-20 that
-# posts it to an Audit Record Repository through the `atna` spool and
-# forwarder.
+# posts it to an Audit Record Repository through the same spool and
+# forwarder. It builds without the syslog sender, the DICOM message and the
+# RFC 5425 TLS stack (owner decision of 2026-10-20): the Feed is an HTTP
+# create, and its TLS backend is the one the caller builds its
+# reqwest::Client with.
 balp = [
-  "atna",
   "dep:async-trait",
+  "dep:base64",
+  "dep:jiff",
+  "dep:secrecy",
+  "dep:thiserror",
+  "dep:tokio",
+  "dep:tracing",
+  "dep:url",
   "dep:fhir-types",
   "fhir-types/r4",
   "fhir-types/resources",
@@ -60,7 +70,7 @@ fhir-types = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true, features = ["rustls"] }
+reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-platform-verifier = { workspace = true, optional = true }
 secrecy = { workspace = true, optional = true }

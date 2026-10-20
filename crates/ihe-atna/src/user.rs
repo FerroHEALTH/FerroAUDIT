@@ -11,6 +11,10 @@
 //! ITI-55 audit message has a Human Requestor participant "if known" (ITI TF-2
 //! §3.55.5.1.1). An exchange the system makes on its own behalf names no user.
 //!
+//! A user authenticated otherwise, by a local account or HTTP Basic, has no
+//! token issuer and no client: [`User::local`] names them by their account
+//! alone, and the record writes no value the authentication did not give.
+//!
 //! A [`User`] names a person or an application: `Debug` shows none of it, and a
 //! client of this crate writes it into the audit record alone.
 
@@ -22,9 +26,9 @@ use crate::redact::REDACTED;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum OnBehalfOf {
-    /// A user the client authenticated by an OAuth 2.0 access token, who
-    /// asked for the exchange: the record names the user and the client
-    /// application the token was issued to.
+    /// A user the client authenticated, who asked for the exchange: the
+    /// record names the user and, when an OAuth 2.0 access token named
+    /// them, the issuer and the client application it was issued to.
     User(User),
     /// The client's own system, with no user: the record names none, as the
     /// BALP examples of an event no user caused do (`ex-auditBasicReadNoUser`
@@ -48,9 +52,9 @@ impl OnBehalfOf {
 /// `Debug` shows that a user is named and none of the values.
 #[derive(Clone, PartialEq, Eq)]
 pub struct User {
-    issuer: String,
+    issuer: Option<String>,
     subject: String,
-    client_id: String,
+    client_id: Option<String>,
     audience: Option<String>,
     purposes: Vec<PurposeOfUse>,
     organisation: Option<String>,
@@ -66,6 +70,7 @@ struct Stated {
     provider_identifier: Option<String>,
     assurance: Option<Code>,
     roles: Vec<Code>,
+    token_id: Option<String>,
 }
 
 impl User {
@@ -75,9 +80,23 @@ impl User {
     #[must_use]
     pub fn new(issuer: String, subject: String, client_id: String) -> Self {
         Self {
-            issuer,
+            issuer: Some(issuer),
+            client_id: Some(client_id),
+            ..Self::local(subject)
+        }
+    }
+
+    /// Returns the user `subject`, authenticated with no OAuth 2.0 access
+    /// token, such as by a local account or HTTP Basic: no issuer vouched for
+    /// them and no client application acted for them, so the record writes
+    /// neither (BALP 1.1.4 §3:5.7.5.4 maps each token field to an element,
+    /// and a field that does not exist writes none).
+    #[must_use]
+    pub fn local(subject: String) -> Self {
+        Self {
+            issuer: None,
             subject,
-            client_id,
+            client_id: None,
             audience: None,
             purposes: Vec::new(),
             organisation: None,
@@ -191,10 +210,43 @@ impl User {
         self
     }
 
-    /// Returns the authorization server that issued the token (`iss`).
+    /// Returns this user, the token they presented identified by
+    /// `token_id`, its `jti`, which BALP 1.1.4 §3:5.7.5.4 writes as
+    /// `agent[user].policy`.
     #[must_use]
-    pub fn issuer(&self) -> &str {
-        &self.issuer
+    pub fn with_token_id(mut self, token_id: Option<String>) -> Self {
+        self.stated.token_id = token_id;
+        self
+    }
+
+    /// Returns the identity of the token the user presented (`jti`), when it
+    /// names one.
+    #[must_use]
+    pub fn token_id(&self) -> Option<&str> {
+        self.stated.token_id.as_deref()
+    }
+
+    /// Returns this user, vouched for by the authorization server `issuer`
+    /// (`iss`), or by none.
+    #[must_use]
+    pub fn with_issuer(mut self, issuer: Option<String>) -> Self {
+        self.issuer = issuer;
+        self
+    }
+
+    /// Returns this user, asking through the client application `client_id`
+    /// (`client_id`), or through none.
+    #[must_use]
+    pub fn with_client_id(mut self, client_id: Option<String>) -> Self {
+        self.client_id = client_id;
+        self
+    }
+
+    /// Returns the authorization server that issued the token (`iss`), when
+    /// a token named the user.
+    #[must_use]
+    pub fn issuer(&self) -> Option<&str> {
+        self.issuer.as_deref()
     }
 
     /// Returns the user (`sub`).
@@ -204,10 +256,10 @@ impl User {
     }
 
     /// Returns the client application the token was issued to
-    /// (`client_id`).
+    /// (`client_id`), when a token named one.
     #[must_use]
-    pub fn client_id(&self) -> &str {
-        &self.client_id
+    pub fn client_id(&self) -> Option<&str> {
+        self.client_id.as_deref()
     }
 
     /// Returns the audience the token names, when the client said which.
@@ -225,15 +277,20 @@ impl User {
     /// The ATNA `UserName` of a user a JWT authenticated:
     /// `alias"<"user"@"issuer">"`, with the token's `aud` as the alias, its
     /// `sub` as the user and its `iss` as the issuer (IUA ITI TF-2
-    /// §3.72.5.1); the alias is empty when the audience is not known.
+    /// §3.72.5.1); the alias is empty when the audience is not known. IUA
+    /// defines the form for a token only, so a user no issuer vouched for is
+    /// named by their account alone.
     #[must_use]
     pub fn atna_user_name(&self) -> String {
-        format!(
-            "{}<{}@{}>",
-            self.audience.as_deref().unwrap_or_default(),
-            self.subject,
-            self.issuer
-        )
+        match &self.issuer {
+            Some(issuer) => format!(
+                "{}<{}@{}>",
+                self.audience.as_deref().unwrap_or_default(),
+                self.subject,
+                issuer
+            ),
+            None => self.subject.clone(),
+        }
     }
 }
 

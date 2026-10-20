@@ -43,14 +43,16 @@ const RETRY_MAX: Duration = Duration::from_millis(400);
 const FAILED_ATTEMPT: Duration = REQUEST.saturating_add(RETRY_MAX);
 
 /// A search on the BALP Patient Query pattern.
-const KIND: EventKind = EventKind {
-    profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
-    event_type: REST,
-    subtypes: &[SEARCH],
-    action: "E",
-    client: SOURCE_ROLE,
-    server: DESTINATION_ROLE,
-};
+fn kind() -> EventKind {
+    EventKind {
+        profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
+        event_type: REST,
+        subtypes: vec![SEARCH],
+        action: "E",
+        client: SOURCE_ROLE,
+        server: DESTINATION_ROLE,
+    }
+}
 
 fn http() -> reqwest::Client {
     reqwest::Client::builder()
@@ -62,21 +64,23 @@ fn http() -> reqwest::Client {
 /// The repository at `server`'s `/arr/` base, over clear text for the test.
 fn repository(server: &MockServer) -> FeedRepository {
     let base = Url::parse(&format!("{}/arr/", server.uri())).expect("a base");
-    FeedRepository::cleartext_for_development(base, http(), REQUEST).expect("a repository")
+    FeedRepository::cleartext(base, http(), REQUEST).expect("a repository")
 }
 
 /// One synthetic ITI-83 record naming the patient `value`.
 fn record(value: &str) -> SecretSlice<u8> {
     Exchange {
-        kind: KIND,
+        kind: kind(),
         recorded: jiff::Timestamp::UNIX_EPOCH,
         outcome: Outcome::Success,
+        outcome_description: None,
         direction: Direction::Sent {
             server: Peer::server(&Url::parse("https://pix.example.org/fhir/").expect("a URL")),
         },
         on_behalf: ihe_atna::user::OnBehalfOf::System,
         entities: vec![Entity::Patient {
-            system: "urn:oid:2.999.1".to_owned(),
+            system: Some("urn:oid:2.999.1".to_owned()),
+            namespace: None,
             value: SecretString::from(value),
         }],
         security: Vec::new(),

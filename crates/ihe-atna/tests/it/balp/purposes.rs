@@ -13,7 +13,7 @@
 
 use std::path::PathBuf;
 
-use ihe_atna::balp::{
+use ihe_atna::balp::{NetworkAddress, 
     DESTINATION_ROLE, Direction, EventKind, Exchange, Outcome, Peer, READ, REST, SOURCE_ROLE,
 };
 use ihe_atna::user::{OnBehalfOf, PurposeOfUse, User};
@@ -27,14 +27,16 @@ use super::observer;
 const READ_PROFILE: &str =
     "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read";
 
-const KIND: EventKind = EventKind {
-    profile: READ_PROFILE,
-    event_type: REST,
-    subtypes: &[READ],
-    action: "R",
-    client: DESTINATION_ROLE,
-    server: SOURCE_ROLE,
-};
+fn kind() -> EventKind {
+    EventKind {
+        profile: READ_PROFILE,
+        event_type: REST,
+        subtypes: vec![READ],
+        action: "R",
+        client: DESTINATION_ROLE,
+        server: SOURCE_ROLE,
+    }
+}
 
 /// The HL7 v3 `ActReason` code system the synthetic purposes are drawn from.
 const ACT_REASON: &str = "http://terminology.hl7.org/CodeSystem/v3-ActReason";
@@ -52,12 +54,13 @@ fn purpose(code: &str) -> PurposeOfUse {
 /// An exchange made for a synthetic user who declared `purposes`.
 fn exchange(purposes: Vec<PurposeOfUse>) -> Exchange {
     Exchange {
-        kind: KIND,
+        kind: kind(),
         recorded: jiff::Timestamp::UNIX_EPOCH,
         outcome: Outcome::Success,
+        outcome_description: None,
         direction: Direction::Received {
             client: Peer::server(&Url::parse("https://client.example.org/").expect("a URL")),
-            endpoint: Url::parse("https://gateway.example.org/v1/ehr").expect("a URL"),
+            endpoint: NetworkAddress::Uri(Url::parse("https://gateway.example.org/v1/ehr").expect("a URL")),
         },
         on_behalf: OnBehalfOf::User(
             User::new(

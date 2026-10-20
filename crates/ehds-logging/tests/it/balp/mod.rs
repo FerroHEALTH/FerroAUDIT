@@ -74,13 +74,14 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
         action,
         recorded: jiff::Timestamp::UNIX_EPOCH,
         outcome,
+        outcome_description: None,
         accessor: Accessor {
-            issuer: "https://issuer.example.org".to_owned(),
+            issuer: Some("https://issuer.example.org".to_owned()),
             subject: SUBJECT.to_owned(),
-            client_id: CLIENT.to_owned(),
+            client_id: Some(CLIENT.to_owned()),
             audience: Some("https://gateway.example.org".to_owned()),
             provider: Some(PROVIDER.to_owned()),
-            acting: Acting::Person,
+            acting: Some(Acting::Person),
             assurance: Some(AssuranceLevel::Substantial),
             professional: Professional {
                 name: Some(NAME.to_owned()),
@@ -92,10 +93,12 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
                 code: "TREAT".to_owned(),
             }],
             relayed: None,
+            roles: Vec::new(),
+            token_id: None,
         },
         subject: DataSubject {
             patient: Some(PatientIdentifier {
-                namespace: "urn:oid:2.999.1".to_owned(),
+                namespace: Some("urn:oid:2.999.1".to_owned()),
                 value: SecretString::from(PATIENT),
             }),
             ehrs: vec![EhrAt {
@@ -107,19 +110,21 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
         },
         categories,
         delivered: Some(1),
+        origin_count: None,
         origins: vec![Origin {
-            endpoint: "node-a".to_owned(),
+            endpoint: Some("node-a".to_owned()),
             node: Some("cdr-a".to_owned()),
             system_id: Some("cdr-a.example.org".to_owned()),
-            status: "active".to_owned(),
+            status: Some("active".to_owned()),
             rows: Some(1),
             version: None,
             created_ehr: None,
             categories: None,
         }],
         request: Request {
-            id: "Qz7-request-46".to_owned(),
+            id: Some("Qz7-request-46".to_owned()),
             operation: "query_execute_adhoc_query".to_owned(),
+            operation_system: None,
             resource: None,
             query: Some(SecretString::from(QUERY)),
             stored_query: None,
@@ -146,8 +151,8 @@ fn labels() -> LabelPolicy {
     .expect("the test labels")
 }
 
-fn gateway() -> Url {
-    Url::parse("https://gateway.example.org/").expect("a URL")
+fn gateway() -> NetworkAddress {
+    NetworkAddress::uri(&Url::parse("https://gateway.example.org/").expect("a URL"))
 }
 
 fn written(record: &AccessRecord) -> Value {
@@ -155,6 +160,7 @@ fn written(record: &AccessRecord) -> Value {
         source_id: "gateway.example.org".to_owned(),
         site: None,
         host: NetworkAddress::host("gateway.example.org"),
+        source_types: Vec::new(),
     };
     let bytes = exchange(record, &gateway())
         .audit_event(&observer)
@@ -335,7 +341,7 @@ fn read_by_ehr_id(found: PatientLookup) -> AccessRecord {
 
 fn patient(namespace: &str, value: &str) -> PatientIdentifier {
     PatientIdentifier {
-        namespace: namespace.to_owned(),
+        namespace: Some(namespace.to_owned()),
         value: SecretString::from(value),
     }
 }
@@ -508,7 +514,7 @@ fn the_persons_agent_carries_the_professional_the_level_and_who_acts() {
 #[test]
 fn a_client_acting_for_the_professional_is_written_as_a_client() {
     let mut record = record(Action::Query, Outcome::Success);
-    record.accessor.acting = Acting::Client;
+    record.accessor.acting = Some(Acting::Client);
     let written = written(&record);
     let person = person(&written);
     assert_eq!(person["role"][0]["coding"][0]["code"], "client");

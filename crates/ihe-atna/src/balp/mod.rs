@@ -30,9 +30,11 @@
 //! §2:3.83.5.2.1): `Debug` shows none of the user's values, and a recorder
 //! sends them to its Audit Record Repository alone.
 
+use std::borrow::Cow;
 use std::fmt;
 use std::net::IpAddr;
 
+pub mod recording;
 mod write;
 
 use fhir_types::r4::coding::Coding;
@@ -44,23 +46,49 @@ use url::Url;
 use crate::redact::{REDACTED, RedactedUrl};
 use crate::user::OnBehalfOf;
 
-/// A coding a profile fixes: its `system`, `code` and `display`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A coding: its `system`, `code` and `display`, each fixed text, such as a
+/// code a profile fixes, or text known only when the exchange is made, such
+/// as an operation id.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coded {
     /// `system`.
-    pub system: &'static str,
+    pub system: Cow<'static, str>,
     /// `code`.
-    pub code: &'static str,
+    pub code: Cow<'static, str>,
     /// `display`.
-    pub display: &'static str,
+    pub display: Cow<'static, str>,
 }
 
 impl Coded {
-    fn coding(self) -> Coding {
+    /// The coding of fixed text, as the constants of this module are.
+    #[must_use]
+    pub const fn fixed(system: &'static str, code: &'static str, display: &'static str) -> Self {
+        Self {
+            system: Cow::Borrowed(system),
+            code: Cow::Borrowed(code),
+            display: Cow::Borrowed(display),
+        }
+    }
+
+    /// The coding of `code` in `system`, displayed as `display`.
+    #[must_use]
+    pub fn new(
+        system: impl Into<String>,
+        code: impl Into<String>,
+        display: impl Into<String>,
+    ) -> Self {
+        Self {
+            system: Cow::Owned(system.into()),
+            code: Cow::Owned(code.into()),
+            display: Cow::Owned(display.into()),
+        }
+    }
+
+    fn coding(&self) -> Coding {
         Coding {
-            system: Some(primitives::Uri::from(self.system)),
-            code: Some(primitives::Code::from(self.code)),
-            display: Some(primitives::String::from(self.display)),
+            system: Some(primitives::Uri::from(self.system.as_ref())),
+            code: Some(primitives::Code::from(self.code.as_ref())),
+            display: Some(primitives::String::from(self.display.as_ref())),
             ..Coding::default()
         }
     }
@@ -72,153 +100,229 @@ pub const IHE_TRANSACTIONS: &str = "urn:ihe:event-type-code";
 
 /// `AuditEvent.type` of every `RESTful` pattern: `rest`
 /// (`IHE.BasicAudit.Query`, `.Read`, `.Create`, `.Delete`).
-pub const REST: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/audit-event-type",
-    code: "rest",
-    display: "Restful Operation",
-};
+pub const REST: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/audit-event-type",
+    "rest",
+    "Restful Operation",
+);
 
 /// The agent type of the side the request flows from: DICOM `110153`.
-pub const SOURCE_ROLE: Coded = Coded {
-    system: "http://dicom.nema.org/resources/ontology/DCM",
-    code: "110153",
-    display: "Source Role ID",
-};
+pub const SOURCE_ROLE: Coded = Coded::fixed(
+    "http://dicom.nema.org/resources/ontology/DCM",
+    "110153",
+    "Source Role ID",
+);
 
 /// The agent type of the side the request flows to: DICOM `110152`.
-pub const DESTINATION_ROLE: Coded = Coded {
-    system: "http://dicom.nema.org/resources/ontology/DCM",
-    code: "110152",
-    display: "Destination Role ID",
-};
+pub const DESTINATION_ROLE: Coded = Coded::fixed(
+    "http://dicom.nema.org/resources/ontology/DCM",
+    "110152",
+    "Destination Role ID",
+);
 
 /// The client's agent type of the Delete pattern: DICOM `110150`
 /// (`IHE.BasicAudit.Delete`, `agent:client.type`).
-pub const APPLICATION: Coded = Coded {
-    system: "http://dicom.nema.org/resources/ontology/DCM",
-    code: "110150",
-    display: "Application",
-};
+pub const APPLICATION: Coded = Coded::fixed(
+    "http://dicom.nema.org/resources/ontology/DCM",
+    "110150",
+    "Application",
+);
 
 /// The agent type of the user an exchange is made for: `IRCP`, as every
 /// BALP pattern's `agent:user` slice fixes it.
-pub const INFORMATION_RECIPIENT: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-    code: "IRCP",
-    display: "information recipient",
-};
+pub const INFORMATION_RECIPIENT: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+    "IRCP",
+    "information recipient",
+);
 
 /// The server's agent type of the Delete pattern: `custodian`
 /// (`IHE.BasicAudit.Delete`, `agent:server.type`).
-pub const CUSTODIAN: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/provenance-participant-type",
-    code: "custodian",
-    display: "Custodian",
-};
+pub const CUSTODIAN: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/provenance-participant-type",
+    "custodian",
+    "Custodian",
+);
 
 /// The `restful-interaction` subtype `search` (`IHE.BasicAudit.Query`,
 /// `subtype:anySearch`).
-pub const SEARCH: Coded = Coded {
-    system: "http://hl7.org/fhir/restful-interaction",
-    code: "search",
-    display: "search",
-};
+pub const SEARCH: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "search",
+    "search",
+);
 
 /// The `restful-interaction` subtype `read` (`IHE.BasicAudit.Read`).
-pub const READ: Coded = Coded {
-    system: "http://hl7.org/fhir/restful-interaction",
-    code: "read",
-    display: "read",
-};
+pub const READ: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "read",
+    "read",
+);
 
 /// The `restful-interaction` subtype `create` (`IHE.BasicAudit.Create`,
 /// `subtype:anyCreate`).
-pub const CREATE: Coded = Coded {
-    system: "http://hl7.org/fhir/restful-interaction",
-    code: "create",
-    display: "create",
-};
+pub const CREATE: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "create",
+    "create",
+);
 
 /// The `restful-interaction` subtype `update`, of the implementation guide's
 /// `AllUpdateVS` (BALP 1.1.4 lists `IHE.BasicAudit.Update` beside the other
 /// `RESTful` patterns).
-pub const UPDATE: Coded = Coded {
-    system: "http://hl7.org/fhir/restful-interaction",
-    code: "update",
-    display: "update",
-};
+pub const UPDATE: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "update",
+    "update",
+);
 
 /// The `restful-interaction` subtype `delete` (`IHE.BasicAudit.Delete`,
 /// `subtype:anyDelete`).
-pub const DELETE: Coded = Coded {
-    system: "http://hl7.org/fhir/restful-interaction",
-    code: "delete",
-    display: "delete",
-};
+pub const DELETE: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "delete",
+    "delete",
+);
 
 /// The `restful-interaction` subtype `history-type` (the mCSD Updates audit
 /// profile, `subtype:anyHistoryT`).
-pub const HISTORY_TYPE: Coded = Coded {
-    system: "http://hl7.org/fhir/restful-interaction",
-    code: "history-type",
-    display: "history-type",
-};
+pub const HISTORY_TYPE: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "history-type",
+    "history-type",
+);
 
 /// The entity type of a system object: `2` (`audit-entity-type`).
-pub const SYSTEM_OBJECT: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/audit-entity-type",
-    code: "2",
-    display: "System Object",
-};
+pub const SYSTEM_OBJECT: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/audit-entity-type",
+    "2",
+    "System Object",
+);
 
 /// The entity type of anything else: `4` (`audit-entity-type`). No slice of
 /// a BALP pattern is discriminated by it, so an entity of this type adds to
 /// a record without filling a slice the pattern bounds.
-pub const OTHER: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/audit-entity-type",
-    code: "4",
-    display: "Other",
-};
+pub const OTHER: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/audit-entity-type",
+    "4",
+    "Other",
+);
 
 /// The entity type of the request id, `XrequestId` (`BasicAuditEntityType`),
 /// as every `RESTful` pattern's `entity:transaction` slice fixes it.
-pub const REQUEST_ID: Coded = Coded {
-    system: "https://profiles.ihe.net/ITI/BALP/CodeSystem/BasicAuditEntityType",
-    code: "XrequestId",
-    display: "X-Request-Id",
-};
+pub const REQUEST_ID: Coded = Coded::fixed(
+    "https://profiles.ihe.net/ITI/BALP/CodeSystem/BasicAuditEntityType",
+    "XrequestId",
+    "X-Request-Id",
+);
 
 /// The entity type of a person: `1` (`audit-entity-type`).
-pub const PERSON: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/audit-entity-type",
-    code: "1",
-    display: "Person",
-};
+pub const PERSON: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/audit-entity-type",
+    "1",
+    "Person",
+);
 
 /// The entity role of a search: `24` (`object-role`).
-pub const QUERY_ROLE: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/object-role",
-    code: "24",
-    display: "Query",
-};
+pub const QUERY_ROLE: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/object-role",
+    "24",
+    "Query",
+);
 
 /// The entity role of a resource: `4` (`object-role`), as the BALP and
 /// PMIR examples give a resource acted on.
-pub const DOMAIN_RESOURCE: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/object-role",
-    code: "4",
-    display: "Domain Resource",
-};
+pub const DOMAIN_RESOURCE: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/object-role",
+    "4",
+    "Domain Resource",
+);
 
 /// The entity role of a patient: `1` (`object-role`).
-pub const PATIENT_ROLE: Coded = Coded {
-    system: "http://terminology.hl7.org/CodeSystem/object-role",
-    code: "1",
-    display: "Patient",
-};
+pub const PATIENT_ROLE: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/object-role",
+    "1",
+    "Patient",
+);
+
+/// The DICOM controlled terminology, the system of the DICOM event codes.
+pub const DCM: &str = "http://dicom.nema.org/resources/ontology/DCM";
+
+/// `AuditEvent.type` of a log on or log off: DICOM `110114` (DICOM PS3.15
+/// Table A.5.3.12-1, User Authentication).
+pub const USER_AUTHENTICATION: Coded = Coded::fixed(DCM, "110114", "User Authentication");
+
+/// The subtype of a log on: DICOM `110122` (DICOM PS3.15 Table A.5.3.12-1).
+pub const LOGIN: Coded = Coded::fixed(DCM, "110122", "Login");
+
+/// The subtype of a log off: DICOM `110123` (DICOM PS3.15 Table A.5.3.12-1).
+pub const LOGOUT: Coded = Coded::fixed(DCM, "110123", "Logout");
+
+/// `AuditEvent.type` of data leaving the system: DICOM `110106` (DICOM PS3.15
+/// Table A.5.3.4-1, Data Export).
+pub const EXPORT: Coded = Coded::fixed(DCM, "110106", "Export");
+
+/// `AuditEvent.type` of data entering the system: DICOM `110107` (DICOM
+/// PS3.15 Table A.5.3.5-1, Data Import).
+pub const IMPORT: Coded = Coded::fixed(DCM, "110107", "Import");
+
+/// The `restful-interaction` subtype `operation`, an operation that is no
+/// read, write or search (FHIR R4 `restful-interaction`).
+pub const OPERATION: Coded = Coded::fixed(
+    "http://hl7.org/fhir/restful-interaction",
+    "operation",
+    "operation",
+);
+
+/// The code system of `AuditEvent.source.type` (FHIR R4
+/// `security-source-type`), which the `RESTful` ATNA mapping carries to and
+/// from the DICOM `AuditSourceTypeCode` (`RESTful` ATNA Rev. 3.6 Table
+/// 3.20.4.2.2.1-1).
+pub const SECURITY_SOURCE_TYPE: &str = "http://terminology.hl7.org/CodeSystem/security-source-type";
+
+/// `source.type` `1`, an end-user display device or diagnostic device.
+pub const SOURCE_USER_DEVICE: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "1", "User Device");
+
+/// `source.type` `2`, a data acquisition device or instrument.
+pub const SOURCE_DATA_INTERFACE: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "2", "Data Interface");
+
+/// `source.type` `3`, a web server process or thread.
+pub const SOURCE_WEB_SERVER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "3", "Web Server");
+
+/// `source.type` `4`, an application server process or thread.
+pub const SOURCE_APPLICATION_SERVER: Coded =
+    Coded::fixed(SECURITY_SOURCE_TYPE, "4", "Application Server");
+
+/// `source.type` `5`, a database server process or thread.
+pub const SOURCE_DATABASE_SERVER: Coded =
+    Coded::fixed(SECURITY_SOURCE_TYPE, "5", "Database Server");
+
+/// `source.type` `6`, a security server, such as a domain controller.
+pub const SOURCE_SECURITY_SERVER: Coded =
+    Coded::fixed(SECURITY_SOURCE_TYPE, "6", "Security Server");
+
+/// `source.type` `7`, an ISO level 1 to 3 network component.
+pub const SOURCE_NETWORK_DEVICE: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "7", "Network Device");
+
+/// `source.type` `8`, ISO level 4 to 6 operating software.
+pub const SOURCE_NETWORK_ROUTER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "8", "Network Router");
+
+/// `source.type` `9`, any other source.
+pub const SOURCE_OTHER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "9", "Other");
+
+/// The canonical URL of the BALP pattern of an OAuth access token's use whose
+/// recorder reads every field of the token, which a record claims when it
+/// names the token's `jti` and its client (BALP 1.1.4 §3:5.7.5.4).
+pub const OAUTH_COMPREHENSIVE: &str =
+    "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive";
+
+/// The `detail` name of the namespace a patient identifier was issued in,
+/// when that namespace is no URI (no specification governs the name: our own
+/// design).
+pub const PATIENT_NAMESPACE: &str = "namespace";
 
 /// What a transaction's audit profile fixes of its records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventKind {
     /// The audit profile's canonical URL, written to `meta.profile`; empty
     /// for a record that claims no profile, such as a failed `delete`, which
@@ -226,8 +330,10 @@ pub struct EventKind {
     pub profile: &'static str,
     /// `type`.
     pub event_type: Coded,
-    /// `subtype`, in order.
-    pub subtypes: &'static [Coded],
+    /// `subtype`, in order: the codes the pattern fixes, then any the
+    /// exchange adds, such as an operation id, which the open `subtype`
+    /// slicing of every BALP `RESTful` pattern admits.
+    pub subtypes: Vec<Coded>,
     /// `action`: `C`, `R`, `U`, `D` or `E`.
     pub action: &'static str,
     /// The type of the agent the request flows from (`agent:client` of a
@@ -253,6 +359,10 @@ pub enum Outcome {
     MinorFailure,
     /// `8`, serious failure: no answer arrived.
     SeriousFailure,
+    /// `12`, major failure: the recording application is now unavailable
+    /// (FHIR R4 `audit-event-outcome`; DICOM PS3.15 A.5.1
+    /// `EventOutcomeIndicator`).
+    MajorFailure,
 }
 
 impl Outcome {
@@ -263,6 +373,7 @@ impl Outcome {
             Self::Success => "0",
             Self::MinorFailure => "4",
             Self::SeriousFailure => "8",
+            Self::MajorFailure => "12",
         }
     }
 }
@@ -380,8 +491,10 @@ pub enum Direction {
     Received {
         /// The agent the request flows from.
         client: Peer,
-        /// The recording system's endpoint the request arrived at.
-        endpoint: Url,
+        /// The recording system's address the request arrived at: the base
+        /// URL it serves, or its host or IP address when it knows only that
+        /// (FHIR R4 `network-type`).
+        endpoint: NetworkAddress,
     },
 }
 
@@ -396,10 +509,15 @@ pub enum Entity {
     /// A patient, by an identifier (`entity:patient`): type `1`, role `1`,
     /// the identifier in `what.identifier`.
     Patient {
-        /// `what.identifier.system`.
-        system: String,
+        /// `what.identifier.system`, a URI (FHIR R4 `Identifier.system`), when
+        /// the identifier names one.
+        system: Option<String>,
         /// `what.identifier.value`.
         value: SecretString,
+        /// The namespace the identifier was issued in, when it is no URI and
+        /// so cannot be its `system`, written as a `detail` named
+        /// [`PATIENT_NAMESPACE`].
+        namespace: Option<String>,
     },
     /// A patient, by a literal reference such as `Patient/<id>`
     /// (`entity:patient`): type `1`, role `1`, the reference in
@@ -557,10 +675,13 @@ impl fmt::Debug for Entity {
             Self::PatientReference(_) => {
                 f.debug_tuple("PatientReference").field(&REDACTED).finish()
             }
-            Self::Patient { system, .. } => f
+            Self::Patient {
+                system, namespace, ..
+            } => f
                 .debug_struct("Patient")
                 .field("system", system)
                 .field("value", &REDACTED)
+                .field("namespace", namespace)
                 .finish(),
             Self::Resource {
                 reference,
@@ -603,6 +724,9 @@ pub struct Exchange {
     pub recorded: Timestamp,
     /// `outcome`.
     pub outcome: Outcome,
+    /// `outcomeDesc`, a free text description of the outcome (FHIR R4
+    /// `AuditEvent.outcomeDesc`), when the system gives one.
+    pub outcome_description: Option<String>,
     /// The recording system's part, and the other party.
     pub direction: Direction,
     /// Whom the exchange was made for.
@@ -618,7 +742,7 @@ impl fmt::Debug for Exchange {
         let direction = match &self.direction {
             Direction::Sent { server } => format!("sent to {:?}", RedactedUrl(&server.who)),
             Direction::Received { endpoint, .. } => {
-                format!("received at {:?}", RedactedUrl(endpoint.as_str()))
+                format!("received at {:?}", RedactedUrl(&endpoint.address()))
             }
         };
         f.debug_struct("Exchange")
@@ -643,6 +767,8 @@ pub struct Observer {
     pub site: Option<String>,
     /// The recording system's `network` when it sends a request.
     pub host: NetworkAddress,
+    /// `source.type`, in order, such as [`SOURCE_APPLICATION_SERVER`].
+    pub source_types: Vec<Coded>,
 }
 
 /// One written `AuditEvent`, FHIR JSON (ITI TF-2 Appendix Z.6), held as a
@@ -660,6 +786,25 @@ impl AuditRecord {
 impl fmt::Debug for AuditRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("AuditRecord").field(&REDACTED).finish()
+    }
+}
+
+/// One written `AuditEvent` as a JSON value, for a caller that stores the
+/// record as JSON rather than as bytes; it may name a patient, so `Debug`
+/// shows none of it.
+pub struct AuditEventValue(serde_json::Value);
+
+impl AuditEventValue {
+    /// The JSON value.
+    #[must_use]
+    pub fn into_value(self) -> serde_json::Value {
+        self.0
+    }
+}
+
+impl fmt::Debug for AuditEventValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("AuditEventValue").field(&REDACTED).finish()
     }
 }
 

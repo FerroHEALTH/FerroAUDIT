@@ -11,11 +11,15 @@
 //! (a leaf value or an aggregate), or nothing at all, the ids the request
 //! constrains its data to classify it too, its templates first. A category
 //! is a set, since one access reaches data of several, and `none` never
-//! removes one. A key matches only exactly: an id that differs by case,
-//! space or a specialisation is unmapped. Whatever is uncertain marks the
-//! access [`Classification::unclassified`] with its ids as evidence, and the
-//! access is never refused for it. No specification governs the
-//! classification: our own design.
+//! removes one. A key matches only exactly, or, in a map declared with
+//! [`Matching::OpenEhr`](crate::map::Matching::OpenEhr), apart from case: an
+//! id that differs by space or a specialisation is unmapped. A root object of
+//! a resource kind that holds no data of any category, such as an
+//! `EHR_STATUS` reached beside a `COMPOSITION`, adds "no category" with its
+//! kind and takes nothing from the categories of the others. Whatever is
+//! uncertain marks the access [`Classification::unclassified`] with its ids
+//! as evidence, and the access is never refused for it. No specification
+//! governs the classification: our own design.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -36,6 +40,9 @@ pub enum Basis {
     Queried,
     /// The kind of request, which serves one category by construction.
     Construction,
+    /// The kind of resource the access reached, which holds data of no
+    /// category.
+    ResourceKind,
 }
 
 impl Basis {
@@ -47,6 +54,46 @@ impl Basis {
             Self::Written => "written",
             Self::Queried => "queried",
             Self::Construction => "construction",
+            Self::ResourceKind => "resource-kind",
+        }
+    }
+}
+
+/// A kind of resource that holds no data of any category: the openEHR
+/// Reference Model classes an access can reach beside clinical content, or a
+/// kind the deployment names.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ResourceKind {
+    /// `EHR`.
+    Ehr,
+    /// `EHR_STATUS`.
+    EhrStatus,
+    /// `EHR_ACCESS`.
+    EhrAccess,
+    /// `FOLDER`.
+    Folder,
+    /// An `ITEM_TAG`.
+    ItemTag,
+    /// A `REVISION_HISTORY`.
+    RevisionHistory,
+    /// A kind the deployment names.
+    Other(String),
+}
+
+impl ResourceKind {
+    /// The kind as a record writes it: the Reference Model class name, or the
+    /// deployment's name.
+    #[must_use]
+    pub fn code(&self) -> &str {
+        match self {
+            Self::Ehr => "EHR",
+            Self::EhrStatus => "EHR_STATUS",
+            Self::EhrAccess => "EHR_ACCESS",
+            Self::Folder => "FOLDER",
+            Self::ItemTag => "ITEM_TAG",
+            Self::RevisionHistory => "REVISION_HISTORY",
+            Self::Other(name) => name,
         }
     }
 }
@@ -61,6 +108,10 @@ pub struct RootObject {
     pub archetype_id: Option<String>,
     /// The `OBJECT_VERSION_ID` of the version the object is, when known.
     pub version_uid: Option<String>,
+    /// The kind of the object, when it is a resource that holds data of no
+    /// category: the object then adds "no category" with its kind, whatever
+    /// its ids.
+    pub kind: Option<ResourceKind>,
 }
 
 impl fmt::Debug for RootObject {
@@ -69,6 +120,7 @@ impl fmt::Debug for RootObject {
             .field("template_id", &self.template_id.is_some())
             .field("archetype_id", &self.archetype_id.is_some())
             .field("version_uid", &self.version_uid.is_some())
+            .field("kind", &self.kind)
             .finish()
     }
 }
@@ -83,6 +135,7 @@ pub struct Evidence {
     every_root_bound: bool,
     unrooted: bool,
     no_category: bool,
+    kinds: BTreeSet<ResourceKind>,
     unreadable: Option<Unreadable>,
     constructed: BTreeSet<Category>,
 }
@@ -112,11 +165,22 @@ impl Evidence {
     }
 
     /// The evidence of an access to a resource that holds no data of any
-    /// category, such as an `EHR` or an `EHR_STATUS`.
+    /// category, such as an `EHR` or an `EHR_STATUS`, with no kind named.
     #[must_use]
     pub fn no_category() -> Self {
         Self {
             no_category: true,
+            ..Self::default()
+        }
+    }
+
+    /// The evidence of an access to a resource of `kind`, which holds no data
+    /// of any category.
+    #[must_use]
+    pub fn resource(kind: ResourceKind) -> Self {
+        Self {
+            no_category: true,
+            kinds: BTreeSet::from([kind]),
             ..Self::default()
         }
     }
@@ -176,6 +240,7 @@ impl fmt::Debug for Evidence {
             .field("every_root_bound", &self.every_root_bound)
             .field("unrooted", &self.unrooted)
             .field("no_category", &self.no_category)
+            .field("kinds", &self.kinds)
             .field("unreadable", &self.unreadable.is_some())
             .field("constructed", &self.constructed)
             .finish()
@@ -254,12 +319,28 @@ impl Unreadable {
 pub struct Classification {
     categories: BTreeMap<Category, BTreeSet<Basis>>,
     no_category: bool,
+    kinds: BTreeSet<ResourceKind>,
     unclassified: Option<Unclassified>,
     templates: BTreeSet<String>,
     archetypes: BTreeSet<String>,
     versions: BTreeSet<String>,
     unmapped: BTreeSet<String>,
+    counts: EvidenceCounts,
     digest: Option<String>,
+}
+
+/// How many distinct ids each evidence set of a classification held before
+/// the map's evidence limit cut it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EvidenceCounts {
+    /// Template ids.
+    pub templates: usize,
+    /// Archetype ids.
+    pub archetypes: usize,
+    /// Version uids.
+    pub versions: usize,
+    /// Ids the map holds no key for.
+    pub unmapped: usize,
 }
 
 impl fmt::Debug for Classification {
@@ -267,6 +348,7 @@ impl fmt::Debug for Classification {
         f.debug_struct("Classification")
             .field("categories", &self.categories)
             .field("no_category", &self.no_category)
+            .field("kinds", &self.kinds)
             .field("unclassified", &self.unclassified.as_ref().map(|_| "set"))
             .field("templates", &self.templates.len())
             .field("archetypes", &self.archetypes.len())
@@ -288,6 +370,20 @@ impl Classification {
     #[must_use]
     pub fn is_no_category(&self) -> bool {
         self.no_category && self.categories.is_empty() && self.unclassified.is_none()
+    }
+
+    /// The kinds of resource of no category the access reached, each the
+    /// basis [`Basis::ResourceKind`] of its "no category".
+    #[must_use]
+    pub fn no_category_kinds(&self) -> &BTreeSet<ResourceKind> {
+        &self.kinds
+    }
+
+    /// How many distinct ids each evidence set held; a set holds fewer when
+    /// the map's evidence limit cut it.
+    #[must_use]
+    pub fn evidence_counts(&self) -> EvidenceCounts {
+        self.counts
     }
 
     /// Why the access, or a part of it, is unclassified; `None` when the
@@ -355,11 +451,13 @@ impl CategoryMap {
         let mut classified = Classification {
             categories: BTreeMap::new(),
             no_category: evidence.no_category,
+            kinds: evidence.kinds.clone(),
             unclassified: None,
             templates: BTreeSet::new(),
             archetypes: BTreeSet::new(),
             versions: BTreeSet::new(),
             unmapped: BTreeSet::new(),
+            counts: EvidenceCounts::default(),
             digest: self.digest().map(str::to_owned),
         };
         if evidence.no_category {
@@ -388,6 +486,7 @@ impl CategoryMap {
         if classified.categories.is_empty() && !classified.no_category {
             classified.unclassify(Unclassified::NamedNothing);
         }
+        classified.bound(self.evidence_limit());
         classified
     }
 
@@ -398,6 +497,11 @@ impl CategoryMap {
         classified.templates.extend(object.template_id.clone());
         classified.archetypes.extend(object.archetype_id.clone());
         classified.versions.extend(object.version_uid.clone());
+        if let Some(kind) = &object.kind {
+            classified.no_category = true;
+            classified.kinds.insert(kind.clone());
+            return;
+        }
         let template = object
             .template_id
             .as_deref()
@@ -467,6 +571,29 @@ impl CategoryMap {
 }
 
 impl Classification {
+    /// Counts each evidence set and keeps at most `limit` of its ids, the
+    /// first in order.
+    fn bound(&mut self, limit: Option<usize>) {
+        self.counts = EvidenceCounts {
+            templates: self.templates.len(),
+            archetypes: self.archetypes.len(),
+            versions: self.versions.len(),
+            unmapped: self.unmapped.len(),
+        };
+        if let Some(limit) = limit {
+            for set in [
+                &mut self.templates,
+                &mut self.archetypes,
+                &mut self.versions,
+                &mut self.unmapped,
+            ] {
+                while set.len() > limit {
+                    set.pop_last();
+                }
+            }
+        }
+    }
+
     /// Marks the access unclassified for `why`, unless a reason is held.
     fn unclassify(&mut self, why: Unclassified) {
         if self.unclassified.is_none() {

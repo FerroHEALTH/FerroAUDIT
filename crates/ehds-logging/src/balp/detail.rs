@@ -23,12 +23,32 @@ pub const ARCHETYPE_ID: &str = "archetype-id";
 pub const VERSION_UID: &str = "version-uid";
 /// An id the category map holds no key for.
 pub const UNMAPPED_ID: &str = "unmapped-id";
+/// How many distinct template ids the evidence held, when the map's evidence
+/// limit cut the `template-id` entries.
+pub const TEMPLATE_ID_COUNT: &str = "template-id-count";
+/// How many distinct archetype ids the evidence held, when the limit cut
+/// them.
+pub const ARCHETYPE_ID_COUNT: &str = "archetype-id-count";
+/// How many distinct version uids the evidence held, when the limit cut them.
+pub const VERSION_UID_COUNT: &str = "version-uid-count";
+/// How many distinct unmapped ids the evidence held, when the limit cut them.
+pub const UNMAPPED_ID_COUNT: &str = "unmapped-id-count";
+/// A kind of resource of no category the access reached, such as
+/// `EHR_STATUS`, once per kind.
+pub const NO_CATEGORY_KIND: &str = "ehds-no-category-kind";
+/// What the "no category" was read from: `resource-kind`.
+pub const NO_CATEGORY_BASIS: &str = "ehds-no-category-basis";
+/// How many distinct origins the access reached, when the record names fewer.
+pub const ORIGIN_COUNT: &str = "ehds-origin-count";
 /// The digest of the category map.
 pub const MAP_DIGEST: &str = "category-map-digest";
 /// The rows or objects delivered.
 pub const DELIVERED: &str = "delivered";
 /// The stored query executed.
 pub const STORED_QUERY: &str = "stored-query";
+/// The namespace of a patient identifier that is no URI, on the patient
+/// entity (the name `ihe-atna` writes).
+pub const PATIENT_NAMESPACE: &str = ihe_atna::balp::PATIENT_NAMESPACE;
 /// The node behind an origin.
 pub const NODE: &str = "node";
 /// The `system_id` of the node behind an origin.
@@ -85,9 +105,17 @@ pub const PROVIDER_ISSUING_AUTHORITY: &str = "provider-issuing-authority";
 pub const PROVIDER_NAME: &str = "provider-name";
 /// The relayed `healthcare_provider_address`.
 pub const PROVIDER_ADDRESS: &str = "provider-address";
-/// The years the record is kept.
+/// The years the record is kept, for a period in years.
 pub const RETENTION_YEARS: &str = "ehds-retention-years";
-/// The first UTC date the record may be deleted on, `YYYY-MM-DD`.
+/// The period the record is kept, as an ISO 8601 duration (`P3Y`, `P1100D`),
+/// or `indefinite`.
+pub const RETENTION_PERIOD: &str = "ehds-retention-period";
+/// The legal ground of the floor the period stands over:
+/// `eu-2025-327-art-9-2`, `national:<citation>` or
+/// `outside-union:<citation>`.
+pub const RETENTION_FLOOR: &str = "ehds-retention-floor";
+/// The first UTC date the record may be deleted on, `YYYY-MM-DD`; absent for
+/// a record kept without end.
 pub const RETENTION_ENDS: &str = "ehds-retention-ends";
 /// What called for the period: `default`, `unclassified`,
 /// `category:<system>|<code>` or `origin:<endpoint>`.

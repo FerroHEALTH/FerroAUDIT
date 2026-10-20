@@ -237,12 +237,13 @@ async fn bounded<T>(
         .map_err(|_elapsed| SendError::Timeout(step))
 }
 
-/// A connection's byte stream, plain or TLS.
-trait Stream: AsyncRead + AsyncWrite + Send + Unpin {}
+/// A connection's byte stream, plain or TLS; both are `Sync`, so a
+/// connection held behind a shared reference needs no lock of its own.
+trait Stream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
-impl<T: AsyncRead + AsyncWrite + Send + Unpin> Stream for T {}
+impl<T: AsyncRead + AsyncWrite + Send + Sync + Unpin> Stream for T {}
 
-/// An open connection to a repository.
+/// An open connection to a repository, `Send` and `Sync`.
 pub struct Connection {
     stream: Box<dyn Stream>,
     send_timeout: Duration,
@@ -345,5 +346,17 @@ fn client_config(tls: &TlsSettings) -> Result<ClientConfig, RepositoryError> {
                 .with_client_auth_cert(chain, key)
                 .map_err(RepositoryError::Tls)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Connection;
+
+    const fn is_send_and_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn a_connection_is_send_and_sync() {
+        const { is_send_and_sync::<Connection>() };
     }
 }

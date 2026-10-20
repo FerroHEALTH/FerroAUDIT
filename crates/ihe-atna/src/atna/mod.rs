@@ -23,13 +23,33 @@
 //! A message names whatever its event names, a patient identifier included,
 //! so no part of this module logs a message or renders one in `Debug`.
 
+#[cfg(feature = "atna")]
+pub mod codes;
 #[cfg(feature = "balp")]
 pub mod feed;
 pub mod forwarder;
+#[cfg(feature = "atna")]
 pub mod message;
+#[cfg(feature = "atna")]
 pub mod repository;
 pub mod spool;
 pub mod syslog;
+
+/// The `tracing` targets the spool and the forwarder log under: an interface
+/// an operator's log filter names, so they never follow the module layout.
+///
+/// Every event of the spool, its reservations and its in-flight writes names
+/// [`SPOOL`]; every event of the forwarder, a failure to reach a syslog
+/// repository or a FHIR Feed repository included, names [`FORWARDER`]. The
+/// repository connection and the FHIR Feed client log nothing of their own:
+/// they return their failures to the forwarder, which logs them. No
+/// specification governs the names: our own design.
+pub mod targets {
+    /// The target of every event of the spool.
+    pub const SPOOL: &str = "ihe_atna::atna::spool";
+    /// The target of every event of the forwarder.
+    pub const FORWARDER: &str = "ihe_atna::atna::forwarder";
+}
 
 /// `error` with its causes, joined, for a log line.
 fn chain(error: &dyn std::error::Error) -> String {

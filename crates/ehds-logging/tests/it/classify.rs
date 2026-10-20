@@ -20,6 +20,7 @@ fn object(template: Option<&str>, archetype: Option<&str>) -> RootObject {
         template_id: template.map(str::to_owned),
         archetype_id: archetype.map(str::to_owned),
         version_uid: Some("8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1".to_owned()),
+        kind: None,
     }
 }
 
