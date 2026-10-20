@@ -137,7 +137,7 @@ impl fmt::Debug for Repository {
 pub struct TlsSettings {
     /// PEM certificates trusted beside the platform's roots.
     pub roots: Option<Vec<u8>>,
-    /// The PEM client certificate chain and private key the gateway
+    /// The PEM client certificate chain and private key the sender
     /// authenticates with, when the repository asks for one.
     pub identity: Option<SecretString>,
 }

@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: BUSL-1.1
 # scripts/vendor/ihe-atna.sh
 #
-# Vendors the IHE ATNA text the gateway's audit trail cites into
+# Vendors the IHE ATNA text the ihe-atna crate cites into
 # docs/specs/ihe-atna/: the Record Audit Event [ITI-20] page of the IT
 # Infrastructure Technical Framework Volume 2 with its one figure (the syslog
 # interaction, its store-and-forward trigger, and the audit message format the
-# ITI-55 audit message follows, #418), and the RESTful ATNA Technical Framework
+# ITI-55 audit message follows), and the RESTful ATNA Technical Framework
 # Supplement (the ATX: FHIR Feed Option and the Send Audit Resource
-# interaction of ITI-20 the BALP audit records travel over, #486).
+# interaction of ITI-20 the BALP audit records travel over).
 #
 # Neither text is in a FHIR package or a tagged repository: the page is
 # published as HTML at profiles.ihe.net and the supplement as a PDF at
@@ -144,8 +144,8 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #418 (the ITI-20 syslog sender of \`crates/ihe-iti\`, feature
-  \`atna\`) and #486 (its ATX: FHIR Feed sender, feature \`balp\`), whose tests
+- Read by: the ITI-20 syslog sender of \`crates/ihe-atna\` (feature
+  \`atna\`) and its ATX: FHIR Feed sender (feature \`balp\`), whose tests
   hold the store-and-forward of §3.20.4.1.1 the spool keeps, and the
   supplement the FHIR Feed follows, to these files
 

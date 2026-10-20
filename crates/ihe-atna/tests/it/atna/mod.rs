@@ -10,7 +10,7 @@ mod spool;
 
 use std::time::{Duration, Instant};
 
-use ihe_iti::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::forwarder::{Forwarder, Status};
 use secrecy::SecretSlice;
 
 /// A synthetic message, `text` as bytes.

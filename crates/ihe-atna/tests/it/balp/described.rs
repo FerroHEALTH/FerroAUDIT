@@ -9,11 +9,11 @@
     reason = "the test seam: the written record is read as a JSON value"
 )]
 
-use ihe_iti::balp::{
+use ihe_atna::balp::{
     DESTINATION_ROLE, Described, Detail, Direction, Entity, EventKind, Exchange, OTHER, Outcome,
     Peer, READ, REQUEST_ID, REST, SOURCE_ROLE, SecurityLabel, What,
 };
-use ihe_iti::user::{Code, OnBehalfOf, User};
+use ihe_atna::user::{Code, OnBehalfOf, User};
 use secrecy::ExposeSecret as _;
 use serde_json::Value;
 use url::Url;

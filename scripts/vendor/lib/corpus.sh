@@ -13,9 +13,9 @@
 #
 # Requires: curl, tar, shasum, jq.
 #
-# No specification governs this file; it is FerroFED's own design.
+# No specification governs this file; it is FerroAUDIT's own design.
 
-corpus_ua="ferrofed-vendor (scripts/vendor)"
+corpus_ua="ferroaudit-vendor (scripts/vendor)"
 corpus_matrix="docs/VERSIONS.md"
 # The sourcing script names every message, so a failure says which corpus it
 # belongs to without each script repeating its own name.

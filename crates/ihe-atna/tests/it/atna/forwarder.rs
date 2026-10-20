@@ -11,9 +11,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use ihe_iti::atna::forwarder::Forwarder;
-use ihe_iti::atna::repository::{Repository, Timeouts, TlsSettings};
-use ihe_iti::atna::spool::{Bounds, QUARANTINE, Spool};
+use ihe_atna::atna::forwarder::Forwarder;
+use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+use ihe_atna::atna::spool::{Bounds, QUARANTINE, Spool};
 use tokio::io::AsyncReadExt as _;
 use tokio::net::{TcpListener, TcpStream};
 use url::Url;

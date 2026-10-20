@@ -11,10 +11,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use ihe_iti::atna::feed::{FeedAddressError, FeedRepository};
-use ihe_iti::atna::forwarder::Forwarder;
-use ihe_iti::atna::spool::{Bounds, Content, QUARANTINE, Spool};
-use ihe_iti::balp::{
+use ihe_atna::atna::feed::{FeedAddressError, FeedRepository};
+use ihe_atna::atna::forwarder::Forwarder;
+use ihe_atna::atna::spool::{Bounds, Content, QUARANTINE, Spool};
+use ihe_atna::balp::{
     DESTINATION_ROLE, Direction, Entity, EventKind, Exchange, Outcome, Peer, REST, SEARCH,
     SOURCE_ROLE,
 };
@@ -74,7 +74,7 @@ fn record(value: &str) -> SecretSlice<u8> {
         direction: Direction::Sent {
             server: Peer::server(&Url::parse("https://pix.example.org/fhir/").expect("a URL")),
         },
-        on_behalf: ihe_iti::user::OnBehalfOf::System,
+        on_behalf: ihe_atna::user::OnBehalfOf::System,
         entities: vec![Entity::Patient {
             system: "urn:oid:2.999.1".to_owned(),
             value: SecretString::from(value),

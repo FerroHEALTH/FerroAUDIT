@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use ihe_iti::atna::spool::{Bounds, Depth, QUARANTINE, Spool, SpoolError};
+use ihe_atna::atna::spool::{Bounds, Depth, QUARANTINE, Spool, SpoolError};
 use secrecy::ExposeSecret;
 
 use super::message;

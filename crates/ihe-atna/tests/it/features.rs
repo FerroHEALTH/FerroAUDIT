@@ -1,0 +1,116 @@
+// SPDX-FileCopyrightText: Cadasto B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The feature boundaries, read from the crate graph one feature at a time
+//! (no specification governs them: our own design).
+//!
+//! `atna` compiles no FHIR model and no HTTP client: the syslog sender needs
+//! neither, so a caller that audits over syslog alone links none of them.
+//! `balp` adds both for the `AuditEvent` and the FHIR Feed. Neither feature
+//! compiles the message ids of an XCPD exchange, which the ITI-55 audit
+//! message's caller supplies.
+
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// The crates only `balp` compiles.
+const BALP_ONLY: &[&str] = &["fhir-types", "reqwest"];
+
+/// The crates no feature compiles.
+const NEVER: &[&str] = &["uuid"];
+
+/// The workspace root, two levels above this crate's manifest.
+const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
+
+/// A cargo home of its own for a child cargo, in a temporary directory whose
+/// `registry` and `git` link to the real home's.
+///
+/// The child resolves offline from the lockfile and the registry already on
+/// disk (`--frozen`), which only reads those caches, yet cargo still takes
+/// the package cache lock of its home, and a cargo building elsewhere on the
+/// machine holds that lock for its whole build. No other cargo takes the lock
+/// of this home (the Cargo book, "Cargo Home").
+fn private_cargo_home() -> tempfile::TempDir {
+    let home = tempfile::tempdir().expect("a temporary cargo home");
+    let shared = std::env::var_os("CARGO_HOME").map_or_else(
+        || {
+            std::env::home_dir()
+                .expect("CARGO_HOME or a home directory names the cargo home")
+                .join(".cargo")
+        },
+        PathBuf::from,
+    );
+    for cache in ["registry", "git"] {
+        let source = shared.join(cache);
+        if source.exists() {
+            std::os::unix::fs::symlink(&source, home.path().join(cache))
+                .expect("the shared cache links into the private home");
+        }
+    }
+    home
+}
+
+/// The package names `cargo tree` lists for this crate with only `feature`
+/// on, through normal dependencies, down to `depth` when given.
+fn tree(feature: &str, depth: Option<&str>) -> BTreeSet<String> {
+    let home = private_cargo_home();
+    let mut command = Command::new(env!("CARGO"));
+    command
+        .env("CARGO_HOME", home.path())
+        .env("CARGO_CACHE_AUTO_CLEAN_FREQUENCY", "never")
+        .arg("tree")
+        .arg("--manifest-path")
+        .arg(Path::new(ROOT).join("Cargo.toml"))
+        .args(["--package", "ihe-atna"])
+        .args(["--edges", "normal"])
+        .args(["--prefix", "none", "--format", "{p}"])
+        .args(["--no-default-features", "--features", feature, "--frozen"]);
+    if let Some(depth) = depth {
+        command.args(["--depth", depth]);
+    }
+    let output = command.output().expect("cargo tree runs");
+    assert!(
+        output.status.success(),
+        "cargo tree failed for {feature}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let names: BTreeSet<String> = String::from_utf8(output.stdout)
+        .expect("UTF-8 output")
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .map(str::to_owned)
+        .collect();
+    assert!(
+        names.contains("ihe-atna"),
+        "cargo tree for {feature} did not list the crate itself, so its output was not read"
+    );
+    names
+}
+
+#[test]
+fn only_balp_compiles_the_fhir_model_and_the_http_client() {
+    let atna = tree("atna", None);
+    let balp = tree("balp", None);
+    for name in BALP_ONLY {
+        assert!(balp.contains(*name), "balp lost {name}: {balp:?}");
+        assert!(!atna.contains(*name), "atna compiles {name}: {atna:?}");
+    }
+    let balp_direct = tree("balp", Some("1"));
+    for name in BALP_ONLY {
+        assert!(balp_direct.contains(*name), "balp names {name}");
+    }
+}
+
+#[test]
+fn no_feature_compiles_the_xcpd_message_ids() {
+    for feature in ["atna", "balp"] {
+        let closure = tree(feature, None);
+        for name in NEVER {
+            assert!(
+                !closure.contains(*name),
+                "{feature} compiles {name}: {closure:?}"
+            );
+        }
+    }
+}
