@@ -16,6 +16,10 @@
 //! value that may name a patient or carry a credential, and `fhir_base` the
 //! URL of an interaction under a FHIR base.
 //!
+//! The syslog sender is shown in the docs of `atna::repository` and a BALP
+//! record sent over the FHIR Feed in those of `atna::feed`, each a compiled
+//! example.
+//!
 //! The profiles are published at <https://profiles.ihe.net/ITI/>. The crate
 //! depends on no application: it is the audit transactions as Rust, for any
 //! caller.

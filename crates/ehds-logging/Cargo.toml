@@ -49,6 +49,8 @@ flate2.workspace = true
 proptest.workspace = true
 serde_json.workspace = true
 tar.workspace = true
+# A cargo home of its own for the feature-boundary test's child cargo.
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "macros"] }
 toml.workspace = true
 

@@ -13,8 +13,9 @@
 
 use std::path::PathBuf;
 
-use ihe_atna::balp::{NetworkAddress, 
-    DESTINATION_ROLE, Direction, EventKind, Exchange, Outcome, Peer, READ, REST, SOURCE_ROLE,
+use ihe_atna::balp::{
+    DESTINATION_ROLE, Direction, EventKind, Exchange, NetworkAddress, Outcome, Peer, READ, REST,
+    SOURCE_ROLE,
 };
 use ihe_atna::user::{OnBehalfOf, PurposeOfUse, User};
 use secrecy::ExposeSecret as _;
@@ -60,7 +61,9 @@ fn exchange(purposes: Vec<PurposeOfUse>) -> Exchange {
         outcome_description: None,
         direction: Direction::Received {
             client: Peer::server(&Url::parse("https://client.example.org/").expect("a URL")),
-            endpoint: NetworkAddress::Uri(Url::parse("https://gateway.example.org/v1/ehr").expect("a URL")),
+            endpoint: NetworkAddress::Uri(
+                Url::parse("https://gateway.example.org/v1/ehr").expect("a URL"),
+            ),
         },
         on_behalf: OnBehalfOf::User(
             User::new(

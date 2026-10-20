@@ -27,6 +27,77 @@
 //! redirect is followed, and no error carries the record, the credential or
 //! the repository's answer body. The TLS stack is the caller's: it builds the
 //! `reqwest::Client` with the TLS backend it ships.
+//!
+//! # Examples
+//!
+//! A BALP record of a search the system made, stored in a spool of
+//! `AuditEvent`s and sent over the FHIR Feed.
+//!
+//! ```no_run
+//! use std::path::Path;
+//! use std::sync::Arc;
+//! use std::time::Duration;
+//!
+//! use ihe_atna::atna::feed::FeedRepository;
+//! use ihe_atna::atna::forwarder::Forwarder;
+//! use ihe_atna::atna::spool::{Bounds, Content, Spool};
+//! use ihe_atna::balp::{
+//!     DESTINATION_ROLE, Direction, EventKind, Exchange, NetworkAddress, Observer, Outcome,
+//!     Peer, REST, SEARCH, SOURCE_APPLICATION_SERVER, SOURCE_ROLE,
+//! };
+//! use ihe_atna::user::OnBehalfOf;
+//! use url::Url;
+//!
+//! # #[tokio::main(flavor = "current_thread")]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let http = reqwest::Client::builder()
+//!     .redirect(reqwest::redirect::Policy::none())
+//!     .build()?;
+//! let feed = FeedRepository::new(
+//!     Url::parse("https://arr.example.org/fhir/")?,
+//!     http,
+//!     Duration::from_secs(10),
+//! )?;
+//! let bounds = Bounds {
+//!     max_messages: 10_000,
+//!     max_bytes: 64 << 20,
+//!     write_timeout: Duration::from_secs(2),
+//! };
+//! let spool = Spool::open_for(Path::new("/var/spool/audit-feed"), bounds, Content::AuditEvents)?;
+//! let forwarder = Forwarder::fhir_feed(spool, feed, Duration::from_secs(60));
+//! tokio::spawn(Arc::clone(&forwarder).run());
+//!
+//! let exchange = Exchange {
+//!     kind: EventKind {
+//!         profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Query",
+//!         event_type: REST,
+//!         subtypes: vec![SEARCH],
+//!         action: "E",
+//!         client: SOURCE_ROLE,
+//!         server: DESTINATION_ROLE,
+//!     },
+//!     recorded: jiff::Timestamp::now(),
+//!     outcome: Outcome::Success,
+//!     outcome_description: None,
+//!     direction: Direction::Sent {
+//!         server: Peer::server(&Url::parse("https://directory.example.org/fhir/")?),
+//!     },
+//!     on_behalf: OnBehalfOf::System,
+//!     entities: Vec::new(),
+//!     security: Vec::new(),
+//! };
+//! let observer = Observer {
+//!     source_id: "gateway.example.org".to_owned(),
+//!     site: None,
+//!     host: NetworkAddress::host("gateway.example.org"),
+//!     source_types: vec![SOURCE_APPLICATION_SERVER],
+//! };
+//! forwarder
+//!     .submit(exchange.audit_event(&observer)?.into_bytes())
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use std::fmt;
 use std::time::Duration;

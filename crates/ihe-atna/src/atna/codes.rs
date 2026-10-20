@@ -27,11 +27,13 @@ pub const EVENT_APPLICATION_ACTIVITY: Triple = ("110100", DCM, "Application Acti
 /// `EV(110101, DCM, "Audit Log Used")`.
 pub const EVENT_AUDIT_LOG_USED: Triple = ("110101", DCM, "Audit Log Used");
 /// `EV(110102, DCM, "Begin Transferring DICOM Instances")`.
-pub const EVENT_BEGIN_TRANSFERRING_DICOM_INSTANCES: Triple = ("110102", DCM, "Begin Transferring DICOM Instances");
+pub const EVENT_BEGIN_TRANSFERRING_DICOM_INSTANCES: Triple =
+    ("110102", DCM, "Begin Transferring DICOM Instances");
 /// `EV(110103, DCM, "DICOM Instances Accessed")`.
 pub const EVENT_DICOM_INSTANCES_ACCESSED: Triple = ("110103", DCM, "DICOM Instances Accessed");
 /// `EV(110104, DCM, "DICOM Instances Transferred")`.
-pub const EVENT_DICOM_INSTANCES_TRANSFERRED: Triple = ("110104", DCM, "DICOM Instances Transferred");
+pub const EVENT_DICOM_INSTANCES_TRANSFERRED: Triple =
+    ("110104", DCM, "DICOM Instances Transferred");
 /// `EV(110105, DCM, "DICOM Study Deleted")`.
 pub const EVENT_DICOM_STUDY_DELETED: Triple = ("110105", DCM, "DICOM Study Deleted");
 /// `EV(110106, DCM, "Export")`.

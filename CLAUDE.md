@@ -34,9 +34,11 @@ Audit Record Repository on it. The code came from FerroFED's `ihe-iti`
   bounded store-and-forward spool ITI-20 requires of a sender
   (`atna::spool`), and the forwarder that stores first and delivers oldest
   first (`atna::forwarder`).
-- `balp` (feature, implies `atna`): the FHIR R4 `AuditEvent` an IHE FHIR
-  transaction is audited as (`balp`), the `AuditRecorder` seam an audited
-  client records through, and the ATX: FHIR Feed client (`atna::feed`).
+- `balp` (feature): the FHIR R4 `AuditEvent` an IHE FHIR transaction is
+  audited as (`balp`), the `AuditRecorder` seam an audited client records
+  through, and the ATX: FHIR Feed client (`atna::feed`), over the same spool
+  and forwarder, without the syslog sender or its TLS stack (owner decision
+  2026-10-20, FerroHEALTH/FerroAUDIT#11).
 - `user` (always): whom an audited exchange is made for, a user an OAuth
   2.0 access token names or the system.
 - `ehds-logging`: the Annex II 3.2 access record, the Article 14(1)
@@ -66,9 +68,11 @@ the oracle, pinned in `docs/VERSIONS.md` and held to their provenance by
   `transformation`, `sink`, and `balp` behind its feature), `tests/it/`.
 - `docs/`: `architecture.md`, `VERSIONS.md`, `specs/` (the vendored ITI-20
   page and RESTful ATNA supplement, the BALP package and pages, the EHDS
-  Regulation with the acts and guidelines `ehds-logging` cites, and the HL7
-  Europe and MyHealth@EU packages the categories are held to, each with a
-  `PROVENANCE.md`).
+  Regulation with the acts and guidelines `ehds-logging` cites, the HL7
+  Europe and MyHealth@EU packages the categories are held to, the IETF
+  syslog and audit RFCs, the openEHR BASE Base Types specification, and the
+  pin of DICOM PS3.15, which is read from the git-ignored `.vendor-cache/`
+  and never committed, each with a `PROVENANCE.md`).
 - `scripts/`: `vendor/` (the corpus fetchers), `checks/` (the committed
   guards), `release/` (the crate publish and the milestone check), `gh/`
   (the tracker helpers).

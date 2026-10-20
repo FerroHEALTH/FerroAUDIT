@@ -5,8 +5,14 @@
 //! cannot reach its repository (ITI TF-2 §3.20.4.1.1), and the forwarder
 //! that delivers from it.
 
+#[cfg(feature = "atna")]
 mod forwarder;
+#[cfg(feature = "atna")]
+mod message;
+mod outbox;
 mod spool;
+#[cfg(feature = "atna")]
+mod targets;
 
 use std::time::{Duration, Instant};
 

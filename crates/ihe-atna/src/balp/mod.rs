@@ -153,11 +153,7 @@ pub const SEARCH: Coded = Coded::fixed(
 );
 
 /// The `restful-interaction` subtype `read` (`IHE.BasicAudit.Read`).
-pub const READ: Coded = Coded::fixed(
-    "http://hl7.org/fhir/restful-interaction",
-    "read",
-    "read",
-);
+pub const READ: Coded = Coded::fixed("http://hl7.org/fhir/restful-interaction", "read", "read");
 
 /// The `restful-interaction` subtype `create` (`IHE.BasicAudit.Create`,
 /// `subtype:anyCreate`).
@@ -274,10 +270,11 @@ pub const OPERATION: Coded = Coded::fixed(
     "operation",
 );
 
-/// The code system of `AuditEvent.source.type` (FHIR R4
-/// `security-source-type`), which the `RESTful` ATNA mapping carries to and
-/// from the DICOM `AuditSourceTypeCode` (`RESTful` ATNA Rev. 3.6 Table
-/// 3.20.4.2.2.1-1).
+/// The code system of `AuditEvent.source.type` (FHIR R4).
+///
+/// FHIR R4 `security-source-type`, which the `RESTful` ATNA mapping carries
+/// to and from the DICOM `AuditSourceTypeCode` (`RESTful` ATNA Rev. 3.6
+/// Table 3.20.4.2.2.1-1).
 pub const SECURITY_SOURCE_TYPE: &str = "http://terminology.hl7.org/CodeSystem/security-source-type";
 
 /// `source.type` `1`, an end-user display device or diagnostic device.
@@ -310,11 +307,11 @@ pub const SOURCE_NETWORK_ROUTER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "8",
 /// `source.type` `9`, any other source.
 pub const SOURCE_OTHER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "9", "Other");
 
-/// The canonical URL of the BALP pattern of an OAuth access token's use whose
-/// recorder reads every field of the token, which a record claims when it
+/// The BALP pattern of an OAuth access token's Comprehensive use.
+///
+/// Its recorder reads every field of the token; a record claims it when it
 /// names the token's `jti` and its client (BALP 1.1.4 §3:5.7.5.4).
-pub const OAUTH_COMPREHENSIVE: &str =
-    "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive";
+pub const OAUTH_COMPREHENSIVE: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive";
 
 /// The `detail` name of the namespace a patient identifier was issued in,
 /// when that namespace is no URI (no specification governs the name: our own
@@ -749,6 +746,7 @@ impl fmt::Debug for Exchange {
             .field("profile", &self.kind.profile)
             .field("recorded", &self.recorded)
             .field("outcome", &self.outcome)
+            .field("outcome_description", &self.outcome_description.is_some())
             .field("direction", &direction)
             .field("on_behalf", &self.on_behalf)
             .field("entities", &self.entities)
@@ -792,11 +790,19 @@ impl fmt::Debug for AuditRecord {
 /// One written `AuditEvent` as a JSON value, for a caller that stores the
 /// record as JSON rather than as bytes; it may name a patient, so `Debug`
 /// shows none of it.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the seam to a caller's JSON store: the record leaves as a value behind this redacting type"
+)]
 pub struct AuditEventValue(serde_json::Value);
 
 impl AuditEventValue {
     /// The JSON value.
     #[must_use]
+    #[expect(
+        clippy::disallowed_types,
+        reason = "the seam to a caller's JSON store: the record leaves as a value behind this redacting type"
+    )]
     pub fn into_value(self) -> serde_json::Value {
         self.0
     }

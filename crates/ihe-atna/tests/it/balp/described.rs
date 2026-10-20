@@ -9,9 +9,9 @@
     reason = "the test seam: the written record is read as a JSON value"
 )]
 
-use ihe_atna::balp::{NetworkAddress, 
-    DESTINATION_ROLE, Described, Detail, Direction, Entity, EventKind, Exchange, OTHER, Outcome,
-    Peer, READ, REQUEST_ID, REST, SOURCE_ROLE, SecurityLabel, What,
+use ihe_atna::balp::{
+    DESTINATION_ROLE, Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress,
+    OTHER, Outcome, Peer, READ, REQUEST_ID, REST, SOURCE_ROLE, SecurityLabel, What,
 };
 use ihe_atna::user::{Code, OnBehalfOf, User};
 use secrecy::ExposeSecret as _;
@@ -52,7 +52,9 @@ fn exchange() -> Exchange {
         outcome_description: None,
         direction: Direction::Received {
             client: Peer::server(&Url::parse("https://client.example.org/").expect("a URL")),
-            endpoint: NetworkAddress::Uri(Url::parse("https://gateway.example.org/v1/ehr").expect("a URL")),
+            endpoint: NetworkAddress::Uri(
+                Url::parse("https://gateway.example.org/v1/ehr").expect("a URL"),
+            ),
         },
         on_behalf: OnBehalfOf::User(
             User::new(

@@ -503,7 +503,7 @@ impl Spool {
         {
             let refused = ledger.refuse();
             drop(ledger);
-            tracing::warn!(target: crate::atna::targets::SPOOL, 
+            tracing::warn!(target: crate::atna::targets::SPOOL,
                 refused,
                 messages,
                 bytes,
@@ -580,7 +580,7 @@ impl Inner {
         let bytes = self.depth.bytes.saturating_add(size);
         if self.depth.messages >= self.bounds.max_messages || bytes > self.bounds.max_bytes {
             let refused = lock(&self.shown).refuse();
-            tracing::warn!(target: crate::atna::targets::SPOOL, 
+            tracing::warn!(target: crate::atna::targets::SPOOL,
                 refused,
                 messages = self.depth.messages,
                 bytes = self.depth.bytes,
@@ -677,7 +677,7 @@ impl Inner {
             quarantined.insert(sequence, size);
             self.depth.quarantined = self.depth.quarantined.saturating_add(1);
         }
-        tracing::error!(target: crate::atna::targets::SPOOL, 
+        tracing::error!(target: crate::atna::targets::SPOOL,
             sequence,
             reason = why,
             "a spooled audit message was moved to the quarantine; the drain goes on"
@@ -703,7 +703,7 @@ impl Inner {
                 if let Some(message) = queue.remove(position) {
                     held.push(message);
                     self.depth.quarantined = self.depth.quarantined.saturating_add(1);
-                    tracing::error!(target: crate::atna::targets::SPOOL, 
+                    tracing::error!(target: crate::atna::targets::SPOOL,
                         sequence,
                         reason = "the audit repository refused it",
                         "an audit message held in memory was set aside; the drain goes on"

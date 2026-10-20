@@ -72,8 +72,14 @@ mod tests {
 
     #[tokio::test]
     async fn a_refusal_in_time_is_the_recorders_error() {
-        let recorded = within(deadline(Duration::from_secs(5)), async { Err::<(), _>("full") }).await;
-        assert!(matches!(recorded, Recorded::Refused("full")), "{recorded:?}");
+        let recorded = within(deadline(Duration::from_secs(5)), async {
+            Err::<(), _>("full")
+        })
+        .await;
+        assert!(
+            matches!(recorded, Recorded::Refused("full")),
+            "{recorded:?}"
+        );
     }
 
     #[tokio::test]
@@ -98,6 +104,9 @@ mod tests {
 
     #[test]
     fn a_timeout_past_the_clock_has_no_deadline() {
-        assert!(deadline(Duration::MAX).is_none(), "no deadline past the clock");
+        assert!(
+            deadline(Duration::MAX).is_none(),
+            "no deadline past the clock"
+        );
     }
 }

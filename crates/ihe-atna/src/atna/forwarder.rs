@@ -118,6 +118,37 @@ pub trait Outbox: Send + Sync + fmt::Debug {
 pub struct OutboxError(#[source] pub Box<dyn std::error::Error + Send + Sync>);
 
 #[async_trait::async_trait]
+impl<O: Outbox + ?Sized> Outbox for Arc<O> {
+    async fn oldest(&self) -> Result<Option<Stored>, OutboxError> {
+        O::oldest(self).await
+    }
+
+    async fn stored(&self) {
+        O::stored(self).await;
+    }
+
+    async fn remove(&self, sequence: u64) -> Result<(), OutboxError> {
+        O::remove(self, sequence).await
+    }
+
+    async fn quarantine(&self, sequence: u64) -> Result<(), OutboxError> {
+        O::quarantine(self, sequence).await
+    }
+
+    fn depth(&self) -> Depth {
+        O::depth(self)
+    }
+
+    fn is_durable(&self) -> bool {
+        O::is_durable(self)
+    }
+
+    fn refusals(&self) -> u64 {
+        O::refusals(self)
+    }
+}
+
+#[async_trait::async_trait]
 impl Outbox for Spool {
     async fn oldest(&self) -> Result<Option<Stored>, OutboxError> {
         Spool::oldest(self)
@@ -300,7 +331,7 @@ impl<O: Outbox> Forwarder<O> {
                 self.delivered.fetch_add(1, Ordering::Relaxed);
             }
             Err(error) => {
-                tracing::warn!(target: crate::atna::targets::FORWARDER, 
+                tracing::warn!(target: crate::atna::targets::FORWARDER,
                     error = %chain(&error),
                     "a delivered audit message could not be removed from the spool"
                 );
@@ -328,7 +359,7 @@ impl<O: Outbox> Forwarder<O> {
                 None => match repository.connect().await {
                     Ok(open) => open,
                     Err(error) => {
-                        tracing::warn!(target: crate::atna::targets::FORWARDER, 
+                        tracing::warn!(target: crate::atna::targets::FORWARDER,
                             error = %chain(&error),
                             "the audit repository could not be reached; its messages stay spooled"
                         );
@@ -338,7 +369,7 @@ impl<O: Outbox> Forwarder<O> {
                 },
             };
             if let Err(error) = open.send(&stored.message).await {
-                tracing::warn!(target: crate::atna::targets::FORWARDER, 
+                tracing::warn!(target: crate::atna::targets::FORWARDER,
                     error = %chain(&error),
                     "an audit message could not be delivered; the connection is dropped and the message stays spooled"
                 );
@@ -363,13 +394,13 @@ impl<O: Outbox> Forwarder<O> {
                 Ok(()) => self.delivered(stored.sequence, &mut retry).await,
                 Err(FeedError::Rejected { status }) => {
                     self.reachable.store(true, Ordering::Relaxed);
-                    tracing::error!(target: crate::atna::targets::FORWARDER, 
+                    tracing::error!(target: crate::atna::targets::FORWARDER,
                         sequence = stored.sequence,
                         status = status.as_u16(),
                         "the audit repository refused an AuditEvent; it is quarantined"
                     );
                     if let Err(error) = self.outbox.quarantine(stored.sequence).await {
-                        tracing::warn!(target: crate::atna::targets::FORWARDER, 
+                        tracing::warn!(target: crate::atna::targets::FORWARDER,
                             error = %chain(&error),
                             "a refused audit message could not be quarantined"
                         );
@@ -377,7 +408,7 @@ impl<O: Outbox> Forwarder<O> {
                     }
                 }
                 Err(error) => {
-                    tracing::warn!(target: crate::atna::targets::FORWARDER, 
+                    tracing::warn!(target: crate::atna::targets::FORWARDER,
                         error = %chain(&error),
                         "an AuditEvent could not be delivered; it stays spooled"
                     );
@@ -407,7 +438,7 @@ fn jittered(retry: Duration) -> Duration {
     half.saturating_add(Duration::from_nanos(random % spread.saturating_add(1)))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "atna"))]
 mod tests {
     use std::sync::Arc;
     use std::time::{Duration, Instant};

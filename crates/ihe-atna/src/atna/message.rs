@@ -124,8 +124,10 @@ pub struct AuditSource {
     pub type_codes: Vec<SourceType>,
 }
 
-/// One `AuditSourceTypeCode`: a `csd-code` of `1` to `9` from DICOM PS3.15
-/// A.5.1 alone (such as [`codes::SOURCE_APPLICATION_SERVER`](super::codes::SOURCE_APPLICATION_SERVER)),
+/// One `AuditSourceTypeCode` (DICOM PS3.15 A.5.1).
+///
+/// A `csd-code` of `1` to `9` alone, such as
+/// [`codes::SOURCE_APPLICATION_SERVER`](super::codes::SOURCE_APPLICATION_SERVER),
 /// or another code with the code system that defines it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceType {

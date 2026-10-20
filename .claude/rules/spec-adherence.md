@@ -25,8 +25,12 @@ version `docs/VERSIONS.md` pins, and the design of record,
    Summary and General Guidelines and the reuse Decision), and the HL7 Europe
    and MyHealth@EU packages the Article 14(1) categories are held to
    (`docs/specs/eu-hl7-*/`, `docs/specs/ehdsi-mvc/`).
-5. **The texts they cite**, by link: DICOM PS3.15 Annex A.5, RFC 5424, RFC
-   5425, RFC 6587 and FHIR R4 (4.0.1).
+5. **The texts they cite**: RFC 3881, RFC 5424, RFC 5425, RFC 5426 and RFC
+   6750 (`docs/specs/ietf-syslog/`), the openEHR BASE Base Types
+   specification (`docs/specs/openehr-base/`), DICOM PS3.15 Annex A.5,
+   pinned by release and sha256 (`docs/specs/dicom-ps3-15/PROVENANCE.md`)
+   and read locally, since NEMA grants no licence to redistribute it, and,
+   by link, RFC 6587 and FHIR R4 (4.0.1).
 6. **The docs.rs pages of the pinned crates** (`quick-xml`, `rustls`,
    `tokio-rustls`, `reqwest`, `secrecy`, `fhir-types`), the Rust book and
    reference, for every question about the tools.

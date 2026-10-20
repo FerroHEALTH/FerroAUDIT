@@ -11,6 +11,97 @@ and this project adheres to
 
 ## [Unreleased]
 
+The audit content the FerroFED and FerroEHR migrations found missing, the
+correctness of the EHDS retention, and the packaging those migrations asked
+for. Public APIs of both crates break, so a product changes what the
+**Changed** entries name.
+
+### Added
+
+- `ihe-atna`: `balp::USER_AUTHENTICATION`, `LOGIN`, `LOGOUT`, `EXPORT`,
+  `IMPORT` (DICOM PS3.15 A.5.3) and `OPERATION` (FHIR R4
+  `restful-interaction`) (#43); `Outcome::MajorFailure`, written as `12`
+  (#44); `Exchange::outcome_description` (`outcomeDesc`), `Observer::source_types`
+  (`source.type`) and the `SOURCE_*` codes of `security-source-type` (#45);
+  `User::with_token_id`, written at `agent[user].policy`, and the claim of
+  `IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive` when the record holds to
+  it (#28); `User::local`, `with_issuer` and `with_client_id`, for a user no
+  OAuth token named (#47); `Exchange::audit_event_value` (#57).
+- `ihe-atna`: the optional DICOM elements `EventOutcomeDescription`,
+  `AuditSourceTypeCode` (`message::SourceType`) and
+  `ParticipantObjectDataLifeCycle` (#49), and `atna::codes`, the DICOM and
+  RFC 3881 code tables (#52).
+- `ihe-atna`: `balp::recording` with `Late` and `within`, the bound on an
+  audited exchange's record (#8); public `redact::{REDACTED, RedactedUrl}`
+  and `fhir_base::under_base` (#9); `atna::targets`, the stable `tracing`
+  targets `ihe_atna::atna::spool` and `ihe_atna::atna::forwarder`, which
+  every spool and forwarder event names (#10).
+- `ihe-atna`: `feed::Credentials` and `FeedRepository::with_credentials`:
+  each Feed request is authorized from the source, and a refused token is
+  renewed once (RFC 6750 §3.1) (#53); `forwarder::Outbox` with
+  `Forwarder::syslog_from` and `Forwarder::fhir_feed_from`, delivery from a
+  caller's own durable store (#55); `Connection` is `Sync` (#51).
+- `ehds-logging`: `map::Matching::OpenEhr` and `CategoryMap::declare_with`,
+  case-insensitive template and archetype keys as openEHR BASE asks, with the
+  evidence kept in its own case (#16); every defect of a declaration at once
+  (`MapErrors`) (#17); archetype keys held to the `ARCHETYPE_ID` grammar
+  (#18); `CategoryMap::templates`, `archetypes` and `national` (#19);
+  `Declared` serializes (#20).
+- `ehds-logging`: `classify::ResourceKind`, `Evidence::resource`,
+  `RootObject::kind` and `Basis::ResourceKind`, so a record of no category
+  says which resource it reached and a no-category object sits beside content
+  (#21, #22, #24); `CategoryMap::with_evidence_limit` and
+  `Classification::evidence_counts` (#23).
+- `ehds-logging`: `Accessor::roles`, written at `agent[user].role` beside the
+  acting mode, which `balp::exchange` no longer overwrites (#27);
+  `Accessor::token_id` (#28); `AccessRecord::origin_count` (#32),
+  `AccessRecord::outcome_description` and `Outcome::MajorFailure`;
+  `Request::operation_system`, the operation written as a subtype (#36).
+- `ehds-logging`: `retention::Period` (years, days or `Indefinite`) and
+  `retention::Bounds` with national floors, ceilings and floors outside the
+  Union, each with its legal ground, through `RetentionPolicy::declare_within`;
+  a record kept without end names no end date, a period in days must reach the
+  floor from any date of access, and every record names the ground of its
+  floor (#37, #38, #39, #40).
+- The vendored IETF syslog and audit RFCs, the openEHR BASE Base Types
+  specification and the pin of DICOM PS3.15 2026c, read locally and never
+  committed; doctests for the syslog sender, the FHIR Feed and the BALP sink
+  (#13); `ehds-logging`'s own feature-boundary test (#12).
+
+### Changed
+
+- **`ihe-atna`: the `balp` feature no longer implies `atna`** and compiles no
+  syslog sender, DICOM message or RFC 5425 TLS stack; the spool, the
+  forwarder and the Feed compile under it. `ihe-atna` no longer enables
+  `reqwest`'s `rustls` feature: a product enables its TLS backend on its own
+  `reqwest` (#11). A product that used the syslog sender with `balp` enables
+  `atna` too.
+- **`ihe-atna`: `balp::Coded` holds `Cow<'static, str>`** and is no longer
+  `Copy`; build one with `Coded::fixed` or `Coded::new`. `EventKind::subtypes`
+  is a `Vec<Coded>` (#42).
+- **`ihe-atna`: `Direction::Received::endpoint` is a `NetworkAddress`** (use
+  `NetworkAddress::uri(&url)` where a URL was given) (#46); `Entity::Patient`
+  takes an optional `system` and a `namespace` (#33); `Exchange` has
+  `outcome_description` and `Observer` has `source_types`.
+- **`ihe-atna`: `User::issuer` and `User::client_id` return `Option<&str>`**;
+  `atna_user_name` of a user with no issuer is the account (#47).
+- **`ihe-atna`: `FeedRepository::cleartext_for_development` is now
+  `FeedRepository::cleartext`** (#54), and a `401` is `FeedError::Unauthorized`,
+  retried and never quarantined (#53).
+- **`ihe-atna`: `Forwarder` is generic over its store** (`Forwarder<O: Outbox
+  = Spool>`), so `Forwarder` alone still names the spool forwarder (#55).
+- **`ehds-logging`: `Accessor::issuer`, `client_id` and `acting` are
+  `Option`** (#25, #26); `PatientIdentifier::namespace`, `Origin::endpoint`,
+  `Origin::status` and `Request::id` are `Option` (#33, #31, #35); `Origin::key`
+  is the origin's endpoint, else its `system_id`.
+- **`ehds-logging`: `BalpSink::new` and `balp::exchange` take a
+  `NetworkAddress`** in place of a `Url` (#46).
+- **`ehds-logging`: `Retention::years` is now `Retention::period`**,
+  `Retention::ends` returns `Option<Date>` and `RetentionPolicy::longest`
+  returns a `Period`; the record writes `ehds-retention-period` and
+  `ehds-retention-floor`, and `ehds-retention-years` and `ehds-retention-ends`
+  only when they apply.
+
 ## [0.1.1] - 2026-10-20
 
 A patch release with no API change: a product pins `=0.1.1` in place of

@@ -6,6 +6,8 @@
 //! of the patient identifier a record carries, what a described entity and a
 //! user add to it, and where it carries the purposes of use.
 
+mod content;
+mod credentials;
 mod described;
 mod feed;
 mod hygiene;

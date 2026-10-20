@@ -6,9 +6,11 @@
 //!
 //! `atna` compiles no FHIR model and no HTTP client: the syslog sender needs
 //! neither, so a caller that audits over syslog alone links none of them.
-//! `balp` adds both for the `AuditEvent` and the FHIR Feed. Neither feature
-//! compiles the message ids of an XCPD exchange, which the ITI-55 audit
-//! message's caller supplies.
+//! `balp` adds both for the `AuditEvent` and the FHIR Feed, and compiles
+//! neither the RFC 5425 TLS stack nor, of its own, the DICOM message's XML
+//! writer (owner decision of 2026-10-20): the Feed is an HTTP create whose
+//! TLS is the caller's client's. Neither feature compiles the message ids of an XCPD
+//! exchange, which the ITI-55 audit message's caller supplies.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -16,6 +18,13 @@ use std::process::Command;
 
 /// The crates only `balp` compiles.
 const BALP_ONLY: &[&str] = &["fhir-types", "reqwest"];
+
+/// The crates of the RFC 5425 TLS connection, which only `atna` compiles.
+const ATNA_ONLY: &[&str] = &["tokio-rustls", "rustls-platform-verifier"];
+
+/// The DICOM message's XML writer, which only `atna` depends on itself;
+/// `fhir-types` takes it in for its own XML form under `balp`.
+const ATNA_DIRECT: &[&str] = &["quick-xml"];
 
 /// The crates no feature compiles.
 const NEVER: &[&str] = &["uuid"];
@@ -112,5 +121,24 @@ fn no_feature_compiles_the_xcpd_message_ids() {
                 "{feature} compiles {name}: {closure:?}"
             );
         }
+    }
+}
+
+#[test]
+fn only_atna_compiles_the_syslog_sender_and_its_tls_stack() {
+    let atna = tree("atna", None);
+    let balp = tree("balp", None);
+    for name in ATNA_ONLY {
+        assert!(atna.contains(*name), "atna lost {name}: {atna:?}");
+        assert!(!balp.contains(*name), "balp compiles {name}: {balp:?}");
+    }
+    let atna_direct = tree("atna", Some("1"));
+    let balp_direct = tree("balp", Some("1"));
+    for name in ATNA_DIRECT {
+        assert!(atna_direct.contains(*name), "atna names {name}");
+        assert!(
+            !balp_direct.contains(*name),
+            "balp names {name}: {balp_direct:?}"
+        );
     }
 }

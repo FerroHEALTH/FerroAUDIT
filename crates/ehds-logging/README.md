@@ -14,16 +14,22 @@ what classifies it.
 - `category`: the six priority categories of Art 14(1) and the national
   categories a deployment declares.
 - `map` and `classify`: a deployment's map from openEHR template ids and
-  archetype ids to categories, and the classification of one access by the
+  archetype ids to categories (compared exactly, or case-insensitively as
+  openEHR BASE asks, archetype keys held to the `ARCHETYPE_ID` grammar, every
+  defect of a declaration reported at once), and the classification of one access by the
   model ids of what it delivered, read or wrote, or by the ids its request
   constrains its data to. An access the map cannot classify is marked
   unclassified with its ids as evidence; it is never refused for it.
-- `retention`: how long a record is kept, in whole years per category and
-  per origin, never under the three years from each date of access of Art
-  9(2): the longest its categories and origins call for, and the longest
-  declared anywhere for an unclassified access. The record states the
-  period, the first date it may be deleted on and what called for it, so the
-  store that holds it can apply it.
+- `retention`: how long a record is kept, in years, in days or without end,
+  per category and per origin, within bounds: never under the three years
+  from each date of access of Art 9(2) inside the Union, over a national
+  floor and under a ceiling the deployment names with their legal ground,
+  and outside the Union over the floor its own law sets, which the record
+  then names in place of Art 9(2). A record is kept for the longest its
+  categories and origins call for, and the longest declared anywhere for an
+  unclassified access. The record states the period, the first date it may
+  be deleted on (none for a record kept without end), what called for it and
+  the ground of its floor, so the store that holds it can apply it.
 - `label`: the security labels a record carries per category and per
   origin of the data (Annex II 3.4), by default each category's own code
   and each origin's endpoint in a code system the deployment names, and

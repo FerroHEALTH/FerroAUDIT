@@ -6,9 +6,10 @@
 
 use url::Url;
 
-/// Returns the URL of `interaction` under the FHIR base `base`, or `None` when
-/// `base` is not an `http` or `https` URL without a query or a fragment
-/// (FHIR R4 HTTP, Service Base URL,
+/// Returns the URL of `interaction` under the FHIR base `base`.
+///
+/// `None` when `base` is not an `http` or `https` URL without a query or a
+/// fragment (FHIR R4 HTTP, Service Base URL,
 /// <http://hl7.org/fhir/R4/http.html#root>).
 #[must_use]
 pub fn under_base(mut base: Url, interaction: &str) -> Option<Url> {
@@ -34,7 +35,10 @@ mod tests {
 
     #[test]
     fn an_interaction_joins_under_the_base_with_or_without_its_slash() {
-        for base in ["https://arr.example.org/fhir", "https://arr.example.org/fhir/"] {
+        for base in [
+            "https://arr.example.org/fhir",
+            "https://arr.example.org/fhir/",
+        ] {
             let joined = under_base(Url::parse(base).expect("a URL"), "AuditEvent");
             assert_eq!(
                 joined.map(String::from).as_deref(),

@@ -17,7 +17,7 @@
 //! composite identifier: case-insensitively, while the evidence keeps each id
 //! as the access named it (BASE Release 1.1.0, Base Types, Identification
 //! Package, "Composite Identifiers and Case"). Archetype keys are held to the
-//! ARCHETYPE_ID grammar of the same package either way.
+//! `ARCHETYPE_ID` grammar of the same package either way.
 //!
 //! The map's [`CategoryMap::canonical`] text is the same for the same
 //! declarations in any order, so a digest of it names the map a record was
@@ -140,8 +140,10 @@ pub enum MapError {
         #[source]
         source: CodeError,
     },
-    /// An archetype key is no ARCHETYPE_ID.
-    #[error("archetypes key {key:?} is no openEHR archetype id (rm_originator-rm_name-rm_entity.concept.vN)")]
+    /// An archetype key is no `ARCHETYPE_ID`.
+    #[error(
+        "archetypes key {key:?} is no openEHR archetype id (rm_originator-rm_name-rm_entity.concept.vN)"
+    )]
     ArchetypeId {
         /// The key.
         key: String,
@@ -244,7 +246,7 @@ impl CategoryMap {
     /// # Errors
     ///
     /// [`MapErrors`] with every defect: a refused national code, an empty or
-    /// malformed key, an archetype key that is no ARCHETYPE_ID, two keys that
+    /// malformed key, an archetype key that is no `ARCHETYPE_ID`, two keys that
     /// name the same id, a word other than `none`, an empty list, and a code
     /// that names no category.
     pub fn declare_with(
@@ -478,13 +480,15 @@ fn is_key(key: &str) -> bool {
     !key.is_empty() && !key.chars().any(char::is_control)
 }
 
-/// Whether `id` follows the ARCHETYPE_ID grammar.
+/// Whether `id` follows the `ARCHETYPE_ID` grammar.
 // NOTE: openEHR BASE 1.1.0, Base Types, Identification Package, Syntaxes: the ARCHETYPE_ID
 // grammar, each part `letter {letter | digit | '_'}` and the version `'v' non-zero-digit [number]`.
 fn is_archetype_id(id: &str) -> bool {
     let alphanumeric = |part: &str| {
         let mut characters = part.chars();
-        characters.next().is_some_and(|first| first.is_ascii_alphabetic())
+        characters
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic())
             && characters.all(|rest| rest.is_ascii_alphanumeric() || rest == '_')
     };
     let mut sections = id.split('.');
@@ -505,7 +509,9 @@ fn is_archetype_id(id: &str) -> bool {
     let concept_ok = concept.split('-').all(alphanumeric);
     let version_ok = version.strip_prefix('v').is_some_and(|number| {
         let mut digits = number.chars();
-        digits.next().is_some_and(|first| matches!(first, '1'..='9'))
+        digits
+            .next()
+            .is_some_and(|first| matches!(first, '1'..='9'))
             && digits.all(|digit| digit.is_ascii_digit())
     });
     entity_ok && concept_ok && version_ok

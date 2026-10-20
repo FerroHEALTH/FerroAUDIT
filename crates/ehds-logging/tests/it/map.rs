@@ -264,3 +264,179 @@ fn a_configuration_declares_the_map_in_toml() {
         Some(&Mapping::Categories([Category::MedicalTestResult].into()))
     );
 }
+
+/// openEHR BASE 1.1.0, Base Types, Identification Package, "Composite
+/// Identifiers and Case": identifiers are case-insensitive and
+/// case-preserving.
+#[test]
+fn an_openehr_map_matches_an_id_apart_from_case_and_keeps_its_case() {
+    use ehds_logging::classify::{Basis, Evidence, RootObject};
+    use ehds_logging::map::Matching;
+
+    let archetypes = one(
+        "openEHR-EHR-OBSERVATION.lab_result.v1",
+        codes(&["Laboratory-Reports"]),
+    );
+    let map = CategoryMap::declare_with(Matching::OpenEhr, &[], &BTreeMap::new(), &archetypes)
+        .expect("a map");
+    assert!(
+        map.archetype("OPENEHR-EHR-OBSERVATION.LAB_RESULT.v1")
+            .is_some()
+    );
+    let read = RootObject {
+        archetype_id: Some("openehr-ehr-observation.LAB_result.v1".to_owned()),
+        ..RootObject::default()
+    };
+    let classified = map.classify(&Evidence::reached(Basis::Returned, vec![read]));
+    assert!(
+        classified
+            .categories()
+            .contains_key(&Category::MedicalTestResult)
+    );
+    assert!(classified.unclassified().is_none());
+    assert!(
+        classified
+            .archetypes()
+            .contains("openehr-ehr-observation.LAB_result.v1"),
+        "the evidence keeps the id as the access named it"
+    );
+    assert!(map.canonical().starts_with("matching\topenehr\n"));
+}
+
+#[test]
+fn two_keys_that_differ_only_by_case_are_refused_in_an_openehr_map() {
+    use ehds_logging::map::Matching;
+
+    let templates = BTreeMap::from([
+        (
+            "Example Lab Report.v1".to_owned(),
+            codes(&["Laboratory-Reports"]),
+        ),
+        (
+            "example lab report.v1".to_owned(),
+            codes(&["Discharge-Reports"]),
+        ),
+    ]);
+    let refused = CategoryMap::declare_with(Matching::OpenEhr, &[], &templates, &BTreeMap::new())
+        .expect_err("refused");
+    assert!(
+        matches!(
+            refused.first(),
+            Some(MapError::DuplicateKey {
+                table: Table::Templates,
+                ..
+            })
+        ),
+        "{refused}"
+    );
+    assert!(
+        CategoryMap::declare(&[], &templates, &BTreeMap::new()).is_ok(),
+        "an exact map holds both"
+    );
+}
+
+/// Every defect is reported in one pass, in table and key order.
+#[test]
+fn every_defect_of_a_declaration_is_reported_at_once() {
+    use ehds_logging::map::Matching;
+
+    let templates = BTreeMap::from([
+        ("A.v1".to_owned(), Declared::Word("nothing".to_owned())),
+        ("B.v1".to_owned(), codes(&[])),
+    ]);
+    let archetypes = one(
+        "openEHR-EHR-OBSERVATION.lab_result",
+        codes(&["Laboratory-Reports"]),
+    );
+    let refused = CategoryMap::declare_with(Matching::Exact, &[], &templates, &archetypes)
+        .expect_err("refused");
+    let errors = refused.errors();
+    assert_eq!(errors.len(), 3, "{refused}");
+    assert!(matches!(errors[0], MapError::Word { .. }), "{refused}");
+    assert!(matches!(errors[1], MapError::Empty { .. }), "{refused}");
+    assert!(
+        matches!(errors[2], MapError::ArchetypeId { .. }),
+        "{refused}"
+    );
+    assert_eq!(
+        CategoryMap::declare(&[], &templates, &archetypes).err(),
+        Some(errors[0].clone()),
+        "declare returns the first"
+    );
+}
+
+/// openEHR BASE 1.1.0, Base Types, Identification Package, Syntaxes: the
+/// `ARCHETYPE_ID` grammar.
+#[test]
+fn an_archetype_key_that_is_no_archetype_id_is_refused() {
+    for key in [
+        "openEHR-EHR-OBSERVATION.lab_result",
+        "openEHR-EHR.lab_result.v1",
+        "openEHR-EHR-OBSERVATION.lab_result.v0",
+        "openEHR-EHR-OBSERVATION.lab_result.v1draft",
+        "openEHR-EHR-OBSERVATION.lab result.v1",
+    ] {
+        assert_eq!(
+            CategoryMap::declare(
+                &[],
+                &BTreeMap::new(),
+                &one(key, codes(&["Laboratory-Reports"]))
+            )
+            .err(),
+            Some(MapError::ArchetypeId {
+                key: key.to_owned()
+            }),
+            "{key}"
+        );
+    }
+    for key in [
+        "openEHR-EHR-SECTION.physical_examination-prenatal.v1",
+        "Hl7-RIM-Act.progress_note.v12",
+    ] {
+        assert!(
+            CategoryMap::declare(
+                &[],
+                &BTreeMap::new(),
+                &one(key, codes(&["Laboratory-Reports"]))
+            )
+            .is_ok(),
+            "{key}"
+        );
+    }
+}
+
+#[test]
+fn a_map_iterates_its_keys_in_order_with_their_mappings() {
+    let map = map();
+    let templates: Vec<&str> = map.templates().map(|(key, _)| key).collect();
+    assert_eq!(
+        templates,
+        ["Example Admin Note.v1", "Example Discharge.v1", LAB_REPORT]
+    );
+    assert!(
+        map.templates()
+            .any(|(key, mapping)| key == ADMIN && *mapping == Mapping::NoCategory)
+    );
+    assert_eq!(map.archetypes().count(), 2);
+    let national: Vec<String> = map
+        .national()
+        .map(|category| format!("{}|{}", category.system(), category.code()))
+        .collect();
+    assert_eq!(national, [NATIONAL]);
+}
+
+#[test]
+fn a_declaration_serializes_to_the_form_it_reads() {
+    for declared in [
+        Declared::Word("none".to_owned()),
+        codes(&["Laboratory-Reports"]),
+    ] {
+        let text = serde_json::to_string(&declared).expect("serialized");
+        let read: Declared = serde_json::from_str(&text).expect("read back");
+        assert_eq!(read, declared, "{text}");
+    }
+    assert_eq!(
+        serde_json::to_string(&Declared::Word("none".to_owned())).expect("serialized"),
+        "\"none\""
+    );
+}

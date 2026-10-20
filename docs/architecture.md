@@ -71,6 +71,9 @@ gains its server half as a feature of the same crate.
 | FHIR | R4 (4.0.1) | BALP 1.1.4 declares FHIR 4.0.1 |
 | EHDS Regulation | Regulation (EU) 2025/327 as published, with Implementing Regulation (EU) 2026/2099 | the law `ehds-logging` implements; no consolidated text exists |
 | Article 14(1) category codes | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the code system HL7 Europe publishes for the six priority categories |
+| DICOM PS3.15 | 2026c | the release current when the optional message elements and the code tables were added; pinned by sha256 and read locally, since NEMA grants no licence to redistribute it |
+| Syslog and audit RFCs | RFC 3881, 5424, 5425, 5426, 6750 | the RFCs ITI TF-2 §3.20.3 references, the RFC 3881 codes the IHE tables write, and the bearer token usage the Feed's credentials follow |
+| openEHR BASE | Release 1.1.0 | the release FerroFED vendors, whose identification package fixes the case rule and the `ARCHETYPE_ID` grammar |
 
 The corpora carry the pins FerroFED vendored them at, re-fetched here by the
 same scripts, so the two trees hold the same bytes.
@@ -84,7 +87,12 @@ an ITI-20 syslog message carries (ITI TF-2 §3.20.4.1.2, §3.20.7): the event
 identification, the active participants, the audit source and the
 participant objects. A participant object's id, query and detail values may
 name a patient, so they are held as secrets, and the written XML (UTF-8, no
-byte order mark) is a secret too.
+byte order mark) is a secret too. The optional elements PS3.15 A.5.1 defines
+and the IHE tables leave not specialized, `EventOutcomeDescription`,
+`AuditSourceTypeCode` and `ParticipantObjectDataLifeCycle`, are written when
+the caller gives them, in the schema's order. `atna::codes` holds the DICOM
+codes of the A.5.3 message tables and the RFC 3881 §5.5.4 participant object
+id types as `(code, codeSystemName, originalText)` triples.
 
 ### 3.2 The syslog message
 
@@ -134,6 +142,15 @@ caller says. `Forwarder::status` reports the depth, the quarantine, the
 deliveries and the retries. No specification governs the backoff: our own
 design.
 
+The forwarder delivers from any `Outbox`: the spool is one, and a product
+that keeps its records in its own durable store, such as a database table,
+implements the trait and gets the same delivery, backoff and quarantine
+(ITI TF-2 §3.20.4.1.1 leaves where a record is stored to the sender). The
+spool's events log under the target `ihe_atna::atna::spool` and the
+forwarder's under `ihe_atna::atna::forwarder`, both constants of
+`atna::targets` that never follow the module layout. No specification
+governs the targets: our own design.
+
 ## 4. The `balp` feature
 
 ### 4.1 The exchange and the record
@@ -152,6 +169,28 @@ A user's purposes of use are written at the `agent:user` `purposeOfUse`
 3.20.4.2.2.1-1 maps to the DICOM `PurposeOfUse` ITI TF-2 §3.20.7.1.2 asks
 for.
 
+A `Coded` holds fixed or run-time text, so a subtype known only when the
+exchange is made, such as an operation id, follows the pattern's codes:
+every RESTful pattern slices `subtype` openly. The record writes the
+major-failure outcome `12` (FHIR R4 `audit-event-outcome`), `outcomeDesc`
+and the observer's `source.type` (FHIR R4 `security-source-type`, which
+RESTful ATNA Table 3.20.4.2.2.1-1 maps to `AuditSourceTypeCode`) when given,
+and the token's `jti` at `agent[user].policy` (BALP §3:5.7.5.4). A record
+that names the `jti` and an Application agent with the `client_id` claims
+`IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive` beside its RESTful
+pattern; the Minimal pattern types its user agent `UserOauthAgent`, which
+the RESTful `agent:user` is not, so no record claims it. The recording
+system's own agent is addressed by URL, host or IP (`network-type` `5`,
+`1`, `2`). A patient identifier's namespace is `Identifier.system` only
+when it is a URI; any other namespace is a `namespace` detail of the
+patient entity. `Exchange::audit_event_value` gives the record as a JSON
+value behind a redacting type, for a store that keeps JSON.
+
+`balp::recording` bounds the record of an audited exchange by the
+exchange's own timeout: a record not accepted in time fails a successful
+exchange with `Late`, while the recorder goes on storing it. No
+specification governs the bound: our own design.
+
 ### 4.2 The recorder
 
 `balp::AuditRecorder` is a deployment's route to its repository. It is
@@ -168,17 +207,24 @@ record.
 `atna::feed::FeedRepository::send` posts one stored record to
 `[base]/AuditEvent` as FHIR JSON (RESTful ATNA §3.20.4.2). A `2xx` is
 success (§3.20.4.3.2). §3.20.4.3.3 leaves a failure to the client: a `4xx`
-other than `408` and `429` is `FeedError::Rejected` and the forwarder
-quarantines the record; every other failure is `FeedError::Unavailable` and
-is retried. No redirect is followed, and no error carries the record or the
-answer body.
+other than `401`, `408` and `429` is `FeedError::Rejected` and the forwarder
+quarantines the record; a `401` is `FeedError::Unauthorized`, the
+credential's fault and never the record's, and is retried; every other
+failure is `FeedError::Unavailable` and is retried. A repository can take a
+`Credentials` source asked for the `Authorization` value of each request;
+after a `401` it is told, and the request is sent once more with a fresh
+value (RFC 6750 §3.1). `FeedRepository::new` takes `https` alone;
+`FeedRepository::cleartext` reaches `http` for an operator who accepts that
+records cross the network in clear text. No redirect is followed, and no
+error carries the record, the credential or the answer body.
 
 ## 5. Whom an exchange is made for
 
 `user::OnBehalfOf` is a `User`, as a verified OAuth 2.0 access token names
-them (`iss`, `sub`, `client_id`, `aud`, purposes of use, and the optional
-organisation, alternative id, name, provider identifier, roles and assurance
-level, BALP §3:5.7.5.4), or `System`. The module compiles with no feature,
+them (`iss`, `sub`, `client_id`, `aud`, `jti`, purposes of use, and the
+optional organisation, alternative id, name, provider identifier, roles and
+assurance level, BALP §3:5.7.5.4), a `User::local` authenticated otherwise,
+with no issuer and no client, whose record writes neither, or `System`. The module compiles with no feature,
 since the identity profiles that audit name the user in their own records
 too (the ITI-55 Human Requestor, ITI TF-2 §3.55.5.1.1).
 
@@ -188,19 +234,23 @@ A record names a patient toward its repository and nowhere else. No `Debug`
 of a message, an exchange, a user or a written record shows an identifier, a
 patient reference, the search that carries them or a user's values; a URL
 that may carry a credential shows through `RedactedUrl` with its userinfo
-and query replaced. No log line carries a message's content. No
-specification governs this: our own design.
+and query replaced. No log line carries a message's content. `redact` and
+`fhir_base` are public, so a product that logs a URL or joins a FHIR base
+uses the same rule. No specification governs this: our own design.
 
 ## 7. Features and boundaries
 
 | Feature | Compiles | Adds |
 |---|---|---|
 | none | `user` | nothing outside `std` |
-| `atna` | `message`, `syslog`, `repository`, `spool`, `forwarder` | XML, timestamps, base64, rustls, tokio, tracing |
-| `balp` | `atna` plus `balp` and `feed` | `fhir-types` (R4 `resources`), reqwest, serde_json |
+| `atna` | `message`, `codes`, `syslog`, `repository`, `spool`, `forwarder` | XML, timestamps, base64, rustls, tokio, tracing |
+| `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (R4 `resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
-no HTTP client. The crate depends on no product.
+no HTTP client, and `balp` compiles no TLS stack and takes no XML writer of
+its own (the owner's decision of 2026-10-20; `fhir-types` takes `quick-xml`
+for its XML form). The Feed's TLS is the backend the caller builds its
+`reqwest::Client` with. The crate depends on no product.
 
 ## 8. The `ehds-logging` crate
 
@@ -230,7 +280,37 @@ natural person, the categories of the data, when, and where it came from
 
 The crate depends on no interoperability component and on nothing of the
 system that builds the records, so the logging component stays independent
-of the interoperability component (Article 2(2)(n), (o)). It ships no
+of the interoperability component (Article 2(2)(n), (o)); its own
+`tests/it/features.rs` holds that with each feature on.
+
+The map compares keys exactly, or, declared with `Matching::OpenEhr`, as
+openEHR BASE 1.1.0 compares composite identifiers: case-insensitively and
+case-preserving, so the evidence keeps each id as the access named it.
+Archetype keys follow the `ARCHETYPE_ID` grammar of the same specification,
+and a declaration reports every defect at once. A root object of a resource
+kind that holds no data of any category (`EHR`, `EHR_STATUS`, `FOLDER` and
+the others) adds "no category" with its kind beside the categories of the
+content around it, on the basis `resource-kind`. A map can bound each
+evidence set of a classification, keeping the true count beside it.
+
+The accessor's issuer, client and acting mode are optional, so a user
+authenticated without a token is recorded without invented values; the
+accessor carries the roles the person acted under, written at
+`agent[user].role` beside the acting mode, and the token's `jti`. An origin
+names the endpoint the access asked, the system stored data came from, or
+both, and is keyed for retention and labels by its endpoint, else its
+`system_id`. A request may have no id, and its operation can be written as a
+second subtype in a named code system.
+
+Retention is a period in years, in days or without end, declared within
+bounds: inside the Union a floor of Art 9(2)'s three years, a national
+floor at or above it and a ceiling, each with the legal ground the
+deployment cites; outside the Union a floor the deployment's own law sets,
+which may be under three years, and which every record names in place of
+Art 9(2). A period in days stands over a floor in years only when it
+reaches it from any date of access. The crate carries no table of national
+law: the deployment states each bound and its citation. No specification
+governs how bounds combine with categories and origins: our own design. It ships no
 category map: the deployment authors it. Its tests hold the six codes to the
 vendored HL7 Europe packages and the record to the BALP patterns.
 
@@ -277,3 +357,23 @@ repository, the written records against the vendored BALP Read pattern and
 capability statements, the store-and-forward against the vendored ITI-20
 text, and the Article 14(1) category codes against the vendored HL7 Europe
 packages. Every patient identifier in them is synthetic.
+
+## 12. Decisions not taken
+
+Recorded on the tracker with their grounds; each is a decision, not a gap.
+
+- **Syslog over UDP (RFC 5426).** ITI TF-2 §3.20.4.1.2.1.2 permits it, but
+  RFC 5426 §4.1 and §5.4 say datagrams can be lost "without any notice" and
+  the transport may truncate a message over 1024 bytes, which breaks this
+  crate's rule that no record is dropped silently (FerroHEALTH/FerroAUDIT#50).
+- **A narrower FHIR model for `balp`.** `fhir-types` has no feature narrower
+  than `resources` that holds `AuditEvent`, and a hand-written `AuditEvent`
+  would fork the generated model; the route is a root-set feature of
+  `fhir-types` in its generator (FerroHEALTH/FerroAUDIT#56).
+- **A per-access legal basis, a pseudonymisation domain and the raw
+  assurance claim.** Annex II 3.2 asks for none of them, and they stay the
+  columns of the product that keeps them (FerroHEALTH/FerroAUDIT#29,
+  FerroHEALTH/FerroAUDIT#30).
+- **A synthesized emergency code on `purposeOfEvent`.** The record keeps the
+  purposes the accessor declared there and states the mark in its own
+  entity (FerroHEALTH/FerroAUDIT#48).

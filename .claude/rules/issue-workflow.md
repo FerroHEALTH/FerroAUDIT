@@ -113,7 +113,7 @@ Labels carry what the platform has no field for. Bootstrap them with
 - **Work kind, on a `Task` only, exactly ONE:** `documentation` (docs),
   `chore`, `refactor`, `perf`, `test`, `ci`. A `Bug` and a `Feature` carry
   none, because the type already names the commit type.
-- **Domain or area:** `syslog` (the DICOM message, the syslog transport and the repository connection), `spool` (the spool and the forwarder), `fhir-feed` (the BALP records and the ATX: FHIR Feed), `spec:ATNA`, `spec:BALP`, and `research` (an investigation whose deliverable is cited evidence). Add more as the
+- **Domain or area:** `syslog` (the DICOM message, the syslog transport and the repository connection), `spool` (the spool and the forwarder), `fhir-feed` (the BALP records and the ATX: FHIR Feed), `ehds` (the EHDS logging component), `spec:ATNA`, `spec:BALP`, and `research` (an investigation whose deliverable is cited evidence). Add more as the
   project grows; keep the set small and meaningful.
 - **Workflow:** `security`, `dependencies` (Dependabot), `blocked-upstream`
   (waits on an upstream specification or tool release), and the pull-request

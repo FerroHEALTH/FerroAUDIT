@@ -385,3 +385,63 @@ fn a_category_by_construction_never_hides_an_unmapped_object() {
     assert_eq!(classified.unclassified(), Some(&Unclassified::Unmapped));
     assert_eq!(classified.unmapped(), &set(&[UNMAPPED]));
 }
+
+/// A resource kind of no category beside content adds "no category" with
+/// its kind and takes nothing from the content's categories.
+#[test]
+fn a_no_category_object_beside_content_keeps_the_contents_categories() {
+    use ehds_logging::classify::ResourceKind;
+
+    let mut status = object(None, None);
+    status.kind = Some(ResourceKind::EhrStatus);
+    let classified = map().classify(&Evidence::reached(
+        Basis::Returned,
+        vec![object(Some(LAB_REPORT), None), status],
+    ));
+    assert_eq!(categories(classified.categories()), ["Laboratory-Reports"]);
+    assert!(classified.unclassified().is_none());
+    assert!(!classified.is_no_category());
+    assert!(
+        classified
+            .no_category_kinds()
+            .contains(&ResourceKind::EhrStatus)
+    );
+}
+
+#[test]
+fn an_access_of_only_no_category_kinds_is_of_no_category_with_its_kinds() {
+    use ehds_logging::classify::ResourceKind;
+
+    let classified = map().classify(&Evidence::resource(ResourceKind::Ehr));
+    assert!(classified.is_no_category());
+    assert_eq!(
+        classified
+            .no_category_kinds()
+            .iter()
+            .map(ResourceKind::code)
+            .collect::<Vec<_>>(),
+        ["EHR"]
+    );
+    assert_eq!(Basis::ResourceKind.code(), "resource-kind");
+    let unnamed = map().classify(&Evidence::no_category());
+    assert!(unnamed.is_no_category());
+    assert!(unnamed.no_category_kinds().is_empty());
+}
+
+#[test]
+fn an_evidence_limit_keeps_the_first_ids_and_the_true_count() {
+    let objects = ["a", "b", "c", "d"]
+        .iter()
+        .map(|uid| RootObject {
+            template_id: Some(LAB_REPORT.to_owned()),
+            version_uid: Some((*uid).to_owned()),
+            ..RootObject::default()
+        })
+        .collect();
+    let classified = map()
+        .with_evidence_limit(2)
+        .classify(&Evidence::reached(Basis::Returned, objects));
+    assert_eq!(classified.versions(), &set(&["a", "b"]));
+    assert_eq!(classified.evidence_counts().versions, 4);
+    assert_eq!(classified.evidence_counts().templates, 1);
+}

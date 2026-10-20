@@ -224,10 +224,11 @@ impl fmt::Debug for RelayedProvider {
     }
 }
 
-/// Who accessed the data (Annex II 3.2(a), (b)): the person, as the token
-/// the access was authenticated by names them, or as a local account names
-/// them when no token did, the client they used, and the provider they act
-/// for.
+/// Who accessed the data (Annex II 3.2(a), (b)).
+///
+/// The person, as the token the access was authenticated by names them, or
+/// as a local account names them when no token did, the client they used,
+/// and the provider they act for.
 ///
 /// Each value is the authentication's, as the recording system verified it:
 /// the record infers none, so the issuer, the client, the acting mode and the
@@ -459,9 +460,11 @@ impl fmt::Debug for Population {
     }
 }
 
-/// One origin of the data (Annex II 3.2(e)): an endpoint the access asked,
-/// with how it answered, or the system stored data came from, such as the
-/// originating system an openEHR `FEEDER_AUDIT` names, or both.
+/// One origin of the data (Annex II 3.2(e)).
+///
+/// An endpoint the access asked, with how it answered, or the system stored
+/// data came from, such as the originating system an openEHR `FEEDER_AUDIT`
+/// names, or both.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Origin {
     /// The endpoint the access asked, as the registry names it, when it
