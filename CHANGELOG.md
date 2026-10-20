@@ -11,7 +11,7 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-20
 
 The first release: the shared IHE audit crate of the FerroHEALTH products,
 moved with its history and its tests from the `atna` and `balp` features of
