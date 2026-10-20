@@ -228,6 +228,39 @@ jobs:
       - run: cargo nextest run --workspace --all-features --locked
       - run: cargo test --doc --workspace --all-features --locked
 
+  # The declared MSRV is the floor a consuming product builds on, so every
+  # target is built with it, read from the manifest, with no feature and with
+  # atna. The balp feature takes fhir-types, which declares its own newer
+  # rust-version, and Cargo refuses an older toolchain for it by name.
+  msrv:
+    name: msrv (no feature, atna)
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the toolchain the manifest declares as its rust-version
+        id: msrv
+        run: |
+          set -euo pipefail
+          msrv="$(awk '/^\[workspace\.package\]/{p=1; next} /^\[/{p=0}
+            p && /^rust-version[[:space:]]*=/{gsub(/.*=[[:space:]]*"|".*/, ""); print; exit}' Cargo.toml)"
+          [ -n "$msrv" ] || { echo "Cargo.toml declares no rust-version"; exit 1; }
+          rustup toolchain install "$msrv" --profile minimal
+          echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
+      - name: Every target builds on the MSRV with no feature and with atna
+        env:
+          MSRV: ${{ steps.msrv.outputs.toolchain }}
+        run: |
+          set -euo pipefail
+          cargo "+$MSRV" check --workspace --all-targets --locked
+          cargo "+$MSRV" check --workspace --all-targets --features atna --locked
+
   doc:
     name: rustdoc
     needs: detect
@@ -337,6 +370,7 @@ jobs:
       - fmt
       - clippy
       - test
+      - msrv
       - doc
       - cargo-deny
       - publish-dry-run
