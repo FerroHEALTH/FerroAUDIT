@@ -22,6 +22,7 @@
 //! pass, and quarantines a record the repository refused, so the drain goes
 //! on.
 
+use std::fmt;
 use std::hash::BuildHasher as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -32,6 +33,7 @@ use secrecy::SecretSlice;
 use super::chain;
 #[cfg(feature = "balp")]
 use super::feed::{FeedError, FeedRepository};
+#[cfg(feature = "atna")]
 use super::repository::{Connection, Repository};
 use super::spool::reserve::Reservation;
 use super::spool::{Depth, Spool, SpoolError, Stored};
@@ -42,7 +44,7 @@ const FIRST_RETRY: Duration = Duration::from_millis(250);
 /// What the forwarder reports of itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Status {
-    /// What the spool holds, awaiting delivery or in quarantine.
+    /// What the store holds, awaiting delivery or in quarantine.
     pub depth: Depth,
     /// The messages delivered since the forwarder started.
     pub delivered: u64,
@@ -52,26 +54,153 @@ pub struct Status {
     /// Whether the last attempt to deliver succeeded; `false` while the
     /// forwarder retries.
     pub reachable: bool,
-    /// Whether the spool is on disk.
+    /// Whether the store keeps its messages across a restart.
     pub durable: bool,
-    /// The messages the spool refused for want of room since it opened.
+    /// The messages the store refused for want of room since it opened.
     pub refused: u64,
+}
+
+/// A durable store a forwarder delivers from, oldest first: the crate's
+/// [`Spool`], or a caller's own, such as a table of records not yet
+/// delivered in the caller's database.
+///
+/// ITI TF-2 §3.20.4.1.1 has a sender store a record it cannot deliver and
+/// send it when it can; where it stores it is the sender's. The forwarder
+/// asks for the oldest message, delivers it, and then removes it, or moves it
+/// aside when the repository refused it, so the store decides nothing of the
+/// delivery.
+#[async_trait::async_trait]
+pub trait Outbox: Send + Sync + fmt::Debug {
+    /// The oldest message awaiting delivery, or `None` when there is none.
+    ///
+    /// # Errors
+    ///
+    /// An [`OutboxError`] when the store cannot be read; the forwarder backs
+    /// off and asks again.
+    async fn oldest(&self) -> Result<Option<Stored>, OutboxError>;
+
+    /// Returns once a message may have been stored since the last
+    /// [`Outbox::oldest`] found none, or after a while, so the forwarder asks
+    /// again.
+    async fn stored(&self);
+
+    /// Removes the delivered message `sequence`.
+    ///
+    /// # Errors
+    ///
+    /// An [`OutboxError`] when it cannot be removed; it is then delivered
+    /// again, which a syslog or FHIR Feed repository takes as a second copy.
+    async fn remove(&self, sequence: u64) -> Result<(), OutboxError>;
+
+    /// Moves the message `sequence`, which the repository refused, out of
+    /// the way of the drain, keeping it for an operator.
+    ///
+    /// # Errors
+    ///
+    /// An [`OutboxError`] when it cannot be moved.
+    async fn quarantine(&self, sequence: u64) -> Result<(), OutboxError>;
+
+    /// What the store holds now.
+    fn depth(&self) -> Depth;
+
+    /// Whether the store keeps its messages across a restart.
+    fn is_durable(&self) -> bool;
+
+    /// The messages the store refused for want of room since it opened.
+    fn refusals(&self) -> u64 {
+        0
+    }
+}
+
+/// Why an [`Outbox`] could not do what the forwarder asked.
+#[derive(Debug, thiserror::Error)]
+#[error("the audit store could not be read or written")]
+pub struct OutboxError(#[source] pub Box<dyn std::error::Error + Send + Sync>);
+
+#[async_trait::async_trait]
+impl<O: Outbox + ?Sized> Outbox for Arc<O> {
+    async fn oldest(&self) -> Result<Option<Stored>, OutboxError> {
+        O::oldest(self).await
+    }
+
+    async fn stored(&self) {
+        O::stored(self).await;
+    }
+
+    async fn remove(&self, sequence: u64) -> Result<(), OutboxError> {
+        O::remove(self, sequence).await
+    }
+
+    async fn quarantine(&self, sequence: u64) -> Result<(), OutboxError> {
+        O::quarantine(self, sequence).await
+    }
+
+    fn depth(&self) -> Depth {
+        O::depth(self)
+    }
+
+    fn is_durable(&self) -> bool {
+        O::is_durable(self)
+    }
+
+    fn refusals(&self) -> u64 {
+        O::refusals(self)
+    }
+}
+
+#[async_trait::async_trait]
+impl Outbox for Spool {
+    async fn oldest(&self) -> Result<Option<Stored>, OutboxError> {
+        Spool::oldest(self)
+            .await
+            .map_err(|error| OutboxError(Box::new(error)))
+    }
+
+    async fn stored(&self) {
+        Spool::stored(self).await;
+    }
+
+    async fn remove(&self, sequence: u64) -> Result<(), OutboxError> {
+        Spool::remove(self, sequence)
+            .await
+            .map_err(|error| OutboxError(Box::new(error)))
+    }
+
+    async fn quarantine(&self, sequence: u64) -> Result<(), OutboxError> {
+        self.reject(sequence)
+            .await
+            .map_err(|error| OutboxError(Box::new(error)))
+    }
+
+    fn depth(&self) -> Depth {
+        Spool::depth(self)
+    }
+
+    fn is_durable(&self) -> bool {
+        Spool::is_durable(self)
+    }
+
+    fn refusals(&self) -> u64 {
+        self.refused()
+    }
 }
 
 /// Where a forwarder delivers to.
 #[derive(Debug)]
 enum Destination {
     /// A syslog repository (ITI TF-2 §3.20.4.1).
+    #[cfg(feature = "atna")]
     Syslog(Repository),
     /// A FHIR Feed repository (ITI TF-2 §3.20.4.2).
     #[cfg(feature = "balp")]
     Feed(FeedRepository),
 }
 
-/// The store-and-forward sender to one Audit Record Repository.
+/// The store-and-forward sender to one Audit Record Repository, from the
+/// crate's [`Spool`] or from a caller's [`Outbox`].
 #[derive(Debug)]
-pub struct Forwarder {
-    spool: Spool,
+pub struct Forwarder<O: Outbox = Spool> {
+    outbox: O,
     destination: Destination,
     retry_max: Duration,
     delivered: AtomicU64,
@@ -79,9 +208,10 @@ pub struct Forwarder {
     reachable: AtomicBool,
 }
 
-impl Forwarder {
+impl Forwarder<Spool> {
     /// The sender of the syslog frames in `spool` to `repository`, waiting
     /// at most `retry_max` between two attempts.
+    #[cfg(feature = "atna")]
     #[must_use]
     pub fn new(spool: Spool, repository: Repository, retry_max: Duration) -> Arc<Self> {
         Self::to(spool, Destination::Syslog(repository), retry_max)
@@ -95,17 +225,6 @@ impl Forwarder {
         Self::to(spool, Destination::Feed(feed), retry_max)
     }
 
-    fn to(spool: Spool, destination: Destination, retry_max: Duration) -> Arc<Self> {
-        Arc::new(Self {
-            spool,
-            destination,
-            retry_max: retry_max.max(FIRST_RETRY),
-            delivered: AtomicU64::new(0),
-            retries: AtomicU64::new(0),
-            reachable: AtomicBool::new(true),
-        })
-    }
-
     /// Stores `frame` for delivery, returning once it is stored.
     ///
     /// # Errors
@@ -116,7 +235,7 @@ impl Forwarder {
     /// [`SpoolError::Late`]: the message is not stored yet, and is delivered
     /// once its write stores it.
     pub async fn submit(&self, frame: SecretSlice<u8>) -> Result<(), SpoolError> {
-        self.spool.push(frame).await
+        self.outbox.push(frame).await
     }
 
     /// Takes the place of one message of at most `bytes` bytes in the spool
@@ -126,19 +245,49 @@ impl Forwarder {
     ///
     /// [`SpoolError::Full`] when the spool has no room for it.
     pub fn reserve(&self, bytes: u64) -> Result<Reservation, SpoolError> {
-        self.spool.reserve(bytes)
+        self.outbox.reserve(bytes)
+    }
+}
+
+impl<O: Outbox> Forwarder<O> {
+    /// The sender of the syslog frames in the caller's `outbox` to
+    /// `repository`, waiting at most `retry_max` between two attempts.
+    #[cfg(feature = "atna")]
+    #[must_use]
+    pub fn syslog_from(outbox: O, repository: Repository, retry_max: Duration) -> Arc<Self> {
+        Self::to(outbox, Destination::Syslog(repository), retry_max)
+    }
+
+    /// The sender of the `AuditEvent` records in the caller's `outbox` to the
+    /// FHIR Feed repository `feed`, waiting at most `retry_max` between two
+    /// attempts.
+    #[cfg(feature = "balp")]
+    #[must_use]
+    pub fn fhir_feed_from(outbox: O, feed: FeedRepository, retry_max: Duration) -> Arc<Self> {
+        Self::to(outbox, Destination::Feed(feed), retry_max)
+    }
+
+    fn to(outbox: O, destination: Destination, retry_max: Duration) -> Arc<Self> {
+        Arc::new(Self {
+            outbox,
+            destination,
+            retry_max: retry_max.max(FIRST_RETRY),
+            delivered: AtomicU64::new(0),
+            retries: AtomicU64::new(0),
+            reachable: AtomicBool::new(true),
+        })
     }
 
     /// What the forwarder holds and how its deliveries went.
     #[must_use]
     pub fn status(&self) -> Status {
         Status {
-            depth: self.spool.depth(),
+            depth: self.outbox.depth(),
             delivered: self.delivered.load(Ordering::Relaxed),
             retries: self.retries.load(Ordering::Relaxed),
             reachable: self.reachable.load(Ordering::Relaxed),
-            durable: self.spool.is_durable(),
-            refused: self.spool.refused(),
+            durable: self.outbox.is_durable(),
+            refused: self.outbox.refusals(),
         }
     }
 
@@ -148,6 +297,7 @@ impl Forwarder {
     /// in flight then stays stored and is delivered again by the next run.
     pub async fn run(self: Arc<Self>) {
         match &self.destination {
+            #[cfg(feature = "atna")]
             Destination::Syslog(repository) => self.run_syslog(repository).await,
             #[cfg(feature = "balp")]
             Destination::Feed(feed) => self.run_feed(feed).await,
@@ -158,14 +308,14 @@ impl Forwarder {
     /// empty; `None` after a wake-up or after a failure to read the spool,
     /// which has backed off.
     async fn next(&self, retry: &mut Duration) -> Option<Stored> {
-        match self.spool.oldest().await {
+        match self.outbox.oldest().await {
             Ok(Some(stored)) => Some(stored),
             Ok(None) => {
-                self.spool.stored().await;
+                self.outbox.stored().await;
                 None
             }
             Err(error) => {
-                tracing::warn!(error = %chain(&error), "the audit spool could not be read");
+                tracing::warn!(target: crate::atna::targets::FORWARDER, error = %chain(&error), "the audit spool could not be read");
                 *retry = self.back_off(*retry).await;
                 None
             }
@@ -176,12 +326,12 @@ impl Forwarder {
     async fn delivered(&self, sequence: u64, retry: &mut Duration) {
         self.reachable.store(true, Ordering::Relaxed);
         *retry = FIRST_RETRY;
-        match self.spool.remove(sequence).await {
+        match self.outbox.remove(sequence).await {
             Ok(()) => {
                 self.delivered.fetch_add(1, Ordering::Relaxed);
             }
             Err(error) => {
-                tracing::warn!(
+                tracing::warn!(target: crate::atna::targets::FORWARDER,
                     error = %chain(&error),
                     "a delivered audit message could not be removed from the spool"
                 );
@@ -192,6 +342,7 @@ impl Forwarder {
 
     // NOTE: RFC 5425 §4.3 carries no application-level acknowledgement, so a
     // syslog repository never refuses a frame: only a transport failure retries.
+    #[cfg(feature = "atna")]
     async fn run_syslog(&self, repository: &Repository) {
         let mut connection: Option<Connection> = None;
         let mut retry = FIRST_RETRY;
@@ -208,7 +359,7 @@ impl Forwarder {
                 None => match repository.connect().await {
                     Ok(open) => open,
                     Err(error) => {
-                        tracing::warn!(
+                        tracing::warn!(target: crate::atna::targets::FORWARDER,
                             error = %chain(&error),
                             "the audit repository could not be reached; its messages stay spooled"
                         );
@@ -218,7 +369,7 @@ impl Forwarder {
                 },
             };
             if let Err(error) = open.send(&stored.message).await {
-                tracing::warn!(
+                tracing::warn!(target: crate::atna::targets::FORWARDER,
                     error = %chain(&error),
                     "an audit message could not be delivered; the connection is dropped and the message stays spooled"
                 );
@@ -243,13 +394,13 @@ impl Forwarder {
                 Ok(()) => self.delivered(stored.sequence, &mut retry).await,
                 Err(FeedError::Rejected { status }) => {
                     self.reachable.store(true, Ordering::Relaxed);
-                    tracing::error!(
+                    tracing::error!(target: crate::atna::targets::FORWARDER,
                         sequence = stored.sequence,
                         status = status.as_u16(),
                         "the audit repository refused an AuditEvent; it is quarantined"
                     );
-                    if let Err(error) = self.spool.reject(stored.sequence).await {
-                        tracing::warn!(
+                    if let Err(error) = self.outbox.quarantine(stored.sequence).await {
+                        tracing::warn!(target: crate::atna::targets::FORWARDER,
                             error = %chain(&error),
                             "a refused audit message could not be quarantined"
                         );
@@ -257,7 +408,7 @@ impl Forwarder {
                     }
                 }
                 Err(error) => {
-                    tracing::warn!(
+                    tracing::warn!(target: crate::atna::targets::FORWARDER,
                         error = %chain(&error),
                         "an AuditEvent could not be delivered; it stays spooled"
                     );
@@ -287,7 +438,7 @@ fn jittered(retry: Duration) -> Duration {
     half.saturating_add(Duration::from_nanos(random % spread.saturating_add(1)))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "atna"))]
 mod tests {
     use std::sync::Arc;
     use std::time::{Duration, Instant};

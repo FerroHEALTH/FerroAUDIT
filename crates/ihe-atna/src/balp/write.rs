@@ -20,9 +20,9 @@ use fhir_types::r4::reference::Reference;
 use secrecy::{ExposeSecret, SecretSlice};
 
 use super::{
-    APPLICATION, AuditRecord, Coded, Described, Direction, Entity, Exchange, INFORMATION_RECIPIENT,
-    NetworkAddress, Observer, PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT,
-    SecurityLabel, What,
+    APPLICATION, AuditEventValue, AuditRecord, Coded, Described, Direction, Entity, Exchange,
+    INFORMATION_RECIPIENT, NetworkAddress, OAUTH_COMPREHENSIVE, Observer, PATIENT_NAMESPACE,
+    PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT, SecurityLabel, What,
 };
 use crate::user::{Code, PurposeOfUse, User};
 
@@ -49,14 +49,33 @@ impl Exchange {
     /// A [`RecordError`] when the resource cannot be written as JSON, which
     /// writing to memory does not do.
     pub fn audit_event(&self, observer: &Observer) -> Result<AuditRecord, RecordError> {
-        let own = |kind: Coded, network: NetworkAddress| AuditEventAgent {
+        serde_json::to_vec(&self.resource(observer))
+            .map(|json| AuditRecord(SecretSlice::from(json)))
+            .map_err(RecordError)
+    }
+
+    /// The `AuditEvent` of this exchange as `observer` records it, as the
+    /// JSON value [`Exchange::audit_event`] writes as bytes.
+    ///
+    /// # Errors
+    ///
+    /// A [`RecordError`] when the resource cannot be written as JSON, which
+    /// writing to memory does not do.
+    pub fn audit_event_value(&self, observer: &Observer) -> Result<AuditEventValue, RecordError> {
+        serde_json::to_value(self.resource(observer))
+            .map(AuditEventValue)
+            .map_err(RecordError)
+    }
+
+    fn resource(&self, observer: &Observer) -> AuditEvent {
+        let own = |kind: &Coded, network: NetworkAddress| AuditEventAgent {
             r#type: Some(concept(kind)),
             who: Some(display(&observer.source_id)),
             requestor: primitives::Boolean::from(false),
             network: Some(network_of(&network)),
             ..AuditEventAgent::default()
         };
-        let other = |kind: Coded, peer: &Peer| AuditEventAgent {
+        let other = |kind: &Coded, peer: &Peer| AuditEventAgent {
             r#type: Some(concept(kind)),
             who: Some(display(&peer.who)),
             requestor: primitives::Boolean::from(false),
@@ -67,57 +86,67 @@ impl Exchange {
         // the others) set requestor false on both system agents; only a user is one.
         let mut agent = match &self.direction {
             Direction::Sent { server } => vec![
-                own(self.kind.client, observer.host.clone()),
-                other(self.kind.server, server),
+                own(&self.kind.client, observer.host.clone()),
+                other(&self.kind.server, server),
             ],
             Direction::Received { client, endpoint } => vec![
-                other(self.kind.client, client),
-                own(self.kind.server, NetworkAddress::uri(endpoint)),
+                other(&self.kind.client, client),
+                own(&self.kind.server, endpoint.clone()),
             ],
         };
+        let mut profiles: Vec<&str> = Vec::new();
+        if !self.kind.profile.is_empty() {
+            profiles.push(self.kind.profile);
+        }
         if let Some(user) = self.on_behalf.user() {
-            let [person, application] = user_agents(user);
+            let (person, application) = user_agents(user);
             agent.push(person);
             // NOTE: BALP 1.1.4 IHE.BasicAudit.Delete admits one 110150 agent, its client, which
             // then names the user's application, so a second one is not added.
-            if self.kind.client != APPLICATION {
-                agent.push(application);
+            let named_client = match application {
+                Some(application) if self.kind.client != APPLICATION => {
+                    agent.push(application);
+                    true
+                }
+                _ => false,
+            };
+            // NOTE: BALP 1.1.4 OAUTHaccessTokenUse.Comprehensive fixes agent:oUser.policy 1..1
+            // and an 110150 oClient with who.identifier.value, so only such a record claims it.
+            if user.token_id().is_some() && named_client {
+                profiles.push(OAUTH_COMPREHENSIVE);
             }
             agent.extend(organisation_agent(user));
         }
         let purpose_of_event = purposes_of_event(&agent);
-        let event = AuditEvent {
-            meta: (!self.kind.profile.is_empty() || !self.security.is_empty()).then(|| Meta {
-                profile: (!self.kind.profile.is_empty())
-                    .then(|| primitives::Canonical::from(self.kind.profile))
+        AuditEvent {
+            meta: (!profiles.is_empty() || !self.security.is_empty()).then(|| Meta {
+                profile: profiles
                     .into_iter()
+                    .map(primitives::Canonical::from)
                     .collect(),
                 security: self.security.iter().map(label).collect(),
                 ..Meta::default()
             }),
             r#type: self.kind.event_type.coding(),
-            subtype: self
-                .kind
-                .subtypes
-                .iter()
-                .map(|code| code.coding())
-                .collect(),
+            subtype: self.kind.subtypes.iter().map(Coded::coding).collect(),
             action: Some(primitives::Code::from(self.kind.action)),
             recorded: primitives::Instant::from(self.recorded.to_string()),
             outcome: Some(primitives::Code::from(self.outcome.code())),
+            outcome_desc: self
+                .outcome_description
+                .as_deref()
+                .map(primitives::String::from),
             purpose_of_event,
             agent,
             source: AuditEventSource {
                 site: observer.site.as_deref().map(primitives::String::from),
                 observer: display(&observer.source_id),
+                r#type: observer.source_types.iter().map(Coded::coding).collect(),
                 ..AuditEventSource::default()
             },
             entity: self.entities.iter().map(entity).collect(),
             ..AuditEvent::default()
-        };
-        serde_json::to_vec(&event)
-            .map(|json| AuditRecord(SecretSlice::from(json)))
-            .map_err(RecordError)
+        }
     }
 }
 
@@ -137,11 +166,12 @@ fn purposes_of_event(agents: &[AuditEventAgent]) -> Vec<CodeableConcept> {
     purposes
 }
 
-/// The two agents that name `user` (BALP 1.1.4 §3:5.7.5.4): the
-/// `agent:user` slice with the token's `iss` and `sub` as `who.identifier`,
-/// as `requestor`, with its purposes of use, and the Application agent with
-/// the token's `client_id` as `who.identifier.value`.
-fn user_agents(user: &User) -> [AuditEventAgent; 2] {
+/// The agents that name `user` (BALP 1.1.4 §3:5.7.5.4): the `agent:user`
+/// slice with the token's `iss` and `sub` as `who.identifier`, as
+/// `requestor`, with its purposes of use and the token's `jti` as `policy`,
+/// and, when a token named a client, the Application agent with its
+/// `client_id` as `who.identifier.value`.
+fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
     let identified = |system: Option<&str>, value: &str| Reference {
         identifier: Some(Box::new(Identifier {
             system: system.map(primitives::Uri::from),
@@ -154,24 +184,29 @@ fn user_agents(user: &User) -> [AuditEventAgent; 2] {
     // client's agent follows ex-auditBasicReadOServer, requestor false.
     let person = AuditEventAgent {
         extension: user_extensions(user),
-        r#type: Some(concept(INFORMATION_RECIPIENT)),
+        r#type: Some(concept(&INFORMATION_RECIPIENT)),
         role: user.roles().iter().map(coded).collect(),
         who: Some(Reference {
             display: user.name().map(primitives::String::from),
-            ..identified(Some(user.issuer()), user.subject())
+            ..identified(user.issuer(), user.subject())
         }),
         alt_id: user.alt_id().map(primitives::String::from),
         requestor: primitives::Boolean::from(true),
+        policy: user
+            .token_id()
+            .map(primitives::Uri::from)
+            .into_iter()
+            .collect(),
         purpose_of_use: user.purposes().iter().map(purpose).collect(),
         ..AuditEventAgent::default()
     };
-    let application = AuditEventAgent {
-        r#type: Some(concept(APPLICATION)),
-        who: Some(identified(None, user.client_id())),
+    let application = user.client_id().map(|client_id| AuditEventAgent {
+        r#type: Some(concept(&APPLICATION)),
+        who: Some(identified(None, client_id)),
         requestor: primitives::Boolean::from(false),
         ..AuditEventAgent::default()
-    };
-    [person, application]
+    });
+    (person, application)
 }
 
 /// The agent of the organisation `user` acts for, when one is named: `who`
@@ -247,7 +282,7 @@ fn purpose(purpose: &PurposeOfUse) -> CodeableConcept {
     }
 }
 
-fn concept(code: Coded) -> CodeableConcept {
+fn concept(code: &Coded) -> CodeableConcept {
     CodeableConcept {
         coding: vec![code.coding()],
         ..CodeableConcept::default()
@@ -279,10 +314,14 @@ fn entity(entity: &Entity) -> AuditEventEntity {
             )),
             ..AuditEventEntity::default()
         },
-        Entity::Patient { system, value } => AuditEventEntity {
+        Entity::Patient {
+            system,
+            value,
+            namespace,
+        } => AuditEventEntity {
             what: Some(Reference {
                 identifier: Some(Box::new(Identifier {
-                    system: Some(primitives::Uri::from(system.as_str())),
+                    system: system.as_deref().map(primitives::Uri::from),
                     value: Some(primitives::String::from(value.expose_secret())),
                     ..Identifier::default()
                 })),
@@ -290,6 +329,10 @@ fn entity(entity: &Entity) -> AuditEventEntity {
             }),
             r#type: Some(PERSON.coding()),
             role: Some(PATIENT_ROLE.coding()),
+            detail: namespace
+                .iter()
+                .map(|namespace| string_detail(PATIENT_NAMESPACE, namespace))
+                .collect(),
             ..AuditEventEntity::default()
         },
         Entity::PatientReference(reference) => AuditEventEntity {
@@ -315,7 +358,7 @@ fn entity(entity: &Entity) -> AuditEventEntity {
                 ..Reference::default()
             }),
             r#type: Some(kind.coding()),
-            role: role.map(Coded::coding),
+            role: role.as_ref().map(Coded::coding),
             name: name.map(primitives::String::from),
             query: query
                 .as_deref()
@@ -349,7 +392,7 @@ fn described_entity(described: &Described) -> AuditEventEntity {
     AuditEventEntity {
         what,
         r#type: Some(described.kind.coding()),
-        role: described.role.map(Coded::coding),
+        role: described.role.as_ref().map(Coded::coding),
         name: described.name.as_deref().map(primitives::String::from),
         description: described
             .description
@@ -358,18 +401,21 @@ fn described_entity(described: &Described) -> AuditEventEntity {
         detail: described
             .details
             .iter()
-            .map(|detail| AuditEventEntityDetail {
-                id: None,
-                extension: Vec::new(),
-                modifier_extension: Vec::new(),
-                r#type: primitives::String::from(detail.kind.as_str()),
-                value: AuditEventEntityDetailValue::String(primitives::String::from(
-                    detail.value.as_str(),
-                )),
-            })
+            .map(|detail| string_detail(&detail.kind, &detail.value))
             .collect(),
         security_label: described.security_labels.iter().map(label).collect(),
         ..AuditEventEntity::default()
+    }
+}
+
+/// One `entity.detail` of type `kind` with the `valueString` `value`.
+fn string_detail(kind: &str, value: &str) -> AuditEventEntityDetail {
+    AuditEventEntityDetail {
+        id: None,
+        extension: Vec::new(),
+        modifier_extension: Vec::new(),
+        r#type: primitives::String::from(kind),
+        value: AuditEventEntityDetailValue::String(primitives::String::from(value)),
     }
 }
 

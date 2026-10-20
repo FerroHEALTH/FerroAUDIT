@@ -6,6 +6,8 @@
 //! of the patient identifier a record carries, what a described entity and a
 //! user add to it, and where it carries the purposes of use.
 
+mod content;
+mod credentials;
 mod described;
 mod feed;
 mod hygiene;
@@ -20,6 +22,7 @@ pub(crate) fn observer() -> Observer {
         source_id: "gateway.example.org".to_owned(),
         site: Some("example site".to_owned()),
         host: NetworkAddress::host("gateway.example.org"),
+        source_types: Vec::new(),
     }
 }
 

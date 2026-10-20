@@ -12,14 +12,21 @@
 //! key for the same object, because a template is the clinical context the
 //! archetype is used in (no specification governs the map: our own design).
 //!
+//! A key is compared exactly by default. Declared with [`Matching::OpenEhr`],
+//! the map compares template and archetype ids as openEHR BASE asks of every
+//! composite identifier: case-insensitively, while the evidence keeps each id
+//! as the access named it (BASE Release 1.1.0, Base Types, Identification
+//! Package, "Composite Identifiers and Case"). Archetype keys are held to the
+//! `ARCHETYPE_ID` grammar of the same package either way.
+//!
 //! The map's [`CategoryMap::canonical`] text is the same for the same
 //! declarations in any order, so a digest of it names the map a record was
 //! classified under.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write as _;
+use std::fmt::{self, Write as _};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::category::{Category, CodeError, NationalCategory, Reference};
 
@@ -28,7 +35,7 @@ pub const NONE: &str = "none";
 
 /// One declaration as a configuration writes it: the word `none`, or a list
 /// of categories.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum Declared {
     /// A word, of which only [`NONE`] is admitted.
@@ -45,6 +52,29 @@ pub enum Mapping {
     Categories(BTreeSet<Category>),
     /// The data under the key belong to no category.
     NoCategory,
+}
+
+/// How a map compares an id with its keys.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Matching {
+    /// Exactly: an id that differs from a key by case is unmapped.
+    #[default]
+    Exact,
+    /// As openEHR BASE compares composite identifiers: two ids identical
+    /// apart from case identify the same thing. BASE limits their textual
+    /// parts to the basic latin letters, so the comparison folds ASCII case.
+    OpenEhr,
+}
+
+impl Matching {
+    /// `id` as this matching compares it.
+    fn key(self, id: &str) -> String {
+        match self {
+            Self::Exact => id.to_owned(),
+            Self::OpenEhr => id.to_ascii_lowercase(),
+        }
+    }
 }
 
 /// The two tables a map keys on.
@@ -110,54 +140,212 @@ pub enum MapError {
         #[source]
         source: CodeError,
     },
+    /// An archetype key is no `ARCHETYPE_ID`.
+    #[error(
+        "archetypes key {key:?} is no openEHR archetype id (rm_originator-rm_name-rm_entity.concept.vN)"
+    )]
+    ArchetypeId {
+        /// The key.
+        key: String,
+    },
+    /// Two keys of a table name the same id under the map's matching.
+    #[error("{} keys {first:?} and {second:?} name the same id", .table.name())]
+    DuplicateKey {
+        /// The table.
+        table: Table,
+        /// The first key.
+        first: String,
+        /// The key that names the same id.
+        second: String,
+    },
+}
+
+/// Every defect of a refused map declaration, in table and key order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapErrors(Vec<MapError>);
+
+impl MapErrors {
+    /// Each defect.
+    #[must_use]
+    pub fn errors(&self) -> &[MapError] {
+        &self.0
+    }
+
+    /// The first defect.
+    #[must_use]
+    pub fn first(&self) -> Option<&MapError> {
+        self.0.first()
+    }
+
+    /// The first defect, taken.
+    #[expect(
+        clippy::expect_used,
+        reason = "declare_with returns MapErrors only after pushing a defect, so it is never empty"
+    )]
+    fn into_first(self) -> MapError {
+        self.0
+            .into_iter()
+            .next()
+            .expect("a refused declaration should hold a defect")
+    }
+}
+
+impl fmt::Display for MapErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "the category map has {} defects", self.0.len())?;
+        for error in &self.0 {
+            write!(f, "; {error}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for MapErrors {}
+
+impl IntoIterator for MapErrors {
+    type Item = MapError;
+    type IntoIter = std::vec::IntoIter<MapError>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 
 /// The deployment's category map.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CategoryMap {
     national: BTreeSet<NationalCategory>,
-    templates: BTreeMap<String, Mapping>,
-    archetypes: BTreeMap<String, Mapping>,
+    matching: Matching,
+    templates: BTreeMap<String, (String, Mapping)>,
+    archetypes: BTreeMap<String, (String, Mapping)>,
     digest: Option<String>,
+    evidence_limit: Option<usize>,
 }
 
 impl CategoryMap {
     /// The map `templates` and `archetypes` declare, their categories read
     /// against the six priority categories and the `national` ones, each
-    /// declared `<system>|<code>`.
+    /// declared `<system>|<code>`, its keys compared exactly.
     ///
     /// # Errors
     ///
-    /// A [`MapError`] for a refused national code, an empty or malformed
-    /// key, a word other than `none`, an empty list, and a code that names
-    /// no category.
+    /// The first [`MapError`] [`CategoryMap::declare_with`] finds.
     pub fn declare(
         national: &[String],
         templates: &BTreeMap<String, Declared>,
         archetypes: &BTreeMap<String, Declared>,
     ) -> Result<Self, MapError> {
-        let national = national
-            .iter()
-            .map(|code| {
-                code.parse::<NationalCategory>()
-                    .map_err(|source| MapError::National {
-                        code: code.clone(),
-                        source,
-                    })
-            })
-            .collect::<Result<BTreeSet<_>, _>>()?;
-        let read = |table: Table, declared: &BTreeMap<String, Declared>| {
-            declared
-                .iter()
-                .map(|(key, declared)| Ok((key.clone(), mapping(table, key, declared, &national)?)))
-                .collect::<Result<BTreeMap<_, _>, MapError>>()
+        Self::declare_with(Matching::Exact, national, templates, archetypes)
+            .map_err(MapErrors::into_first)
+    }
+
+    /// The map `templates` and `archetypes` declare, compared by `matching`,
+    /// their categories read against the six priority categories and the
+    /// `national` ones, each declared `<system>|<code>`.
+    ///
+    /// # Errors
+    ///
+    /// [`MapErrors`] with every defect: a refused national code, an empty or
+    /// malformed key, an archetype key that is no `ARCHETYPE_ID`, two keys that
+    /// name the same id, a word other than `none`, an empty list, and a code
+    /// that names no category.
+    pub fn declare_with(
+        matching: Matching,
+        national: &[String],
+        templates: &BTreeMap<String, Declared>,
+        archetypes: &BTreeMap<String, Declared>,
+    ) -> Result<Self, MapErrors> {
+        let mut errors = Vec::new();
+        let mut declared = BTreeSet::new();
+        for code in national {
+            match code.parse::<NationalCategory>() {
+                Ok(category) => {
+                    declared.insert(category);
+                }
+                Err(source) => errors.push(MapError::National {
+                    code: code.clone(),
+                    source,
+                }),
+            }
+        }
+        let mut read = |table: Table, keys: &BTreeMap<String, Declared>| {
+            let mut read: BTreeMap<String, (String, Mapping)> = BTreeMap::new();
+            for (key, value) in keys {
+                if table == Table::Archetypes && !is_archetype_id(key) && is_key(key) {
+                    errors.push(MapError::ArchetypeId { key: key.clone() });
+                    continue;
+                }
+                match mapping(table, key, value, &declared) {
+                    Ok(mapping) => {
+                        let folded = matching.key(key);
+                        if let Some((first, _)) = read.get(&folded) {
+                            errors.push(MapError::DuplicateKey {
+                                table,
+                                first: first.clone(),
+                                second: key.clone(),
+                            });
+                        } else {
+                            read.insert(folded, (key.clone(), mapping));
+                        }
+                    }
+                    Err(error) => errors.push(error),
+                }
+            }
+            read
         };
+        let templates = read(Table::Templates, templates);
+        let archetypes = read(Table::Archetypes, archetypes);
+        if !errors.is_empty() {
+            return Err(MapErrors(errors));
+        }
         Ok(Self {
-            templates: read(Table::Templates, templates)?,
-            archetypes: read(Table::Archetypes, archetypes)?,
-            national,
+            national: declared,
+            matching,
+            templates,
+            archetypes,
             digest: None,
+            evidence_limit: None,
         })
+    }
+
+    /// This map, keeping at most `limit` ids in each evidence set of a
+    /// classification, with each set's true count beside it.
+    #[must_use]
+    pub fn with_evidence_limit(mut self, limit: usize) -> Self {
+        self.evidence_limit = Some(limit);
+        self
+    }
+
+    /// The most ids a classification keeps in each evidence set, when the
+    /// map bounds them.
+    #[must_use]
+    pub fn evidence_limit(&self) -> Option<usize> {
+        self.evidence_limit
+    }
+
+    /// How the map compares an id with its keys.
+    #[must_use]
+    pub fn matching(&self) -> Matching {
+        self.matching
+    }
+
+    /// Every template key, as declared, with what it maps to, in key order.
+    pub fn templates(&self) -> impl Iterator<Item = (&str, &Mapping)> {
+        self.templates
+            .values()
+            .map(|(key, mapping)| (key.as_str(), mapping))
+    }
+
+    /// Every archetype key, as declared, with what it maps to, in key order.
+    pub fn archetypes(&self) -> impl Iterator<Item = (&str, &Mapping)> {
+        self.archetypes
+            .values()
+            .map(|(key, mapping)| (key.as_str(), mapping))
+    }
+
+    /// Every national category the map declares, in order.
+    pub fn national(&self) -> impl Iterator<Item = &NationalCategory> {
+        self.national.iter()
     }
 
     /// This map, named by `digest`, such as a hash of
@@ -174,16 +362,22 @@ impl CategoryMap {
         self.digest.as_deref()
     }
 
-    /// What `template_id` maps to, when the map holds it.
+    /// What `template_id` maps to, when the map holds it under its
+    /// matching.
     #[must_use]
     pub fn template(&self, template_id: &str) -> Option<&Mapping> {
-        self.templates.get(template_id)
+        self.templates
+            .get(&self.matching.key(template_id))
+            .map(|(_, mapping)| mapping)
     }
 
-    /// What `archetype_id` maps to, when the map holds it.
+    /// What `archetype_id` maps to, when the map holds it under its
+    /// matching.
     #[must_use]
     pub fn archetype(&self, archetype_id: &str) -> Option<&Mapping> {
-        self.archetypes.get(archetype_id)
+        self.archetypes
+            .get(&self.matching.key(archetype_id))
+            .map(|(_, mapping)| mapping)
     }
 
     /// The category `reference` names: a priority category by its bare code
@@ -208,13 +402,17 @@ impl CategoryMap {
         self.templates.is_empty() && self.archetypes.is_empty()
     }
 
-    /// The map as text that is the same for the same declarations: one line
+    /// The map as text that is the same for the same declarations: a line
+    /// `matching\topenehr` for a map compared as openEHR BASE asks, one line
     /// per national category, then per template and per archetype key, each
     /// field separated by a tab, the categories by `,`, each category as
     /// `<system>|<code>`.
     #[must_use]
     pub fn canonical(&self) -> String {
         let mut text = String::new();
+        if self.matching == Matching::OpenEhr {
+            text.push_str("matching\topenehr\n");
+        }
         for national in &self.national {
             let _written = writeln!(text, "national\t{}|{}", national.system(), national.code());
         }
@@ -222,7 +420,7 @@ impl CategoryMap {
             (Table::Templates, &self.templates),
             (Table::Archetypes, &self.archetypes),
         ] {
-            for (key, mapping) in keys {
+            for (key, mapping) in keys.values() {
                 let value = match mapping {
                     Mapping::NoCategory => NONE.to_owned(),
                     Mapping::Categories(categories) => categories
@@ -245,7 +443,7 @@ fn mapping(
     declared: &Declared,
     national: &BTreeSet<NationalCategory>,
 ) -> Result<Mapping, MapError> {
-    if key.is_empty() || key.chars().any(char::is_control) {
+    if !is_key(key) {
         return Err(MapError::Key(table));
     }
     let codes = match declared {
@@ -275,6 +473,48 @@ fn mapping(
         })
         .collect::<Result<BTreeSet<_>, _>>()
         .map(Mapping::Categories)
+}
+
+/// Whether `key` is not empty and holds no control character.
+fn is_key(key: &str) -> bool {
+    !key.is_empty() && !key.chars().any(char::is_control)
+}
+
+/// Whether `id` follows the `ARCHETYPE_ID` grammar.
+// NOTE: openEHR BASE 1.1.0, Base Types, Identification Package, Syntaxes: the ARCHETYPE_ID
+// grammar, each part `letter {letter | digit | '_'}` and the version `'v' non-zero-digit [number]`.
+fn is_archetype_id(id: &str) -> bool {
+    let alphanumeric = |part: &str| {
+        let mut characters = part.chars();
+        characters
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic())
+            && characters.all(|rest| rest.is_ascii_alphanumeric() || rest == '_')
+    };
+    let mut sections = id.split('.');
+    let (Some(entity), Some(concept), Some(version), None) = (
+        sections.next(),
+        sections.next(),
+        sections.next(),
+        sections.next(),
+    ) else {
+        return false;
+    };
+    let mut entity_parts = entity.split('-');
+    let entity_ok = matches!(
+        (entity_parts.next(), entity_parts.next(), entity_parts.next(), entity_parts.next()),
+        (Some(originator), Some(name), Some(class), None)
+            if alphanumeric(originator) && alphanumeric(name) && alphanumeric(class)
+    );
+    let concept_ok = concept.split('-').all(alphanumeric);
+    let version_ok = version.strip_prefix('v').is_some_and(|number| {
+        let mut digits = number.chars();
+        digits
+            .next()
+            .is_some_and(|first| matches!(first, '1'..='9'))
+            && digits.all(|digit| digit.is_ascii_digit())
+    });
+    entity_ok && concept_ok && version_ok
 }
 
 /// The category `reference` names among the priority categories and the

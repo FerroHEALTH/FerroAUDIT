@@ -56,6 +56,8 @@ pub enum Outcome {
     MinorFailure,
     /// The access failed on the side that records it.
     SeriousFailure,
+    /// The access failed and left the recording system unavailable.
+    MajorFailure,
 }
 
 /// One purpose of use the accessor declared: a code and the system that
@@ -222,27 +224,39 @@ impl fmt::Debug for RelayedProvider {
     }
 }
 
-/// Who accessed the data (Annex II 3.2(a), (b)): the person, as the token
-/// the access was authenticated by names them, the client they used, and
-/// the provider they act for.
+/// Who accessed the data (Annex II 3.2(a), (b)).
 ///
-/// Each value is the token's, as the recording system verified it: the
-/// record infers none, so the assurance level is absent unless the
-/// authentication established one.
+/// The person, as the token the access was authenticated by names them, or
+/// as a local account names them when no token did, the client they used,
+/// and the provider they act for.
+///
+/// Each value is the authentication's, as the recording system verified it:
+/// the record infers none, so the issuer, the client, the acting mode and the
+/// assurance level are absent unless the authentication established them.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Accessor {
-    /// The issuer that vouched for the person (`iss`).
-    pub issuer: String,
-    /// The person (`sub`).
+    /// The issuer that vouched for the person (`iss`), when a token named
+    /// them; `None` for a user authenticated otherwise, such as by HTTP
+    /// Basic.
+    pub issuer: Option<String>,
+    /// The person (`sub`, or the local account).
     pub subject: String,
-    /// The client application they used (`client_id`).
-    pub client_id: String,
+    /// The client application they used (`client_id`), when a token named
+    /// one.
+    pub client_id: Option<String>,
     /// The audience the token named the recording system by.
     pub audience: Option<String>,
     /// The healthcare provider or other organisation the person acts for.
     pub provider: Option<String>,
-    /// Who acts behind the token: the person, or a client application.
-    pub acting: Acting,
+    /// Who acts behind the token: the person, or a client application, when
+    /// the recording system established it.
+    pub acting: Option<Acting>,
+    /// The roles or authorities the person acted under, such as the security
+    /// roles of the recording system, which the record writes at
+    /// `agent[user].role` (BALP 1.1.4 §3:5.7.5.4, the IUA `subject_role`).
+    pub roles: Vec<Coded>,
+    /// The identity of the access token (`jti`), when it names one.
+    pub token_id: Option<String>,
     /// The assurance level the authentication reached, when the recording
     /// system established one from the token.
     pub assurance: Option<AssuranceLevel>,
@@ -266,6 +280,8 @@ impl fmt::Debug for Accessor {
         f.debug_struct("Accessor")
             .field("provider", &self.provider.is_some())
             .field("acting", &self.acting)
+            .field("roles", &self.roles)
+            .field("token_id", &self.token_id.is_some())
             .field("assurance", &self.assurance)
             .field("professional", &self.professional)
             .field("alt_id", &self.alt_id.is_some())
@@ -279,8 +295,10 @@ impl fmt::Debug for Accessor {
 /// the namespace that issued it; `Debug` shows the namespace alone.
 #[derive(Debug, Clone)]
 pub struct PatientIdentifier {
-    /// The issuing namespace.
-    pub namespace: String,
+    /// The issuing namespace, when one is known: a URI, which the record
+    /// writes as the identifier's system, or another name, such as an openEHR
+    /// `PARTY_REF.namespace`, which it writes beside the identifier.
+    pub namespace: Option<String>,
     /// The identifier.
     pub value: SecretString,
 }
@@ -442,19 +460,24 @@ impl fmt::Debug for Population {
     }
 }
 
-/// One origin of the data (Annex II 3.2(e)): an endpoint the access asked,
-/// with how it answered.
+/// One origin of the data (Annex II 3.2(e)).
+///
+/// An endpoint the access asked, with how it answered, or the system stored
+/// data came from, such as the originating system an openEHR `FEEDER_AUDIT`
+/// names, or both.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Origin {
-    /// The endpoint, as the registry names it.
-    pub endpoint: String,
+    /// The endpoint the access asked, as the registry names it, when it
+    /// asked one.
+    pub endpoint: Option<String>,
     /// The node behind it.
     pub node: Option<String>,
-    /// The node's openEHR `system_id`.
+    /// The openEHR `system_id` of the node, or of the system stored data
+    /// came from.
     pub system_id: Option<String>,
-    /// How the endpoint answered, as the Federation Tier §11.1 status set
-    /// spells it, such as `active` or `node-error`.
-    pub status: String,
+    /// How the endpoint answered, such as `active` or `node-error`, when an
+    /// endpoint was asked.
+    pub status: Option<String>,
     /// The rows or objects it contributed, when counted.
     pub rows: Option<usize>,
     /// The version a write left at the endpoint, as its answer named it, or
@@ -466,6 +489,15 @@ pub struct Origin {
     /// The categories of what it contributed, when told apart from the
     /// other origins'.
     pub categories: Option<Classification>,
+}
+
+impl Origin {
+    /// What the origin is keyed by for retention and labels: its endpoint,
+    /// or its `system_id` when it names no endpoint.
+    #[must_use]
+    pub fn key(&self) -> Option<&str> {
+        self.endpoint.as_deref().or(self.system_id.as_deref())
+    }
 }
 
 impl fmt::Debug for Origin {
@@ -588,10 +620,14 @@ impl fmt::Debug for CreatedEhr {
 #[derive(Clone)]
 pub struct Request {
     /// The id the recording system knows the request by, which its own log
-    /// names too.
-    pub id: String,
+    /// names too, when the request carried one.
+    pub id: Option<String>,
     /// The operation, such as an ITS-REST `operationId`.
     pub operation: String,
+    /// The code system the operation is a code of, such as the system of the
+    /// ITS-REST operation ids: when it is named, the record writes the
+    /// operation as a `subtype` in it.
+    pub operation_system: Option<String>,
     /// The resource the request addressed, when it addressed one.
     pub resource: Option<String>,
     /// The query text, for a query.
@@ -626,6 +662,8 @@ pub struct AccessRecord {
     pub recorded: Timestamp,
     /// How it ended.
     pub outcome: Outcome,
+    /// Free text on how it ended, when the recording system gives one.
+    pub outcome_description: Option<String>,
     /// Who accessed the data (3.2(a), (b)), with their purposes of use.
     pub accessor: Accessor,
     /// Whose data.
@@ -636,6 +674,9 @@ pub struct AccessRecord {
     pub delivered: Option<usize>,
     /// The origins of the data (3.2(e)), in the order the access asked them.
     pub origins: Vec<Origin>,
+    /// How many distinct origins the access reached, when `origins` names
+    /// fewer, such as when the recording system bounds one record's origins.
+    pub origin_count: Option<usize>,
     /// What the access asked for.
     pub request: Request,
     /// How long the record is kept (Art 9(2), Annex II 3.4).
@@ -676,11 +717,13 @@ impl fmt::Debug for AccessRecord {
             .field("action", &self.action)
             .field("recorded", &self.recorded)
             .field("outcome", &self.outcome)
+            .field("outcome_description", &self.outcome_description.is_some())
             .field("accessor", &self.accessor)
             .field("subject", &self.subject)
             .field("categories", &self.categories)
             .field("delivered", &self.delivered)
             .field("origins", &self.origins)
+            .field("origin_count", &self.origin_count)
             .field("request", &self.request)
             .field("retention", &self.retention)
             .field("labels", &self.labels)

@@ -13,10 +13,13 @@
 #   2. the BALP package  the PROVENANCE.md names the pinned version and
 #                        tarball sha256, and the tree still hashes to the
 #                        digest it records.
-#   3. the pinned corpora  the BALP pages, the EHDS acts and the four packages
-#                        the categories are read against: each PROVENANCE.md
-#                        names its row's pin-set digest, and each tree still
-#                        hashes to the digest it records.
+#   3. the pinned corpora  the BALP pages, the EHDS acts, the four packages
+#                        the categories are read against, the IETF RFCs and
+#                        DICOM PS3.15: each PROVENANCE.md names its row's
+#                        pin-set digest, and each tree still hashes to the
+#                        digest it records.
+#   3b. openEHR BASE     the PROVENANCE.md names the pinned tag, and the
+#                        tree still hashes to the digest it records.
 #   4. the design        the pin table of docs/architecture.md names the
 #                        same BALP version as the matrix.
 #   5. the licence       no first-party file claims a licence other than
@@ -144,6 +147,20 @@ pinned_at docs/specs/eu-hl7-health-data-api "HL7 Europe EU Health Data API"
 pinned_at docs/specs/eu-hl7-imaging "HL7 Europe Imaging Report"
 pinned_at docs/specs/eu-hl7-hdr "HL7 Europe Hospital Discharge Report"
 pinned_at docs/specs/ehdsi-mvc "MyHealth@EU Master Value Sets Catalogue"
+pinned_at docs/specs/ietf-syslog "IETF syslog and audit RFCs"
+pinned_at docs/specs/dicom-ps3-15 "DICOM PS3.15"
+
+# ---- 3b. openEHR BASE --------------------------------------------------------
+base="docs/specs/openehr-base"
+if [ -f "$base/PROVENANCE.md" ]; then
+  tag="$(corpus_pin_tag "$(corpus_pin_cell "openEHR BASE specification source")")"
+  grep -qF "Pin: tag \`$tag\`" "$base/PROVENANCE.md" ||
+    fail "$base/PROVENANCE.md does not name tag $tag, which docs/VERSIONS.md pins"
+  tree_at "$base"
+  ok "openEHR BASE $tag at its digest"
+else
+  fail "$base/PROVENANCE.md is missing"
+fi
 
 # ---- 4. the design ----------------------------------------------------------
 architecture="docs/architecture.md"

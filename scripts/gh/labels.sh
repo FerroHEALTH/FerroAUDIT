@@ -63,6 +63,7 @@ echo "== domain labels =="
 label syslog 1d76db "The DICOM audit message, the syslog transport and the repository connection."
 label spool 5319e7 "The store-and-forward spool and the forwarder."
 label fhir-feed 0e8a16 "The BALP AuditEvent and the ATX: FHIR Feed."
+label ehds c5def5 "The EHDS logging component, ehds-logging: the access record, the categories, the map, the retention."
 label "spec:ATNA" fbca04 "ITI-20 Record Audit Event and the RESTful ATNA supplement."
 label "spec:BALP" d93f0b "The IHE Basic Audit Log Patterns."
 

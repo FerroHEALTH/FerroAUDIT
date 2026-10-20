@@ -79,7 +79,7 @@ impl Spool {
             if bytes.saturating_add(excess) > self.bounds.max_bytes {
                 let refused = ledger.refuse();
                 drop(ledger);
-                tracing::warn!(
+                tracing::warn!(target: crate::atna::targets::SPOOL,
                     refused,
                     messages,
                     bytes,

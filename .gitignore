@@ -13,3 +13,6 @@
 
 # Finder metadata.
 .DS_Store
+
+# The local copies of vendored material that may not be redistributed.
+/.vendor-cache/

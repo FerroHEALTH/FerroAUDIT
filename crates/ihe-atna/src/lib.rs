@@ -11,19 +11,25 @@
 //!   through the same spool and forwarder.
 //!
 //! Module `user` names whom an audited exchange is made for, a user an OAuth
-//! 2.0 access token names or the system itself, and compiles with or without
-//! a feature.
+//! 2.0 access token names, a local user, or the system itself, and compiles
+//! with or without a feature. Module `redact` is the `Debug` rendering of a
+//! value that may name a patient or carry a credential, and `fhir_base` the
+//! URL of an interaction under a FHIR base.
+//!
+//! The syslog sender is shown in the docs of `atna::repository` and a BALP
+//! record sent over the FHIR Feed in those of `atna::feed`, each a compiled
+//! example.
 //!
 //! The profiles are published at <https://profiles.ihe.net/ITI/>. The crate
 //! depends on no application: it is the audit transactions as Rust, for any
 //! caller.
 #![doc(test(attr(deny(warnings))))]
 
-#[cfg(feature = "atna")]
+#[cfg(any(feature = "atna", feature = "balp"))]
 pub mod atna;
 #[cfg(feature = "balp")]
 pub mod balp;
-mod redact;
-#[cfg(feature = "balp")]
-mod search;
+#[cfg(any(feature = "atna", feature = "balp"))]
+pub mod fhir_base;
+pub mod redact;
 pub mod user;

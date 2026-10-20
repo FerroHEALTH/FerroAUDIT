@@ -4,32 +4,57 @@
 //! ATNA, the audit trail of a Secure Node or Secure Application: ITI-20
 //! Record Audit Event (ITI TF-2 §3.20).
 //!
-//! - [`message`]: the DICOM PS3.15 Annex A.5 `AuditMessage` an event is
-//!   recorded as.
+//! - `message` (feature `atna`): the DICOM PS3.15 Annex A.5 `AuditMessage`
+//!   an event is recorded as, and `codes` the code tables it is written with.
 //! - [`syslog`]: the RFC 5424 syslog message that carries it, with the PRI and
 //!   MSGID §3.20.4.1.2 fixes, and its RFC 5425 octet-counted frame.
-//! - [`repository`]: the connection to an Audit Record Repository, TLS (RFC
-//!   5425) unless a development caller asks otherwise.
+//! - `repository` (feature `atna`): the connection to an Audit Record
+//!   Repository, TLS (RFC 5425) unless a development caller asks otherwise.
 //! - [`spool`]: the bounded local store ITI-20 requires of a sender that
 //!   cannot reach its repository (§3.20.4.1.1): one file per message on disk,
 //!   fsynced before it counts as stored, or a queue in memory for
 //!   development.
-//! - [`feed`] (feature `balp`): the ATX: FHIR Feed Option's Send Audit
+//! - `feed` (feature `balp`): the ATX: FHIR Feed Option's Send Audit
 //!   Resource Request, a FHIR `create` of one `AuditEvent` (the `RESTful` ATNA
 //!   supplement, ITI TF-2 §3.20.4.2).
-//! - [`forwarder`]: the sender that writes every message to the spool first
-//!   and delivers it from there, in order.
+//! - [`forwarder`]: the sender that writes every message to the spool, or a
+//!   caller's own store, first and delivers it from there, in order.
+//!
+//! The spool, the forwarder and the syslog frame compile under either
+//! feature; the syslog sender's message and TLS connection under `atna`
+//! alone, and the FHIR Feed under `balp` alone.
 //!
 //! A message names whatever its event names, a patient identifier included,
 //! so no part of this module logs a message or renders one in `Debug`.
 
+#[cfg(feature = "atna")]
+pub mod codes;
 #[cfg(feature = "balp")]
 pub mod feed;
 pub mod forwarder;
+#[cfg(feature = "atna")]
 pub mod message;
+#[cfg(feature = "atna")]
 pub mod repository;
 pub mod spool;
 pub mod syslog;
+
+/// The `tracing` targets the spool and the forwarder log under: an interface
+/// an operator's log filter names, so they never follow the module layout.
+///
+/// Every event of the spool, its reservations and its in-flight writes names
+/// [`SPOOL`](targets::SPOOL); every event of the forwarder, a failure to reach
+/// a syslog repository or a FHIR Feed repository included, names
+/// [`FORWARDER`](targets::FORWARDER). The
+/// repository connection and the FHIR Feed client log nothing of their own:
+/// they return their failures to the forwarder, which logs them. No
+/// specification governs the names: our own design.
+pub mod targets {
+    /// The target of every event of the spool.
+    pub const SPOOL: &str = "ihe_atna::atna::spool";
+    /// The target of every event of the forwarder.
+    pub const FORWARDER: &str = "ihe_atna::atna::forwarder";
+}
 
 /// `error` with its causes, joined, for a log line.
 fn chain(error: &dyn std::error::Error) -> String {

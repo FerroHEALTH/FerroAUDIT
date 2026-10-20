@@ -46,6 +46,9 @@ documents FerroFED's holds, so its pin-set digest is its own.
 | HL7 Europe Imaging Report | package `hl7.fhir.eu.imaging` 1.0.0-ballot, pin-set digest `aad98731a1f2597d6a7defa2c7f6ab7297781b677398383346c5592f913c9f4b`, tarball sha256 `bb6012bd7a019ac82f5e939dd6e892e6db6b15fd2931dcf7cc445c1ad92c3d70` | `scripts/vendor/ehds-categories.sh`, `docs/specs/eu-hl7-imaging/PROVENANCE.md` |
 | HL7 Europe Hospital Discharge Report | package `hl7.fhir.eu.hdr` 0.1.0-ballot, pin-set digest `2bc6073aedf1a6e4630b3763c2058ed5bbec53c29bc2e74ef5a9c2a60f0af918`, tarball sha256 `458b8ba0edcf22d75d455d6149c9264d486bb8ec052251a90afd8654410482ee` | `scripts/vendor/ehds-categories.sh`, `docs/specs/eu-hl7-hdr/PROVENANCE.md` |
 | MyHealth@EU Master Value Sets Catalogue | package `myhealth.eu.fhir.mvc-package` 9.1.0, pin-set digest `06f68a58f7382db396f029b1c0a420fcac6cbf53d8a948df47594937b0886749`, tarball sha256 `3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1` | `scripts/vendor/ehds-categories.sh`, `docs/specs/ehdsi-mvc/PROVENANCE.md` |
+| IETF syslog and audit RFCs | RFC 3881, RFC 5424, RFC 5425, RFC 5426 and RFC 6750 from `www.rfc-editor.org`, each by its sha256, pin-set digest `9de9544040398351d75871f4074a2bde41a21e6b14aafe798678addb2d500bab` | `scripts/vendor/ietf-syslog.sh`, `docs/specs/ietf-syslog/PROVENANCE.md` |
+| DICOM PS3.15 | release 2026c, `part15.html` from `dicom.nema.org`, cache only (not redistributed), pin-set digest `9a9b6eb4218785a873402cc045eff8aa16c05aa89a6df5909628301dc7a69ac7` | `scripts/vendor/dicom-ps3-15.sh`, `docs/specs/dicom-ps3-15/PROVENANCE.md` |
+| openEHR BASE specification source | `openEHR/specifications-BASE` tag `Release-1.1.0`, the release FerroHEALTH/FerroFED vendors: the Base Types specification and the licence | `scripts/vendor/openehr-base.sh`, `docs/specs/openehr-base/PROVENANCE.md` |
 
 ## Licence
 

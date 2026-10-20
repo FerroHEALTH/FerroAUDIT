@@ -10,8 +10,8 @@
 )]
 
 use ihe_atna::balp::{
-    DESTINATION_ROLE, Described, Detail, Direction, Entity, EventKind, Exchange, OTHER, Outcome,
-    Peer, READ, REQUEST_ID, REST, SOURCE_ROLE, SecurityLabel, What,
+    DESTINATION_ROLE, Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress,
+    OTHER, Outcome, Peer, READ, REQUEST_ID, REST, SOURCE_ROLE, SecurityLabel, What,
 };
 use ihe_atna::user::{Code, OnBehalfOf, User};
 use secrecy::ExposeSecret as _;
@@ -20,14 +20,16 @@ use url::Url;
 
 use super::observer;
 
-const KIND: EventKind = EventKind {
-    profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read",
-    event_type: REST,
-    subtypes: &[READ],
-    action: "R",
-    client: DESTINATION_ROLE,
-    server: SOURCE_ROLE,
-};
+fn kind() -> EventKind {
+    EventKind {
+        profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read",
+        event_type: REST,
+        subtypes: vec![READ],
+        action: "R",
+        client: DESTINATION_ROLE,
+        server: SOURCE_ROLE,
+    }
+}
 
 /// The synthetic values the exchange carries, each unlike any other text.
 const TEMPLATE: &str = "Qz7-template-31";
@@ -44,12 +46,15 @@ const LEVELS: &str = "urn:example:assurance";
 
 fn exchange() -> Exchange {
     Exchange {
-        kind: KIND,
+        kind: kind(),
         recorded: jiff::Timestamp::UNIX_EPOCH,
         outcome: Outcome::Success,
+        outcome_description: None,
         direction: Direction::Received {
             client: Peer::server(&Url::parse("https://client.example.org/").expect("a URL")),
-            endpoint: Url::parse("https://gateway.example.org/v1/ehr").expect("a URL"),
+            endpoint: NetworkAddress::Uri(
+                Url::parse("https://gateway.example.org/v1/ehr").expect("a URL"),
+            ),
         },
         on_behalf: OnBehalfOf::User(
             User::new(
@@ -274,7 +279,7 @@ fn the_security_labels_are_written_to_meta_and_to_their_entity() {
     };
     described.security_labels = labels().into_iter().take(1).collect();
     let record = written(&exchange);
-    assert_eq!(record["meta"]["profile"][0], KIND.profile);
+    assert_eq!(record["meta"]["profile"][0], kind().profile);
     let security = record["meta"]["security"]
         .as_array()
         .expect("meta.security");

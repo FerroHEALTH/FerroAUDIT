@@ -10,7 +10,10 @@ ITI-20's ATX: FHIR Feed, with a feature per layer.
 | Feature | Layer | Transaction |
 |---|---|---|
 | `atna` | Audit Trail and Node Authentication: the DICOM audit message over syslog with TLS, the spool and the forwarder | ITI-20 |
-| `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of an IHE FHIR transaction, sent over the ITI-20 FHIR Feed (implies `atna`) | ITI-20 |
+| `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of an IHE FHIR transaction, sent over the ITI-20 FHIR Feed through the same spool and forwarder, without the syslog sender or its TLS stack | ITI-20 |
+
+Under `balp` the FHIR Feed's TLS is the backend you build your
+`reqwest::Client` with; the crate enables none.
 
 The crate depends on no application. The profiles are published at
 <https://profiles.ihe.net/ITI/>.
@@ -42,7 +45,13 @@ The crate depends on no application. The profiles are published at
 - `forwarder::Forwarder`: stores every message first, then delivers it from
   the spool in order, retries a transport failure with a jittered backoff
   capped where the caller says, and reports the spool's depth, its
-  quarantine, its deliveries and its retries.
+  quarantine, its deliveries and its retries. `forwarder::Outbox` lets it
+  deliver from your own durable store instead, such as a table of records
+  not yet sent.
+- `codes`: the DICOM EventID, EventTypeCode, RoleID, AuditSourceTypeCode and
+  ParticipantObjectDataLifeCycle codes and the RFC 3881 participant object id
+  types, as triples `CodedValue::of` reads.
+- `targets`: the stable `tracing` targets of the spool and the forwarder.
 
 ## BALP (`balp`)
 
@@ -59,17 +68,26 @@ The crate depends on no application. The profiles are published at
 - `atna::feed::FeedRepository` with `Forwarder::fhir_feed`: the ATX: FHIR
   Feed's Send Audit Resource Request, a FHIR `create` of each stored record
   at `[base]/AuditEvent`; a refused record is quarantined, every other
-  failure retried.
+  failure retried. `with_credentials` authorizes each request from a
+  `Credentials` source and renews a refused token once (RFC 6750 §3.1);
+  `cleartext` reaches an `http` base for an operator who accepts it.
+- `recording`: the bound on an audited exchange's record, `Late` and
+  `within`.
+- `Exchange::audit_event_value`: the record as a JSON value, for a store
+  that keeps JSON.
 
 ## Whom an exchange is made for
 
 `ihe_atna::user::OnBehalfOf` is the `User` an OAuth 2.0 access token names
-(its `iss`, `sub`, `client_id`, `aud` and purposes of use, and optionally the
-organisation, name, provider identifier, roles and assurance level), or
-`System` for an exchange the system makes on its own behalf. The BALP record
+(its `iss`, `sub`, `client_id`, `aud`, `jti` and purposes of use, and
+optionally the organisation, name, provider identifier, roles and assurance
+level), a `User::local` authenticated otherwise, with no issuer and no
+client, or `System` for an exchange the system makes on its own behalf. The BALP record
 names the user in the `agent:user` slice and an Application agent with the
 `client_id` (BALP 1.1.4 §3:5.7.5.4). `User`'s `Debug` shows none of its
-values. The module compiles with no feature.
+values. The module compiles with no feature, and so do `redact`, the
+`Debug` rendering of a URL with its credential redacted, and (with either
+feature) `fhir_base`, the URL of an interaction under a FHIR base.
 
 ## Licence
 

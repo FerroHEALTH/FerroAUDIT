@@ -55,22 +55,22 @@ impl Drop for InFlight {
 // able, so a write its exchange stopped waiting for is delivered, never discarded.
 fn abandoned(write: JoinHandle<Result<u64, SpoolError>>) {
     let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-        tracing::error!(
+        tracing::error!(target: crate::atna::targets::SPOOL,
             "an audit message write was given up outside a runtime; a message it stores is delivered"
         );
         return;
     };
     drop(runtime.spawn(async move {
         match write.await {
-            Ok(Ok(sequence)) => tracing::warn!(
+            Ok(Ok(sequence)) => tracing::warn!(target: crate::atna::targets::SPOOL,
                 sequence,
                 "an audit message was stored after its exchange stopped waiting for it; it is delivered like any other"
             ),
-            Ok(Err(error)) => tracing::error!(
+            Ok(Err(error)) => tracing::error!(target: crate::atna::targets::SPOOL,
                 error = %super::super::chain(&error),
                 "an audit message its exchange stopped waiting for could not be stored"
             ),
-            Err(error) => tracing::error!(
+            Err(error) => tracing::error!(target: crate::atna::targets::SPOOL,
                 error = %error,
                 "the task storing an audit message its exchange stopped waiting for did not end"
             ),

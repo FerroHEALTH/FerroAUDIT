@@ -9,6 +9,78 @@
 //! through [`Repository::unencrypted_for_development`]: an audit message
 //! names the patient, so it never crosses a network in clear text outside a
 //! development deployment.
+//!
+//! # Examples
+//!
+//! The syslog sender: a spool that stores every message first, the
+//! repository it delivers to, and the forwarder that drains one into the
+//! other.
+//!
+//! ```no_run
+//! use std::path::Path;
+//! use std::sync::Arc;
+//! use std::time::Duration;
+//!
+//! use ihe_atna::atna::codes;
+//! use ihe_atna::atna::forwarder::Forwarder;
+//! use ihe_atna::atna::message::{
+//!     ActiveParticipant, AuditMessage, AuditSource, CodedValue, EventIdentification,
+//! };
+//! use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+//! use ihe_atna::atna::spool::{Bounds, Spool};
+//! use ihe_atna::atna::syslog::Sender;
+//! use url::Url;
+//!
+//! # #[tokio::main(flavor = "current_thread")]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let timeouts = Timeouts {
+//!     connect: Duration::from_secs(5),
+//!     send: Duration::from_secs(5),
+//! };
+//! let repository = Repository::tls(
+//!     &Url::parse("tls://arr.example.org")?,
+//!     &TlsSettings::default(),
+//!     timeouts,
+//! )?;
+//! let bounds = Bounds {
+//!     max_messages: 10_000,
+//!     max_bytes: 64 << 20,
+//!     write_timeout: Duration::from_secs(2),
+//! };
+//! let spool = Spool::open(Path::new("/var/spool/audit"), bounds)?;
+//! let forwarder = Forwarder::new(spool, repository, Duration::from_secs(60));
+//! tokio::spawn(Arc::clone(&forwarder).run());
+//!
+//! let message = AuditMessage {
+//!     event: EventIdentification {
+//!         event_id: CodedValue::of(codes::EVENT_APPLICATION_ACTIVITY),
+//!         action: "E",
+//!         date_time: jiff::Timestamp::now(),
+//!         outcome: "0",
+//!         type_codes: vec![CodedValue::of(codes::TYPE_APPLICATION_START)],
+//!         outcome_description: None,
+//!     },
+//!     participants: vec![ActiveParticipant {
+//!         user_id: "gateway".to_owned(),
+//!         alternative_user_id: None,
+//!         user_name: None,
+//!         user_is_requestor: false,
+//!         role_id_codes: vec![CodedValue::of(codes::ROLE_APPLICATION)],
+//!         access_point: None,
+//!     }],
+//!     source: AuditSource {
+//!         id: "gateway.example.org".to_owned(),
+//!         enterprise_site: None,
+//!         type_codes: Vec::new(),
+//!     },
+//!     objects: Vec::new(),
+//! };
+//! let sender = Sender::new("gateway.example.org", "gateway", "4242")?;
+//! let frame = sender.frame(jiff::Timestamp::now(), &message.to_xml()?);
+//! forwarder.submit(frame).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use std::fmt;
 use std::sync::Arc;
@@ -237,12 +309,13 @@ async fn bounded<T>(
         .map_err(|_elapsed| SendError::Timeout(step))
 }
 
-/// A connection's byte stream, plain or TLS.
-trait Stream: AsyncRead + AsyncWrite + Send + Unpin {}
+/// A connection's byte stream, plain or TLS; both are `Sync`, so a
+/// connection held behind a shared reference needs no lock of its own.
+trait Stream: AsyncRead + AsyncWrite + Send + Sync + Unpin {}
 
-impl<T: AsyncRead + AsyncWrite + Send + Unpin> Stream for T {}
+impl<T: AsyncRead + AsyncWrite + Send + Sync + Unpin> Stream for T {}
 
-/// An open connection to a repository.
+/// An open connection to a repository, `Send` and `Sync`.
 pub struct Connection {
     stream: Box<dyn Stream>,
     send_timeout: Duration,
@@ -345,5 +418,17 @@ fn client_config(tls: &TlsSettings) -> Result<ClientConfig, RepositoryError> {
                 .with_client_auth_cert(chain, key)
                 .map_err(RepositoryError::Tls)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Connection;
+
+    const fn is_send_and_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn a_connection_is_send_and_sync() {
+        const { is_send_and_sync::<Connection>() };
     }
 }

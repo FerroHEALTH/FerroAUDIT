@@ -64,6 +64,9 @@ pub struct EventIdentification {
     pub outcome: &'static str,
     /// `EventTypeCode`, in order.
     pub type_codes: Vec<CodedValue>,
+    /// `EventOutcomeDescription`, free text on how the event ended, when
+    /// the system gives one (DICOM PS3.15 A.5.1, optional).
+    pub outcome_description: Option<String>,
 }
 
 /// A `NetworkAccessPointID` with its `NetworkAccessPointTypeCode`.
@@ -110,16 +113,43 @@ impl fmt::Debug for ActiveParticipant {
 }
 
 /// `AuditSourceIdentification`: the system that wrote the message.
-///
-/// No `AuditSourceTypeCode` is written: the IHE audit tables this crate
-/// fills leave it not specialized, and the PS3.15 A.5.1 schema makes it
-/// optional.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditSource {
     /// `AuditSourceID`.
     pub id: String,
     /// `AuditEnterpriseSiteID`, when the deployment names one.
     pub enterprise_site: Option<String>,
+    /// `AuditSourceTypeCode`, in order, each optional and none by default:
+    /// the IHE audit tables leave it not specialized (ITI TF-2 §3.20.7).
+    pub type_codes: Vec<SourceType>,
+}
+
+/// One `AuditSourceTypeCode` (DICOM PS3.15 A.5.1).
+///
+/// A `csd-code` of `1` to `9` alone, such as
+/// [`codes::SOURCE_APPLICATION_SERVER`](super::codes::SOURCE_APPLICATION_SERVER),
+/// or another code with the code system that defines it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceType {
+    /// `csd-code`.
+    pub code: String,
+    /// `codeSystemName`, which PS3.15 A.5.1 asks for a code other than `1`
+    /// to `9`.
+    pub system_name: Option<String>,
+    /// `originalText`.
+    pub original_text: Option<String>,
+}
+
+impl SourceType {
+    /// The source type `code` of the PS3.15 A.5.1 list, written alone.
+    #[must_use]
+    pub fn of(code: &str) -> Self {
+        Self {
+            code: code.to_owned(),
+            system_name: None,
+            original_text: None,
+        }
+    }
 }
 
 /// `ParticipantObjectIdentification`: an object the event concerned.
@@ -131,6 +161,9 @@ pub struct ParticipantObject {
     pub type_code: Option<&'static str>,
     /// `ParticipantObjectTypeCodeRole`, when the table fills it.
     pub type_code_role: Option<&'static str>,
+    /// `ParticipantObjectDataLifeCycle`, `1` to `15` (DICOM PS3.15 A.5.1),
+    /// when the table or the caller fills it.
+    pub data_life_cycle: Option<&'static str>,
     /// `ParticipantObjectIDTypeCode`.
     pub id_type_code: CodedValue,
     /// `ParticipantObjectQuery`, written base64-encoded.
@@ -146,6 +179,7 @@ impl fmt::Debug for ParticipantObject {
             .field("id", &REDACTED)
             .field("type_code", &self.type_code)
             .field("type_code_role", &self.type_code_role)
+            .field("data_life_cycle", &self.data_life_cycle)
             .field("id_type_code", &self.id_type_code)
             .field("query", &self.query.as_ref().map(|_| REDACTED))
             .field(
@@ -223,6 +257,12 @@ impl AuditMessage {
                 for code in &event.type_codes {
                     write_coded(writer, "EventTypeCode", code)?;
                 }
+                // NOTE: DICOM PS3.15 A.5.1: EventOutcomeDescription follows EventTypeCode.
+                if let Some(description) = &event.outcome_description {
+                    writer
+                        .create_element("EventOutcomeDescription")
+                        .write_text_content(BytesText::new(description))?;
+                }
                 Ok(())
             })?;
         Ok(())
@@ -235,10 +275,29 @@ impl AuditMessage {
             attributes.push(("AuditEnterpriseSiteID", site.as_str()));
         }
         attributes.push(("AuditSourceID", source.id.as_str()));
-        writer
+        let element = writer
             .create_element("AuditSourceIdentification")
-            .with_attributes(attributes)
-            .write_empty()?;
+            .with_attributes(attributes);
+        if source.type_codes.is_empty() {
+            element.write_empty()?;
+            return Ok(());
+        }
+        element.write_inner_content(|writer| {
+            for kind in &source.type_codes {
+                let mut attributes = vec![("csd-code", kind.code.as_str())];
+                if let Some(system) = &kind.system_name {
+                    attributes.push(("codeSystemName", system.as_str()));
+                }
+                if let Some(text) = &kind.original_text {
+                    attributes.push(("originalText", text.as_str()));
+                }
+                writer
+                    .create_element("AuditSourceTypeCode")
+                    .with_attributes(attributes)
+                    .write_empty()?;
+            }
+            Ok(())
+        })?;
         Ok(())
     }
 }
@@ -301,6 +360,9 @@ fn write_object(writer: &mut Writer<Vec<u8>>, object: &ParticipantObject) -> std
     }
     if let Some(role) = object.type_code_role {
         attributes.push(("ParticipantObjectTypeCodeRole", role));
+    }
+    if let Some(stage) = object.data_life_cycle {
+        attributes.push(("ParticipantObjectDataLifeCycle", stage));
     }
     let details: Vec<(&str, String)> = object
         .details

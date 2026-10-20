@@ -15,14 +15,16 @@ use url::Url;
 
 use super::observer;
 
-const KIND: EventKind = EventKind {
-    profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
-    event_type: REST,
-    subtypes: &[SEARCH],
-    action: "E",
-    client: SOURCE_ROLE,
-    server: DESTINATION_ROLE,
-};
+fn kind() -> EventKind {
+    EventKind {
+        profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
+        event_type: REST,
+        subtypes: vec![SEARCH],
+        action: "E",
+        client: SOURCE_ROLE,
+        server: DESTINATION_ROLE,
+    }
+}
 
 /// The synthetic values the exchange carries, each unlike any other text.
 const VALUE: &str = "Qz7-value-17";
@@ -31,9 +33,10 @@ const SEARCHED: &str = "Qz7-search-19";
 
 fn exchange() -> Exchange {
     Exchange {
-        kind: KIND,
+        kind: kind(),
         recorded: jiff::Timestamp::UNIX_EPOCH,
         outcome: Outcome::Success,
+        outcome_description: None,
         direction: Direction::Sent {
             server: Peer::server(
                 &Url::parse("https://user:Qz7-password@pix.example.org/fhir/?token=Qz7-token")
@@ -46,7 +49,8 @@ fn exchange() -> Exchange {
                 "https://pix.example.org/fhir/Patient?identifier={SEARCHED}"
             ))),
             Entity::Patient {
-                system: "urn:oid:2.999.1".to_owned(),
+                system: Some("urn:oid:2.999.1".to_owned()),
+                namespace: None,
                 value: SecretString::from(VALUE),
             },
             Entity::PatientReference(SecretString::from(REFERENCE)),
