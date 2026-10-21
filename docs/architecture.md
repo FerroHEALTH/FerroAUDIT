@@ -244,6 +244,8 @@ uses the same rule. No specification governs this: our own design.
 |---|---|---|
 | none | `user` | nothing outside `std` |
 | `atna` | `message`, `codes`, `syslog`, `repository`, `spool`, `forwarder` | XML, timestamps, base64, rustls, tokio, tracing |
+| `recording` | `balp::recording` alone | tokio, thiserror |
+| `redact` | `redact::RedactedUrl`, `fhir_base` | url |
 | `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (R4 `resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
@@ -317,7 +319,7 @@ vendored HL7 Europe packages and the record to the BALP patterns.
 ## 9. How a product integrates
 
 A product pins `ihe-atna` and, where it writes the EHDS access record,
-`ehds-logging` exactly (`=0.2.0`) from crates.io and enables the feature it
+`ehds-logging` exactly (`=0.2.1`) from crates.io and enables the feature it
 sends with. The migrations, each one pull request in the
 product's repository:
 

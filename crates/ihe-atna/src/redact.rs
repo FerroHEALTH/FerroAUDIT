@@ -6,11 +6,11 @@
 //!
 //! A URL may carry a user name and password in its userinfo (RFC 3986
 //! §3.2.1) and a credential in its query, so every type of this crate that
-//! holds one shows it through [`RedactedUrl`] with both replaced by
+//! holds one shows it through `RedactedUrl` with both replaced by
 //! [`REDACTED`]. A product that logs a URL uses the same rendering, so the
 //! rule has one copy. No specification governs this: our own design.
 
-#[cfg(any(feature = "atna", feature = "balp"))]
+#[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 use std::fmt;
 
 /// The fixed text a rendering shows in place of a credential or of a value
@@ -18,10 +18,10 @@ use std::fmt;
 pub const REDACTED: &str = "***";
 
 /// A URL whose `Debug` shows it with its userinfo and its query redacted.
-#[cfg(any(feature = "atna", feature = "balp"))]
+#[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 pub struct RedactedUrl<'a>(pub &'a str);
 
-#[cfg(any(feature = "atna", feature = "balp"))]
+#[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 impl fmt::Debug for RedactedUrl<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&redact(self.0), f)
@@ -41,7 +41,7 @@ impl fmt::Debug for RedactedUrl<'_> {
 /// `://` has no authority to find a credential in, so it shows as
 /// [`REDACTED`] whole. The text is never decoded, so it is redacted as
 /// written.
-#[cfg(any(feature = "atna", feature = "balp"))]
+#[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 fn redact(url: &str) -> String {
     if url.is_empty() {
         return String::new();
@@ -77,7 +77,7 @@ fn redact(url: &str) -> String {
     format!("{scheme}://{userinfo}{hierarchy}{tail}")
 }
 
-#[cfg(all(test, any(feature = "atna", feature = "balp")))]
+#[cfg(all(test, any(feature = "atna", feature = "balp", feature = "redact")))]
 mod tests {
     use super::{REDACTED, RedactedUrl, redact};
 

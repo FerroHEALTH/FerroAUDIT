@@ -12,6 +12,10 @@ ITI-20's ATX: FHIR Feed, with a feature per layer.
 | `atna` | Audit Trail and Node Authentication: the DICOM audit message over syslog with TLS, the spool and the forwarder | ITI-20 |
 | `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of an IHE FHIR transaction, sent over the ITI-20 FHIR Feed through the same spool and forwarder, without the syslog sender or its TLS stack | ITI-20 |
 
+`recording` compiles `balp::recording` alone and `redact` compiles
+`redact::RedactedUrl` and `fhir_base` alone, for a profile crate that audits
+through its own model or logs URLs it does not audit.
+
 Under `balp` the FHIR Feed's TLS is the backend you build your
 `reqwest::Client` with; the crate enables none.
 
