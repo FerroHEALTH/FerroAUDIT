@@ -440,3 +440,46 @@ fn a_declaration_serializes_to_the_form_it_reads() {
         "\"none\""
     );
 }
+
+/// openEHR BASE 1.1.0, Base Types, Identification Package, "Composite
+/// Identifiers and Case": two declarations that differ only in the case of a
+/// key are one map, so they have one canonical text and one digest.
+#[test]
+fn an_openehr_map_has_one_canonical_text_whatever_the_case_of_its_keys() {
+    use ehds_logging::map::Matching;
+
+    let declare = |template: &str, archetype: &str| {
+        CategoryMap::declare_with(
+            Matching::OpenEhr,
+            &[],
+            &one(template, codes(&["Laboratory-Reports"])),
+            &one(archetype, codes(&["Medical-Imaging"])),
+        )
+        .expect("a map")
+        .canonical()
+    };
+    assert_eq!(
+        declare(
+            "Example Lab Report.v1",
+            "openEHR-EHR-COMPOSITION.imaging_report.v1"
+        ),
+        declare(
+            "example lab REPORT.v1",
+            "OPENEHR-EHR-COMPOSITION.Imaging_Report.v1"
+        )
+    );
+    let exact = |template: &str| {
+        CategoryMap::declare(
+            &[],
+            &one(template, codes(&["Laboratory-Reports"])),
+            &BTreeMap::new(),
+        )
+        .expect("a map")
+        .canonical()
+    };
+    assert_ne!(
+        exact("Example Lab Report.v1"),
+        exact("example lab report.v1"),
+        "an exact map writes each key as declared"
+    );
+}

@@ -406,7 +406,10 @@ impl CategoryMap {
     /// `matching\topenehr` for a map compared as openEHR BASE asks, one line
     /// per national category, then per template and per archetype key, each
     /// field separated by a tab, the categories by `,`, each category as
-    /// `<system>|<code>`.
+    /// `<system>|<code>`. A key is written as the map compares it: as
+    /// declared in an exact map, and in its comparison form in an openEHR one,
+    /// so two declarations that differ only in the case of a key have one
+    /// text.
     #[must_use]
     pub fn canonical(&self) -> String {
         let mut text = String::new();
@@ -420,7 +423,9 @@ impl CategoryMap {
             (Table::Templates, &self.templates),
             (Table::Archetypes, &self.archetypes),
         ] {
-            for (key, mapping) in keys.values() {
+            // NOTE: openEHR BASE 1.1.0 Base Types, Composite Identifiers and Case: under
+            // Matching::OpenEhr a key is written in its comparison form, so one map has one text.
+            for (key, (_, mapping)) in keys {
                 let value = match mapping {
                     Mapping::NoCategory => NONE.to_owned(),
                     Mapping::Categories(categories) => categories

@@ -319,7 +319,7 @@ vendored HL7 Europe packages and the record to the BALP patterns.
 ## 9. How a product integrates
 
 A product pins `ihe-atna` and, where it writes the EHDS access record,
-`ehds-logging` exactly (`=0.2.2`) from crates.io and enables the feature it
+`ehds-logging` exactly (`=0.2.3`) from crates.io and enables the feature it
 sends with. The migrations, each one pull request in the
 product's repository:
 
