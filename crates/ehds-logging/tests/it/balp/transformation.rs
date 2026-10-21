@@ -101,7 +101,7 @@ fn a_transformation_is_written_in_its_own_entity_by_path() {
         ["1"],
         "an element no path names is counted all the same"
     );
-    assert!(details(entity, "ehds-dropped-path").is_empty());
+    assert_eq!(details(entity, "ehds-dropped-path"), Vec::<&str>::new());
 }
 
 #[test]

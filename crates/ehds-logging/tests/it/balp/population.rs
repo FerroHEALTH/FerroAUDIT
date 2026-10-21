@@ -45,11 +45,11 @@ fn a_population_access_states_its_scope_in_its_own_entity() {
     assert_eq!(mark["description"], POPULATION_DESCRIPTION);
     assert_eq!(details(mark, "ehds-population"), ["true"]);
     assert_eq!(details(mark, "ehds-population-reason"), ["not-projected"]);
-    assert!(details(mark, "ehds-population-ehrs").is_empty());
+    assert_eq!(details(mark, "ehds-population-ehrs"), Vec::<&str>::new());
     assert_eq!(details(mark, "ehds-population-limit"), ["2"]);
     assert_eq!(details(mark, "template-id"), [LAB_REPORT]);
     assert_eq!(details(mark, "archetype-id"), [ARCHETYPE]);
-    assert!(patient_values(&written).is_empty());
+    assert_eq!(patient_values(&written), Vec::<&str>::new());
     assert_eq!(
         profile(&written),
         Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Query")
@@ -91,7 +91,10 @@ fn a_record_over_its_limit_says_how_many_ehrs_the_rows_named() {
 #[test]
 fn a_record_that_names_its_ehrs_carries_no_population_entity() {
     let written = written(&record(Action::Query, Outcome::Success));
-    assert!(entity(&written, POPULATION_ENTITY).is_empty());
+    assert_eq!(
+        entity(&written, POPULATION_ENTITY),
+        Vec::<&serde_json::Value>::new()
+    );
 }
 
 #[test]

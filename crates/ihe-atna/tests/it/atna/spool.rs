@@ -181,7 +181,7 @@ async fn the_bounds_count_the_quarantine() {
     }
     std::fs::write(path.join(named(0)), b"garbage").expect("a corrupt message");
     let spool = Spool::open(&path, bounds).expect("the spool reopens");
-    assert!(drain(&spool).await.is_empty());
+    assert_eq!(drain(&spool).await, Vec::<String>::new());
     spool
         .push(framed("one"))
         .await
@@ -297,7 +297,7 @@ fn inspecting_a_missing_spool_under_a_writable_parent_creates_nothing() {
     let path = directory.path().join("spool");
     Spool::inspect(&path).expect("the spool would open");
     assert!(!path.exists());
-    assert!(listing(directory.path()).is_empty());
+    assert_eq!(listing(directory.path()), Vec::<String>::new());
 }
 
 #[test]
@@ -305,7 +305,7 @@ fn inspecting_a_spool_whose_parents_are_missing_reads_the_nearest_ancestor() {
     let directory = tempfile::tempdir().expect("a directory");
     let path = directory.path().join("missing").join("spool");
     Spool::inspect(&path).expect("opening creates the missing parents");
-    assert!(listing(directory.path()).is_empty());
+    assert_eq!(listing(directory.path()), Vec::<String>::new());
 
     let file = directory.path().join("a-file");
     std::fs::write(&file, b"a file").expect("a file");

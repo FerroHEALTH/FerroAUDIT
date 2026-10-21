@@ -681,7 +681,10 @@ fn the_version_a_write_left_is_named_on_its_origin() {
         panic!("one origin, got {origins:?}");
     };
     assert_eq!(details(origin, "written-version"), [uid]);
-    assert!(details(origin, "written-version-unread").is_empty());
+    assert_eq!(
+        details(origin, "written-version-unread"),
+        Vec::<&str>::new()
+    );
 }
 
 #[test]
@@ -696,7 +699,7 @@ fn a_version_the_answer_did_not_tell_is_said_so_and_names_nothing() {
             panic!("one origin, got {origins:?}");
         };
         assert_eq!(details(origin, "written-version-unread"), [why]);
-        assert!(details(origin, "written-version").is_empty());
+        assert_eq!(details(origin, "written-version"), Vec::<&str>::new());
     }
 }
 
@@ -704,8 +707,11 @@ fn a_version_the_answer_did_not_tell_is_said_so_and_names_nothing() {
 fn a_record_of_no_write_names_no_version() {
     let written = written(&record(Action::Read, Outcome::Success));
     for origin in entity(&written, "origin") {
-        assert!(details(origin, "written-version").is_empty());
-        assert!(details(origin, "written-version-unread").is_empty());
+        assert_eq!(details(origin, "written-version"), Vec::<&str>::new());
+        assert_eq!(
+            details(origin, "written-version-unread"),
+            Vec::<&str>::new()
+        );
     }
 }
 

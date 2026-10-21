@@ -6,9 +6,9 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.98"
 license = "BUSL-1.1"
 repository = "https://github.com/FerroHEALTH/FerroAUDIT"
 homepage = "https://github.com/FerroHEALTH/FerroAUDIT"
@@ -54,7 +54,7 @@ proptest = "1.12.0"
 tar = { version = "0.4.46", default-features = false }
 toml = { version = "1.1.8", default-features = false, features = ["std", "parse", "display", "serde"] }
 # The workspace's own crates, each at the workspace version.
-ihe-atna = { path = "crates/ihe-atna", version = "=0.2.1" }
+ihe-atna = { path = "crates/ihe-atna", version = "=0.2.2" }
 # Test-only: the spool directories, the log capture of the forwarder tests,
 # and the stub FHIR Feed repository.
 tempfile = "3.27.0"
