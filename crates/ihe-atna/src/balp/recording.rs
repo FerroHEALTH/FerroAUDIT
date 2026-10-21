@@ -17,10 +17,19 @@ use std::time::Duration;
 
 /// Why an audited exchange failed: its audit record was not stored before
 /// the exchange's time was up, so its answer is not used.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Default, thiserror::Error)]
 #[error("the audit record was not stored before the exchange's time was up")]
 #[non_exhaustive]
 pub struct Late;
+
+impl Late {
+    /// The failure of an exchange whose record was late, which an audited
+    /// client returns as its audit error.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+}
 
 /// What became of an exchange's audit record.
 #[derive(Debug)]
@@ -100,6 +109,14 @@ mod tests {
         })
         .await;
         assert!(matches!(recorded, Recorded::Accepted), "{recorded:?}");
+    }
+
+    #[test]
+    fn a_late_record_is_made_by_the_caller_that_reports_it() {
+        assert_eq!(
+            super::Late::new().to_string(),
+            "the audit record was not stored before the exchange's time was up"
+        );
     }
 
     #[test]

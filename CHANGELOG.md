@@ -23,6 +23,10 @@ A patch release with no API change: a product pins `=0.2.1` in place of
   `redact::RedactedUrl` and `fhir_base` alone (url only), so a profile crate
   such as FerroPIX's `ihe-iti` takes the record bound and the URL helpers
   without the BALP or syslog stack and drops its own copies (#61).
+- `ihe-atna`: `balp::recording::Late::new` (and `Default`), so an audited
+  client outside the crate can return the late-record failure it reports;
+  `Late` is `#[non_exhaustive]`, which kept 0.2.0's callers from making one
+  (#61).
 
 ## [0.2.0] - 2026-10-21
 
