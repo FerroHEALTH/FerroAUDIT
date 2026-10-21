@@ -7,26 +7,27 @@ Vendored verbatim by `scripts/vendor/openehr-base.sh`. Never edit a file
 here: change the pin in docs/VERSIONS.md and re-run the script.
 
 - Source: <https://github.com/openEHR/specifications-BASE>, published at
-  <https://specifications.openehr.org/releases/BASE/Release-1.1.0/>
-- Pin: tag `Release-1.1.0`, which resolves to commit `a7154147fc17721fd9d575b61081a1e54113b974`; the amendment
-  record of the Base Types specification heads its entries `BASE Release
-  1.1.0`, and the specification declares the status STABLE
-- Fetched: 2026-10-20
+  <https://specifications.openehr.org/releases/BASE/development/>
+- Pin: commit `707b8ac28cea1ccc4410f8e930665d473475350f`, the commit FerroHEALTH/FerroEHR vendors; the
+  amendment record of the Base Types specification heads its entries
+  `BASE Release 1.3.0 (unreleased)`, and the specification declares the status
+  STABLE
+- Fetched: 2026-10-21
 - Upstream licence: Creative Commons Attribution-ShareAlike 3.0 Unported, the
   repository's `LICENSE` file, vendored beside this file
 - Layout: the upstream paths, unchanged
-- Files: 7
+- Files: 10
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `a28b001632572f1a0960cef14d08201d78d53979adc00495fdc64efc666f081e`
+  `PROVENANCE.md` excluded): `dbdfd3de8ae1865b4f0065b34b163a8d59c73d6be9cc5ec821aeb040d372528d`
 - Read by: the category map of `crates/ehds-logging`, which compares
-  template and archetype ids by the case rule of §4.4 (Composite Identifiers
-  and Case) and holds archetype keys to the ARCHETYPE_ID grammar of the
+  template and archetype ids by the case rule of Composite Identifiers
+  and Case and holds archetype keys to the ARCHETYPE_ID grammar of the
   identification package's Syntaxes section
 
 ## What is here
 
 `docs/base_types/` is the Base Types specification, the AsciiDoc chapters
-with their figures; `master04-identification_package.adoc` is the
+with their figures; `master05-identification_package.adoc` is the
 identification package. `LICENSE` is the repository's licence. The other
 BASE specifications, the class tables, the rendered pages and the UML files
 are left out.

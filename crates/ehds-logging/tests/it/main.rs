@@ -8,6 +8,8 @@
 //! the test-scoped relaxations of `clippy.toml` reach their helpers too.
 
 #[cfg(test)]
+mod archetype_id;
+#[cfg(test)]
 #[cfg(feature = "balp")]
 mod balp;
 #[cfg(test)]

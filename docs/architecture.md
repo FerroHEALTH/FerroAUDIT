@@ -286,9 +286,12 @@ of the interoperability component (Article 2(2)(n), (o)); its own
 `tests/it/features.rs` holds that with each feature on.
 
 The map compares keys exactly, or, declared with `Matching::OpenEhr`, as
-openEHR BASE 1.1.0 compares composite identifiers: case-insensitively and
+openEHR BASE 1.3.0 compares composite identifiers: case-insensitively and
 case-preserving, so the evidence keeps each id as the access named it.
 Archetype keys follow the `ARCHETYPE_ID` grammar of the same specification,
+the legacy form with a major version from `0` and the namespaced ADL 2 form,
+read as FerroEHR's `openehr-base` reads it (a test holds the two to one
+answer),
 and a declaration reports every defect at once. A root object of a resource
 kind that holds no data of any category (`EHR`, `EHR_STATUS`, `FOLDER` and
 the others) adds "no category" with its kind beside the categories of the
@@ -319,7 +322,7 @@ vendored HL7 Europe packages and the record to the BALP patterns.
 ## 9. How a product integrates
 
 A product pins `ihe-atna` and, where it writes the EHDS access record,
-`ehds-logging` exactly (`=0.2.3`) from crates.io and enables the feature it
+`ehds-logging` exactly (`=0.2.4`) from crates.io and enables the feature it
 sends with. The migrations, each one pull request in the
 product's repository:
 

@@ -15,7 +15,7 @@
 //! A key is compared exactly by default. Declared with [`Matching::OpenEhr`],
 //! the map compares template and archetype ids as openEHR BASE asks of every
 //! composite identifier: case-insensitively, while the evidence keeps each id
-//! as the access named it (BASE Release 1.1.0, Base Types, Identification
+//! as the access named it (BASE Release 1.3.0, Base Types, Identification
 //! Package, "Composite Identifiers and Case"). Archetype keys are held to the
 //! `ARCHETYPE_ID` grammar of the same package either way.
 //!
@@ -142,7 +142,7 @@ pub enum MapError {
     },
     /// An archetype key is no `ARCHETYPE_ID`.
     #[error(
-        "archetypes key {key:?} is no openEHR archetype id (rm_originator-rm_name-rm_entity.concept.vN)"
+        "archetypes key {key:?} is no openEHR archetype id ([namespace::]rm_originator-rm_name-rm_entity.concept.vN)"
     )]
     ArchetypeId {
         /// The key.
@@ -423,7 +423,7 @@ impl CategoryMap {
             (Table::Templates, &self.templates),
             (Table::Archetypes, &self.archetypes),
         ] {
-            // NOTE: openEHR BASE 1.1.0 Base Types, Composite Identifiers and Case: under
+            // NOTE: openEHR BASE 1.3.0 Base Types, Composite Identifiers and Case: under
             // Matching::OpenEhr a key is written in its comparison form, so one map has one text.
             for (key, (_, mapping)) in keys {
                 let value = match mapping {
@@ -485,9 +485,11 @@ fn is_key(key: &str) -> bool {
     !key.is_empty() && !key.chars().any(char::is_control)
 }
 
-/// Whether `id` follows the `ARCHETYPE_ID` grammar.
-// NOTE: openEHR BASE 1.1.0, Base Types, Identification Package, Syntaxes: the ARCHETYPE_ID
-// grammar, each part `letter {letter | digit | '_'}` and the version `'v' non-zero-digit [number]`.
+/// Whether `id` follows the `ARCHETYPE_ID` grammar: the namespaced ADL 2 form
+/// `namespace::rm_originator-rm_name-rm_entity.concept.vM.m.p-rc.N` or the
+/// legacy form `rm_originator-rm_name-rm_entity.concept.vM`.
+// NOTE: openEHR BASE 1.3.0, Base Types, Identification Package, Syntaxes; a namespaceless id
+// with a full version is admitted as FerroEHR's ArchetypeId admits it (AM 2.4.0 ARCHETYPE_HRID).
 fn is_archetype_id(id: &str) -> bool {
     let alphanumeric = |part: &str| {
         let mut characters = part.chars();
@@ -496,13 +498,24 @@ fn is_archetype_id(id: &str) -> bool {
             .is_some_and(|first| first.is_ascii_alphabetic())
             && characters.all(|rest| rest.is_ascii_alphanumeric() || rest == '_')
     };
-    let mut sections = id.split('.');
-    let (Some(entity), Some(concept), Some(version), None) = (
-        sections.next(),
-        sections.next(),
-        sections.next(),
-        sections.next(),
-    ) else {
+    let extended = |part: &str| {
+        let mut characters = part.chars();
+        characters
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic())
+            && characters.all(|rest| rest.is_ascii_alphanumeric() || rest == '_' || rest == '-')
+    };
+    let (namespace, rest) = match id.split_once("::") {
+        Some((namespace, rest)) => (Some(namespace), rest),
+        None => (None, id),
+    };
+    if namespace.is_some_and(|namespace| !namespace.split('.').all(extended)) {
+        return false;
+    }
+    let mut sections = rest.splitn(3, '.');
+    let (Some(entity), Some(concept), Some(version)) =
+        (sections.next(), sections.next(), sections.next())
+    else {
         return false;
     };
     let mut entity_parts = entity.split('-');
@@ -512,14 +525,42 @@ fn is_archetype_id(id: &str) -> bool {
             if alphanumeric(originator) && alphanumeric(name) && alphanumeric(class)
     );
     let concept_ok = concept.split('-').all(alphanumeric);
-    let version_ok = version.strip_prefix('v').is_some_and(|number| {
-        let mut digits = number.chars();
-        digits
-            .next()
-            .is_some_and(|first| matches!(first, '1'..='9'))
-            && digits.all(|digit| digit.is_ascii_digit())
-    });
+    let version_ok = version.strip_prefix('v').is_some_and(is_version_id);
     entity_ok && concept_ok && version_ok
+}
+
+/// Whether `version` is a BASE `version_id`: `major [. minor [. patch
+/// [modifier]]]`, each number `0` or without a leading zero, and the modifier
+/// `-rc`, `-alpha` or `-beta` with an optional `.build`.
+fn is_version_id(version: &str) -> bool {
+    let number = |part: &str| {
+        !part.is_empty()
+            && part.bytes().all(|digit| digit.is_ascii_digit())
+            && (part == "0" || !part.starts_with('0'))
+    };
+    let (numeric, modifier) = match version.split_once('-') {
+        Some((numeric, modifier)) => (numeric, Some(modifier)),
+        None => (version, None),
+    };
+    let mut count = 0_usize;
+    for part in numeric.split('.') {
+        count = count.saturating_add(1);
+        if !number(part) {
+            return false;
+        }
+    }
+    let modifier_ok = modifier.is_none_or(|modifier| {
+        let (kind, build) = match modifier.split_once('.') {
+            Some((kind, build)) => (kind, Some(build)),
+            None => (modifier, None),
+        };
+        count == 3
+            && matches!(kind, "rc" | "alpha" | "beta")
+            && build.is_none_or(|build| {
+                !build.is_empty() && build.bytes().all(|digit| digit.is_ascii_digit())
+            })
+    });
+    (1..=3).contains(&count) && modifier_ok
 }
 
 /// The category `reference` names among the priority categories and the

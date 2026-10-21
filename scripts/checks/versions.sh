@@ -18,7 +18,7 @@
 #                        DICOM PS3.15: each PROVENANCE.md names its row's
 #                        pin-set digest, and each tree still hashes to the
 #                        digest it records.
-#   3b. openEHR BASE     the PROVENANCE.md names the pinned tag, and the
+#   3b. openEHR BASE     the PROVENANCE.md names the pinned commit, and the
 #                        tree still hashes to the digest it records.
 #   4. the design        the pin table of docs/architecture.md names the
 #                        same BALP version as the matrix.
@@ -153,11 +153,11 @@ pinned_at docs/specs/dicom-ps3-15 "DICOM PS3.15"
 # ---- 3b. openEHR BASE --------------------------------------------------------
 base="docs/specs/openehr-base"
 if [ -f "$base/PROVENANCE.md" ]; then
-  tag="$(corpus_pin_tag "$(corpus_pin_cell "openEHR BASE specification source")")"
-  grep -qF "Pin: tag \`$tag\`" "$base/PROVENANCE.md" ||
-    fail "$base/PROVENANCE.md does not name tag $tag, which docs/VERSIONS.md pins"
+  commit="$(corpus_pin_commit "$(corpus_pin_cell "openEHR BASE specification source")")"
+  grep -qF "Pin: commit \`$commit\`" "$base/PROVENANCE.md" ||
+    fail "$base/PROVENANCE.md does not name commit $commit, which docs/VERSIONS.md pins"
   tree_at "$base"
-  ok "openEHR BASE $tag at its digest"
+  ok "openEHR BASE $commit at its digest"
 else
   fail "$base/PROVENANCE.md is missing"
 fi
