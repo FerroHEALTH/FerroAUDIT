@@ -29,7 +29,10 @@
 pub mod atna;
 #[cfg(feature = "balp")]
 pub mod balp;
-#[cfg(any(feature = "atna", feature = "balp"))]
+#[cfg(all(feature = "recording", not(feature = "balp")))]
+#[path = "balp/recording_only.rs"]
+pub mod balp;
+#[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 pub mod fhir_base;
 pub mod redact;
 pub mod user;

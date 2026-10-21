@@ -11,6 +11,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-21
+
+A patch release with no API change: a product pins `=0.2.1` in place of
+`=0.2.0` and changes nothing else.
+
+### Added
+
+- `ihe-atna`: the feature `recording` compiles `balp::recording` alone (tokio
+  and thiserror only), and the feature `redact` compiles
+  `redact::RedactedUrl` and `fhir_base` alone (url only), so a profile crate
+  such as FerroPIX's `ihe-iti` takes the record bound and the URL helpers
+  without the BALP or syslog stack and drops its own copies (#61).
+
 ## [0.2.0] - 2026-10-21
 
 The audit content the FerroFED and FerroEHR migrations found missing, the
@@ -164,7 +177,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/FerroHEALTH/FerroAUDIT/releases/tag/v0.1.0

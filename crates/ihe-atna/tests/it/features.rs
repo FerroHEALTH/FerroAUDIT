@@ -142,3 +142,27 @@ fn only_atna_compiles_the_syslog_sender_and_its_tls_stack() {
         );
     }
 }
+
+/// `recording` compiles the record bound alone and `redact` the URL helpers
+/// alone, so a profile crate takes them without the audit stack: neither the
+/// FHIR model and the HTTP client of `balp` nor the syslog sender of `atna`.
+#[test]
+fn recording_and_redact_take_no_audit_stack() {
+    for (feature, takes) in [("recording", "tokio"), ("redact", "url")] {
+        let closure = tree(feature, None);
+        assert!(
+            closure.contains(takes),
+            "{feature} lost {takes}: {closure:?}"
+        );
+        for name in BALP_ONLY.iter().chain(ATNA_ONLY).chain(ATNA_DIRECT) {
+            assert!(
+                !closure.contains(*name),
+                "{feature} compiles {name}: {closure:?}"
+            );
+        }
+    }
+    assert!(
+        !tree("redact", None).contains("tokio"),
+        "redact takes no runtime"
+    );
+}

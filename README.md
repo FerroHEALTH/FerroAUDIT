@@ -40,8 +40,8 @@ record of both.
 
 ```toml
 [dependencies]
-ihe-atna = { version = "=0.2.0", features = ["balp"] }
-ehds-logging = { version = "=0.2.0", features = ["balp"] }
+ihe-atna = { version = "=0.2.1", features = ["balp"] }
+ehds-logging = { version = "=0.2.1", features = ["balp"] }
 ```
 
 The crate documentation on docs.rs is the integration guide; the design is

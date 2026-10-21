@@ -39,6 +39,14 @@ atna = [
   "dep:tracing",
   "dep:url",
 ]
+# The bound on an audited exchange's record (`balp::recording`), alone, for a
+# client that audits through its own model, such as a profile crate's
+# ITI-55 writer.
+recording = ["dep:thiserror", "dep:tokio"]
+# The Debug rendering of a URL with its credential redacted
+# (`redact::RedactedUrl`) and the URL of an interaction under a FHIR base
+# (`fhir_base`), alone, for a client that logs URLs it does not audit.
+redact = ["dep:url"]
 # BALP, the Basic Audit Log Patterns: the FHIR R4 AuditEvent an IHE FHIR
 # transaction is audited as, and the ATX: FHIR Feed Option of ITI-20 that
 # posts it to an Audit Record Repository through the same spool and
