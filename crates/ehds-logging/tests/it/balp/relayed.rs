@@ -102,7 +102,10 @@ fn the_correlation_identifier_rides_with_the_request_id() {
 #[test]
 fn a_record_no_contact_point_relayed_has_no_relayed_entity() {
     let written = written(&record(Action::Query, Outcome::Success));
-    assert!(entity(&written, "ehds-relayed").is_empty());
+    assert_eq!(
+        entity(&written, "ehds-relayed"),
+        Vec::<&serde_json::Value>::new()
+    );
     assert!(!written.to_string().contains("correlation-id"));
 }
 

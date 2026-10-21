@@ -73,10 +73,10 @@ packages, and Commission Decision 2011/833/EU for the EU acts.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Rust toolchain | 1.98.1, profile `minimal`, components `rustfmt` and `clippy` | `rust-toolchain.toml` |
+| Rust toolchain | 1.99.1, profile `minimal`, components `rustfmt` and `clippy` | `rust-toolchain.toml` |
 | Rust edition | 2024 | `Cargo.toml` `[workspace.package] edition`, `rustfmt.toml` |
-| MSRV | 1.97, the FerroHEALTH family floor, checked on every pull request by the `msrv` job with no feature and with `atna`; `balp` takes `fhir-types`, whose own `rust-version` is 1.98 | `Cargo.toml` `[workspace.package] rust-version`, `.github/workflows/ci.yml` (reads it from the manifest) |
-| `ihe-atna`, `ehds-logging` | 0.2.1, the workspace version both crates inherit, the release tag `v0.2.1` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version`, `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
+| MSRV | 1.98, the FerroHEALTH family floor (the pinned toolchain's release minus one), checked on every pull request by the `msrv` job with no feature, with `atna` and with every feature | `Cargo.toml` `[workspace.package] rust-version`, `.github/workflows/ci.yml` (reads it from the manifest) |
+| `ihe-atna`, `ehds-logging` | 0.2.2, the workspace version both crates inherit, the release tag `v0.2.2` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version`, `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
 | Third-party crates | the `[workspace.dependencies]` table, each version checked against crates.io on 2026-10-20 | `Cargo.toml`, `Cargo.lock` |
 
 ## The CI tools

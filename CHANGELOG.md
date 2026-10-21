@@ -11,6 +11,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
+A patch release with no API change: a product pins `=0.2.2` in place of
+`=0.2.1` and changes nothing else.
+
+### Changed
+
+- Both crates declare `rust-version = "1.98"` in place of 1.97, and the
+  repository builds with Rust 1.99.1 in place of 1.98.1: the FerroHEALTH
+  family builds with the latest stable toolchain and declares the release
+  before it as its MSRV. A product on a toolchain older than 1.98 can no
+  longer take the crates. The `balp` feature now builds on the declared
+  MSRV too, and the `msrv` job checks every feature as well as no feature
+  and `atna`.
+
 ## [0.2.1] - 2026-10-21
 
 A patch release with no API change: a product pins `=0.2.1` in place of
@@ -181,7 +196,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.0...v0.1.1

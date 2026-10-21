@@ -82,7 +82,7 @@ fn a_member_whose_denial_was_set_aside_is_named_in_the_mark() {
     let [mark] = marks.as_slice() else {
         panic!("one emergency entity: {plain}");
     };
-    assert!(details(mark, "ehds-consent-set-aside").is_empty());
+    assert_eq!(details(mark, "ehds-consent-set-aside"), Vec::<&str>::new());
     let mut record = emergency_record();
     record.emergency = record.emergency.map(|mark| {
         mark.with_consent_set_aside([
