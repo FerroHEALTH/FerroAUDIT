@@ -48,7 +48,7 @@ documents FerroFED's holds, so its pin-set digest is its own.
 | MyHealth@EU Master Value Sets Catalogue | package `myhealth.eu.fhir.mvc-package` 9.1.0, pin-set digest `06f68a58f7382db396f029b1c0a420fcac6cbf53d8a948df47594937b0886749`, tarball sha256 `3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1` | `scripts/vendor/ehds-categories.sh`, `docs/specs/ehdsi-mvc/PROVENANCE.md` |
 | IETF syslog and audit RFCs | RFC 3881, RFC 5424, RFC 5425, RFC 5426 and RFC 6750 from `www.rfc-editor.org`, each by its sha256, pin-set digest `9de9544040398351d75871f4074a2bde41a21e6b14aafe798678addb2d500bab` | `scripts/vendor/ietf-syslog.sh`, `docs/specs/ietf-syslog/PROVENANCE.md` |
 | DICOM PS3.15 | release 2026c, `part15.html` from `dicom.nema.org`, cache only (not redistributed), pin-set digest `9a9b6eb4218785a873402cc045eff8aa16c05aa89a6df5909628301dc7a69ac7` | `scripts/vendor/dicom-ps3-15.sh`, `docs/specs/dicom-ps3-15/PROVENANCE.md` |
-| openEHR BASE specification source | `openEHR/specifications-BASE` tag `Release-1.1.0`, the release FerroHEALTH/FerroFED vendors: the Base Types specification and the licence | `scripts/vendor/openehr-base.sh`, `docs/specs/openehr-base/PROVENANCE.md` |
+| openEHR BASE specification source | `openEHR/specifications-BASE` commit `707b8ac28cea1ccc4410f8e930665d473475350f`, BASE Release 1.3.0 (unreleased), the commit FerroHEALTH/FerroEHR vendors: the Base Types specification and the licence | `scripts/vendor/openehr-base.sh`, `docs/specs/openehr-base/PROVENANCE.md` |
 
 ## Licence
 
@@ -76,7 +76,7 @@ packages, and Commission Decision 2011/833/EU for the EU acts.
 | Rust toolchain | 1.99.1, profile `minimal`, components `rustfmt` and `clippy` | `rust-toolchain.toml` |
 | Rust edition | 2024 | `Cargo.toml` `[workspace.package] edition`, `rustfmt.toml` |
 | MSRV | 1.98, the FerroHEALTH family floor (the pinned toolchain's release minus one), checked on every pull request by the `msrv` job with no feature, with `atna` and with every feature | `Cargo.toml` `[workspace.package] rust-version`, `.github/workflows/ci.yml` (reads it from the manifest) |
-| `ihe-atna`, `ehds-logging` | 0.2.3, the workspace version both crates inherit, the release tag `v0.2.3` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version`, `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
+| `ihe-atna`, `ehds-logging` | 0.2.4, the workspace version both crates inherit, the release tag `v0.2.4` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version`, `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
 | Third-party crates | the `[workspace.dependencies]` table, each version checked against crates.io on 2026-10-20 | `Cargo.toml`, `Cargo.lock` |
 
 ## The CI tools

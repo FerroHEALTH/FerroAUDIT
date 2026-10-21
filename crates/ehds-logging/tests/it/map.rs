@@ -265,7 +265,7 @@ fn a_configuration_declares_the_map_in_toml() {
     );
 }
 
-/// openEHR BASE 1.1.0, Base Types, Identification Package, "Composite
+/// openEHR BASE 1.3.0, Base Types, Identification Package, "Composite
 /// Identifiers and Case": identifiers are case-insensitive and
 /// case-preserving.
 #[test]
@@ -365,16 +365,22 @@ fn every_defect_of_a_declaration_is_reported_at_once() {
     );
 }
 
-/// openEHR BASE 1.1.0, Base Types, Identification Package, Syntaxes: the
-/// `ARCHETYPE_ID` grammar.
+/// openEHR BASE 1.3.0, Base Types, Identification Package, Syntaxes: the
+/// `ARCHETYPE_ID` grammar, whose major version may be `0` and whose ADL 2 form
+/// carries a namespace and a full version.
 #[test]
 fn an_archetype_key_that_is_no_archetype_id_is_refused() {
     for key in [
         "openEHR-EHR-OBSERVATION.lab_result",
         "openEHR-EHR.lab_result.v1",
-        "openEHR-EHR-OBSERVATION.lab_result.v0",
+        "openEHR-EHR-OBSERVATION.lab_result.v01",
         "openEHR-EHR-OBSERVATION.lab_result.v1draft",
         "openEHR-EHR-OBSERVATION.lab result.v1",
+        "openEHR-EHR-OBSERVATION.lab_result.v1.0-rc.1",
+        "openEHR-EHR-OBSERVATION.lab_result.v1.0.0.0",
+        "org.openehr::openEHR-EHR-OBSERVATION.lab_result.v1.0.0-gamma",
+        "org..openehr::openEHR-EHR-OBSERVATION.lab_result.v1",
+        "::openEHR-EHR-OBSERVATION.lab_result.v1",
     ] {
         assert_eq!(
             CategoryMap::declare(
@@ -392,6 +398,10 @@ fn an_archetype_key_that_is_no_archetype_id_is_refused() {
     for key in [
         "openEHR-EHR-SECTION.physical_examination-prenatal.v1",
         "Hl7-RIM-Act.progress_note.v12",
+        "openEHR-EHR-OBSERVATION.imaging_exam_result.v0",
+        "org.openehr::openEHR-EHR-OBSERVATION.blood_pressure.v2.1.4",
+        "org.openehr::openEHR-EHR-EVALUATION.problem.v2.0.0-rc.4",
+        "openEHR-EHR-OBSERVATION.cbc.v1.0.0",
     ] {
         assert!(
             CategoryMap::declare(
@@ -441,7 +451,7 @@ fn a_declaration_serializes_to_the_form_it_reads() {
     );
 }
 
-/// openEHR BASE 1.1.0, Base Types, Identification Package, "Composite
+/// openEHR BASE 1.3.0, Base Types, Identification Package, "Composite
 /// Identifiers and Case": two declarations that differ only in the case of a
 /// key are one map, so they have one canonical text and one digest.
 #[test]

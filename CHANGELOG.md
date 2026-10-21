@@ -11,6 +11,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-21
+
+A patch release with no API change: a product pins `=0.2.4` in place of
+`=0.2.3`.
+
+### Fixed
+
+- `ehds-logging`: the category map admits every archetype key the
+  `ARCHETYPE_ID` grammar of openEHR BASE 1.3.0 admits. It refused a major
+  version of `0`, which CKM gives its draft archetypes
+  (`openEHR-EHR-OBSERVATION.imaging_exam_result.v0`), and the namespaced
+  ADL 2 form (`org.openehr::openEHR-EHR-OBSERVATION.blood_pressure.v2.1.4`).
+  A namespaceless key with a full version (`.v1.0.0`) is admitted too, as
+  FerroEHR's `openehr-base` admits it, and a test holds the map's check and
+  that parser to one answer on a shared corpus. The refusal's message names
+  the optional namespace (#66).
+
+### Changed
+
+- The vendored openEHR BASE source moves from `Release-1.1.0` to commit
+  `707b8ac28cea1ccc4410f8e930665d473475350f` (BASE Release 1.3.0,
+  unreleased), the commit FerroEHR vendors.
+
 ## [0.2.3] - 2026-10-21
 
 A patch release with no API change: a product pins `=0.2.3` in place of
@@ -210,7 +233,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.0...v0.2.1
