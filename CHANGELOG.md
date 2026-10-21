@@ -11,6 +11,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-21
+
+A patch release with no API change: a product pins `=0.2.3` in place of
+`=0.2.2`.
+
+### Fixed
+
+- `ehds-logging`: a category map declared with `Matching::OpenEhr` writes
+  its canonical text, and so its digest, with each key in its comparison
+  form, so two declarations that differ only in the case of a key name one
+  map, as openEHR BASE says they are. An exact map's text is unchanged. The
+  digest of an openEHR-matched map whose keys are not all lower case moves
+  once (#64).
+
 ## [0.2.2] - 2026-10-21
 
 A patch release with no API change: a product pins `=0.2.2` in place of
@@ -196,7 +210,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.1.1...v0.2.0
