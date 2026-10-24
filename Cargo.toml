@@ -56,6 +56,9 @@ toml = { version = "1.1.8", default-features = false, features = ["std", "parse"
 # Test-only: FerroEHR's archetype-id parser, which the category map's
 # ARCHETYPE_ID check is held to.
 openehr-base = "0.0.93"
+# Test-only: the CA and leaf the TLS listener of the repository tests mints at
+# run time, on the aws-lc-rs provider rustls already uses.
+rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
 # The workspace's own crates, each at the workspace version.
 ihe-atna = { path = "crates/ihe-atna", version = "=0.2.4" }
 # Test-only: the spool directories, the log capture of the forwarder tests,

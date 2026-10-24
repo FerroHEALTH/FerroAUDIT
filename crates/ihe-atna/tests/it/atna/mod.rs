@@ -10,6 +10,8 @@ mod forwarder;
 #[cfg(feature = "atna")]
 mod message;
 mod outbox;
+#[cfg(feature = "atna")]
+mod repository;
 mod spool;
 #[cfg(feature = "atna")]
 mod targets;
