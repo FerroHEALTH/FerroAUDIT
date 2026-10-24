@@ -6,6 +6,8 @@
 //! that delivers from it.
 
 #[cfg(feature = "atna")]
+mod closing;
+#[cfg(feature = "atna")]
 mod forwarder;
 #[cfg(feature = "atna")]
 mod message;

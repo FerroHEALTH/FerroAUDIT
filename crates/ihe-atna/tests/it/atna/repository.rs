@@ -36,13 +36,13 @@ const RECEIVE_BUFFER: u32 = 4096;
 
 /// A CA and the leaf it signed for `localhost`, valid from yesterday to a
 /// week from today.
-struct Pki {
-    ca_pem: String,
-    leaf: CertificateDer<'static>,
-    key: Vec<u8>,
+pub(super) struct Pki {
+    pub(super) ca_pem: String,
+    pub(super) leaf: CertificateDer<'static>,
+    pub(super) key: Vec<u8>,
 }
 
-fn pki() -> Pki {
+pub(super) fn pki() -> Pki {
     use rcgen::{
         BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer,
         KeyPair, KeyUsagePurpose,
