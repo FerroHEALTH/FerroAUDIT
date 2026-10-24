@@ -11,6 +11,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `atna::repository::Connection::close` ends a connection as RFC 5425 §4.4
+  asks of a transport sender: a TLS `close_notify`, the write half shut, and
+  the stream read to the repository's end within the send timeout, under the
+  new `Step::Close`. A product closes its connection whenever no further
+  frame follows on it (#77).
+
+### Fixed
+
+- A frame sent just before a connection was dropped could be lost. Dropping
+  the connection closed the socket with the repository's TLS session tickets
+  unread, so the kernel reset it and discarded what was still queued; on
+  Linux the repository received none of it. Closing with
+  `Connection::close` delivers every frame sent. `Repository::connect` now
+  sets `TCP_NODELAY`, so a frame never waits on the acknowledgement of the
+  one before it (#77).
+
 ### Changed
 
 - The release checks the family's Security changelog rules: every

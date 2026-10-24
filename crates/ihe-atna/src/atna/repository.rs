@@ -156,6 +156,9 @@ pub enum Step {
     Write,
     /// Flushing it.
     Flush,
+    /// Closing the connection: the TLS `close_notify` and the repository's
+    /// end of the stream.
+    Close,
 }
 
 impl fmt::Display for Step {
@@ -165,6 +168,7 @@ impl fmt::Display for Step {
             Self::Handshake => "TLS handshake",
             Self::Write => "write",
             Self::Flush => "flush",
+            Self::Close => "close",
         })
     }
 }
@@ -279,6 +283,9 @@ impl Repository {
         )
         .await?
         .map_err(SendError::Connect)?;
+        // NOTE: no specification governs this: our own design; a frame goes out at
+        // once, so it never waits on the acknowledgement of the one before it.
+        stream.set_nodelay(true).map_err(SendError::Connect)?;
         let stream: Box<dyn Stream> = match &self.transport {
             Transport::Plain => Box::new(stream),
             Transport::Tls(connector, name) => Box::new(
@@ -362,6 +369,46 @@ impl Connection {
         bounded(limit, Step::Flush, self.stream.flush())
             .await?
             .map_err(SendError::Write)
+    }
+
+    /// Ends the connection as RFC 5425 §4.4 asks of a transport sender: a
+    /// TLS `close_notify` with the write half shut, then the stream read to
+    /// the repository's end, each within the send timeout.
+    ///
+    /// Dropping a connection instead closes the socket with the repository's
+    /// TLS session tickets unread, and the kernel then resets it, which can
+    /// discard frames [`Connection::send`] already handed over. Close a
+    /// connection whenever no further frame will follow on it.
+    ///
+    /// # Errors
+    ///
+    /// [`SendError::Write`] when the close cannot be written or the
+    /// connection fails while it ends, and [`SendError::Timeout`] with
+    /// [`Step::Close`] when the repository does not end the stream in time;
+    /// a frame sent last may then be lost.
+    pub async fn close(mut self) -> Result<(), SendError> {
+        let limit = self.send_timeout;
+        bounded(limit, Step::Close, self.stream.shutdown())
+            .await?
+            .map_err(SendError::Write)?;
+        let stream = &mut self.stream;
+        bounded(limit, Step::Close, async move {
+            let mut unread = [0_u8; 256];
+            loop {
+                match stream.read(&mut unread).await {
+                    Ok(0) => return Ok(()),
+                    Ok(_) => {}
+                    // NOTE: RFC 5425 §4.4 lets a receiver close without its own
+                    // close_notify, an incomplete close that still ends the stream.
+                    Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+        })
+        .await?
+        .map_err(SendError::Write)
     }
 }
 
