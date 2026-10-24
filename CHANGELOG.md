@@ -11,6 +11,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-10-24
+
 ### Added
 
 - `atna::forwarder::Forwarder::stop` ends the delivery loop: the forwarder
@@ -285,7 +287,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.2...v0.2.3
