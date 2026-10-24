@@ -17,6 +17,10 @@
 //! repository's timeouts, removes the message once it is written, and after
 //! any transport failure drops the connection and retries with an
 //! exponential backoff, with jitter, capped at the configured longest wait.
+//! A connection the repository ended, and the open connection when
+//! [`Forwarder::stop`] ends the loop, are closed with
+//! [`Connection::close`], so the frames written last are not lost to a
+//! reset (RFC 5425 §4.4).
 //! To a FHIR Feed repository (feature `balp`) it posts each stored record,
 //! removes it on a `2xx`, retries the same way after a failure that may
 //! pass, and quarantines a record the repository refused, so the drain goes
@@ -29,6 +33,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use secrecy::SecretSlice;
+use tokio::sync::Notify;
 
 use super::chain;
 #[cfg(feature = "balp")]
@@ -206,6 +211,8 @@ pub struct Forwarder<O: Outbox = Spool> {
     delivered: AtomicU64,
     retries: AtomicU64,
     reachable: AtomicBool,
+    stopping: AtomicBool,
+    stop: Notify,
 }
 
 impl Forwarder<Spool> {
@@ -275,7 +282,34 @@ impl<O: Outbox> Forwarder<O> {
             delivered: AtomicU64::new(0),
             retries: AtomicU64::new(0),
             reachable: AtomicBool::new(true),
+            stopping: AtomicBool::new(false),
+            stop: Notify::new(),
         })
+    }
+
+    /// Asks [`Forwarder::run`] to end: it finishes the message it is
+    /// writing, if any, closes its syslog connection with
+    /// [`Connection::close`], and returns, so the caller awaits the task it
+    /// spawned.
+    ///
+    /// A message not yet written stays stored and is delivered by the next
+    /// run. A run started after the stop returns at once.
+    pub fn stop(&self) {
+        self.stopping.store(true, Ordering::SeqCst);
+        self.stop.notify_waiters();
+    }
+
+    /// Returns once [`Forwarder::stop`] has been called.
+    async fn stopped(&self) {
+        loop {
+            // NOTE: a Notified future receives notify_waiters from the moment it
+            // is created (tokio::sync::Notify), so no stop falls between the two.
+            let notified = self.stop.notified();
+            if self.stopping.load(Ordering::SeqCst) {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// What the forwarder holds and how its deliveries went.
@@ -291,10 +325,14 @@ impl<O: Outbox> Forwarder<O> {
         }
     }
 
-    /// Delivers the stored messages, oldest first, for as long as it runs.
+    /// Delivers the stored messages, oldest first, until
+    /// [`Forwarder::stop`] is called.
     ///
-    /// The caller spawns it once and aborts the task to stop it; a message
-    /// in flight then stays stored and is delivered again by the next run.
+    /// The caller spawns it once and stops it with [`Forwarder::stop`],
+    /// awaiting the task, which closes the syslog connection first. A task
+    /// aborted instead drops the connection, and the frames written last
+    /// may then be lost to a reset (RFC 5425 §4.4); a message in flight
+    /// stays stored and is delivered again by the next run.
     pub async fn run(self: Arc<Self>) {
         match &self.destination {
             #[cfg(feature = "atna")]
@@ -347,11 +385,23 @@ impl<O: Outbox> Forwarder<O> {
         let mut connection: Option<Connection> = None;
         let mut retry = FIRST_RETRY;
         loop {
-            let Some(stored) = self.next(&mut retry).await else {
+            let next = tokio::select! {
+                biased;
+                () = self.stopped() => break,
+                next = self.next(&mut retry) => next,
+            };
+            let Some(stored) = next else {
                 continue;
             };
             let reusable = match connection.take() {
-                Some(mut open) => (!open.is_closed().await).then_some(open),
+                Some(mut open) => {
+                    if open.is_closed().await {
+                        closed(open).await;
+                        None
+                    } else {
+                        Some(open)
+                    }
+                }
                 None => None,
             };
             let mut open = match reusable {
@@ -379,6 +429,9 @@ impl<O: Outbox> Forwarder<O> {
             connection = Some(open);
             self.delivered(stored.sequence, &mut retry).await;
         }
+        if let Some(open) = connection {
+            closed(open).await;
+        }
     }
 
     // NOTE: the `RESTful` ATNA supplement §3.20.4.3.3 leaves a failure to the
@@ -387,7 +440,12 @@ impl<O: Outbox> Forwarder<O> {
     async fn run_feed(&self, feed: &FeedRepository) {
         let mut retry = FIRST_RETRY;
         loop {
-            let Some(stored) = self.next(&mut retry).await else {
+            let next = tokio::select! {
+                biased;
+                () = self.stopped() => break,
+                next = self.next(&mut retry) => next,
+            };
+            let Some(stored) = next else {
                 continue;
             };
             match feed.send(&stored.message).await {
@@ -420,11 +478,28 @@ impl<O: Outbox> Forwarder<O> {
 
     /// Records a failed attempt, waits about `retry`, and returns the wait
     /// after it: twice as long, at most the configured longest wait.
+    /// A stop ends the wait early.
     async fn back_off(&self, retry: Duration) -> Duration {
         self.reachable.store(false, Ordering::Relaxed);
         self.retries.fetch_add(1, Ordering::Relaxed);
-        tokio::time::sleep(jittered(retry)).await;
+        tokio::select! {
+            () = self.stopped() => {}
+            () = tokio::time::sleep(jittered(retry)) => {}
+        }
         retry.saturating_mul(2).min(self.retry_max)
+    }
+}
+
+/// Closes `connection`, on which no further frame follows, with
+/// [`Connection::close`], and logs a close that fails: a frame written last
+/// may then be lost.
+#[cfg(feature = "atna")]
+async fn closed(connection: Connection) {
+    if let Err(error) = connection.close().await {
+        tracing::warn!(target: crate::atna::targets::FORWARDER,
+            error = %chain(&error),
+            "the audit repository connection did not close cleanly; the messages written last may be lost"
+        );
     }
 }
 

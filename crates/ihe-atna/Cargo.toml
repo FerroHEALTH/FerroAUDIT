@@ -84,7 +84,7 @@ rustls-platform-verifier = { workspace = true, optional = true }
 secrecy = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["fs", "io-util", "net", "rt", "sync", "time"] }
+tokio = { workspace = true, optional = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
 tokio-rustls = { workspace = true, optional = true, features = ["tls12", "aws_lc_rs"] }
 tracing = { workspace = true, optional = true }
 url = { workspace = true, optional = true }

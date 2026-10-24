@@ -11,6 +11,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `atna::forwarder::Forwarder::stop` ends the delivery loop: the forwarder
+  finishes the message it is writing, closes its syslog connection with
+  `Connection::close` and returns, so a product stops it and awaits the
+  task where it aborted it before. A stop also ends a backoff (#82).
+
+### Fixed
+
+- The forwarder dropped its syslog connection, with the repository's TLS
+  session tickets unread, when it reconnected after the repository ended
+  the connection, and when its task was aborted, so the frames it wrote
+  last could be lost to a reset after they had left the spool. It now
+  closes a connection the repository ended with `Connection::close` before
+  it reconnects, and closes its open connection when it is stopped (RFC 5425
+  §4.4, ITI TF-2 §3.20.4.1.1) (#82).
+
 ## [0.2.5] - 2026-10-24
 
 ### Added
