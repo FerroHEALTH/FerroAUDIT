@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- A BALP record names the audit source id in `source.observer.identifier`
+  beside the `display` (#97): the `RESTful` ATNA supplement maps
+  `AuditSourceId` to `source.observer`, and the ITI-81 `source.identifier`
+  parameter matches `source.observer.identifier`, so a repository that keeps
+  these records can answer it.
+
 ## [0.2.8] - 2026-10-25
 
 Two additions a product takes in place of its own code: the ITI-81 retrieval

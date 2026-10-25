@@ -140,7 +140,15 @@ impl Exchange {
             agent,
             source: AuditEventSource {
                 site: observer.site.as_deref().map(primitives::String::from),
-                observer: display(&observer.source_id),
+                // NOTE: RESTful ATNA Table 3.81.4.2.2.1-1 maps AuditSourceId to source.observer, and
+                // §3.81.4.1.2.2 matches source.identifier against source.observer.identifier.
+                observer: Reference {
+                    identifier: Some(Box::new(Identifier {
+                        value: Some(primitives::String::from(observer.source_id.as_str())),
+                        ..Identifier::default()
+                    })),
+                    ..display(&observer.source_id)
+                },
                 r#type: observer.source_types.iter().map(Coded::coding).collect(),
                 ..AuditEventSource::default()
             },

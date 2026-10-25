@@ -166,6 +166,21 @@ fn the_outcome_description_and_the_source_type_are_written_when_given() {
     assert_eq!(kind["code"], "4");
 }
 
+/// `RESTful` ATNA Table 3.81.4.2.2.1-1 maps the audit source id to
+/// `source.observer`, and the ITI-81 `source.identifier` parameter matches
+/// `source.observer.identifier` (§3.81.4.1.2.2), so the record carries it
+/// beside the display.
+#[test]
+fn the_audit_source_id_is_the_observers_identifier() {
+    let record = written(&exchange(OnBehalfOf::System));
+    let observer = &record["source"]["observer"];
+    assert_eq!(
+        observer["identifier"]["value"], "gateway.example.org",
+        "{record}"
+    );
+    assert_eq!(observer["display"], "gateway.example.org", "{record}");
+}
+
 /// BALP 1.1.4 §3:5.7.5.4 writes the token's `jti` at `agent[user].policy`,
 /// and a record that names it and the client claims the Comprehensive
 /// pattern, whose `agent:oUser.policy` is `1..1` and whose `110150` client
