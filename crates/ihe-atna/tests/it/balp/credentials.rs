@@ -73,13 +73,13 @@ fn http() -> reqwest::Client {
         .expect("an HTTP client")
 }
 
-fn repository(server: &MockServer) -> FeedRepository {
+pub(crate) fn repository(server: &MockServer) -> FeedRepository {
     let base = Url::parse(&format!("{}/arr/", server.uri())).expect("a base");
     FeedRepository::cleartext(base, http(), timing::SLACK).expect("a repository")
 }
 
 /// One synthetic record of an exchange the system made on its own behalf.
-fn record() -> SecretSlice<u8> {
+pub(crate) fn record() -> SecretSlice<u8> {
     Exchange {
         kind: EventKind {
             profile: "",

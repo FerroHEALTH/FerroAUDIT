@@ -76,6 +76,9 @@ The crate depends on no application. The profiles are published at
   failure retried. `with_credentials` authorizes each request from a
   `Credentials` source and renews a refused token once (RFC 6750 §3.1);
   `cleartext` reaches an `http` base for an operator who accepts it.
+- `atna::bearer::Bearer` (feature `smart`): the client credentials token of
+  `ferrohealth-smart` as that `Credentials` source, so a product writes no
+  adapter of its own.
 - `recording`: the bound on an audited exchange's record, `Late` and
   `within`.
 - `Exchange::audit_event_value`: the record as a JSON value, for a store

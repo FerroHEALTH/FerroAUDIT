@@ -42,6 +42,8 @@ confidence-threshold = 0.9
 exceptions = [
   { allow = ["BUSL-1.1"], crate = "ihe-atna" },
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
+  # The family's SMART crate, the same Licensor's code (feature `smart`).
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-smart" },
 ]
 
 [bans]

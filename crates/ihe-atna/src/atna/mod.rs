@@ -17,6 +17,8 @@
 //! - `feed` (feature `balp`): the ATX: FHIR Feed Option's Send Audit
 //!   Resource Request, a FHIR `create` of one `AuditEvent` (the `RESTful` ATNA
 //!   supplement, ITI TF-2 §3.20.4.2).
+//! - `bearer` (feature `smart`): the client credentials token of
+//!   `ferrohealth-smart` as the `Credentials` source of a Feed repository.
 //! - [`forwarder`]: the sender that writes every message to the spool, or a
 //!   caller's own store, first and delivers it from there, in order.
 //!
@@ -27,6 +29,8 @@
 //! A message names whatever its event names, a patient identifier included,
 //! so no part of this module logs a message or renders one in `Debug`.
 
+#[cfg(feature = "smart")]
+pub mod bearer;
 #[cfg(feature = "atna")]
 pub mod codes;
 #[cfg(feature = "balp")]
