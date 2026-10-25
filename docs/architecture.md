@@ -218,6 +218,15 @@ value (RFC 6750 §3.1). `FeedRepository::new` takes `https` alone;
 records cross the network in clear text. No redirect is followed, and no
 error carries the record, the credential or the answer body.
 
+Under the `smart` feature, `atna::bearer::Bearer` is that `Credentials`
+source over the client credentials token of `ferrohealth-smart`, the
+family's SMART crate (its `TokenSource` fetches, caches and renews the
+token): it gives the token's `Authorization` value and drops a refused token
+so the repeated request carries one fetched anew. Every product that
+authorizes its Feed with that grant takes it in place of an adapter of its
+own. The dependency points from the audit crate to the SMART crate and is
+pinned exactly, as the products pin it.
+
 ### 4.4 The retrieval (feature `retrieve`)
 
 Retrieve ATNA Audit Event [ITI-81] is the read side of a repository: an
@@ -291,6 +300,7 @@ uses the same rule. No specification governs this: our own design.
 | `redact` | `redact::RedactedUrl`, `fhir_base` | url |
 | `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (R4 `resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
 | `retrieve` | `retrieve` | `fhir-types` (R4 `resources`), timestamps, percent-encoding |
+| `smart` | `balp` and `bearer` | `ferrohealth-smart` (`fetch`) |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
 no HTTP client, and `balp` compiles no TLS stack and takes no XML writer of

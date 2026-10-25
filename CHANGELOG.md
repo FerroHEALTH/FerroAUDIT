@@ -25,6 +25,12 @@ and this project adheres to
   `recorded` instants a `date` matches, and `retrieve::bundle::searchset`
   and `retrieve::bundle::refusal` write the answer as `fhir_types::r4`
   resources.
+- `ihe-atna` takes the client credentials token of `ferrohealth-smart` as
+  the credential source of a FHIR Feed repository, behind the new `smart`
+  feature (#90). `atna::bearer::Bearer`, built from a `TokenSource`, gives
+  each request the cached token's `Authorization` value and drops a token the
+  repository refused with `401`, so the request is sent once more under a
+  token fetched anew (RFC 6750 §3.1). A product removes its own adapter.
 
 ### Changed
 
