@@ -20,6 +20,15 @@ and this project adheres to
   assessment for a Critical vulnerability, 30 days for High, 90 days for
   Medium and with the next release for Low.
 
+### Fixed
+
+- `atna::repository::Connection::is_closed` answers at once on a live
+  connection. It polled its read inside a zero-length tokio timeout, which
+  waits for the next timer tick of about a millisecond, so a sender that
+  probes before every frame (as the forwarder and FerroEHR's syslog sink do)
+  was held to roughly 880 records per second on one connection; it now polls
+  the read once without a timer and measures about 47 000 (#86).
+
 ## [0.2.6] - 2026-10-24
 
 ### Added

@@ -83,7 +83,9 @@
 //! ```
 
 use std::fmt;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 
 use rustls::ClientConfig;
@@ -91,7 +93,7 @@ use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls_platform_verifier::Verifier;
 use secrecy::{ExposeSecret, SecretSlice, SecretString};
-use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
+use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _, ReadBuf};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use url::Url;
@@ -341,11 +343,20 @@ impl Connection {
     /// a read that ends or fails at once means the connection is gone. A
     /// write to a connection closed after this check can still be lost:
     /// syslog has no acknowledgement.
+    ///
+    /// The read is polled once and never waited on, so a live connection
+    /// answers at once rather than after a timer tick. The yield before it
+    /// lets the runtime read the socket's readiness first, so an end the
+    /// repository sent is seen.
     pub async fn is_closed(&mut self) -> bool {
+        tokio::task::yield_now().await;
         let mut probe = [0_u8; 1];
-        match tokio::time::timeout(Duration::ZERO, self.stream.read(&mut probe)).await {
-            Ok(Ok(0) | Err(_)) => true,
-            Ok(Ok(_)) | Err(_) => false,
+        let mut buf = ReadBuf::new(&mut probe);
+        let mut cx = Context::from_waker(Waker::noop());
+        match Pin::new(&mut self.stream).poll_read(&mut cx, &mut buf) {
+            Poll::Ready(Ok(())) => buf.filled().is_empty(),
+            Poll::Ready(Err(_)) => true,
+            Poll::Pending => false,
         }
     }
 
