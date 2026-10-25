@@ -31,8 +31,9 @@ or a credential. A record the spool cannot take is refused at once, so the
 caller fails the exchange it audits; nothing is dropped silently.
 
 FerroAUDIT is one of the [FerroHEALTH](https://ferrohealth.eu/) family.
-FerroFED, FerroEHR and FerroPIX send their audit records through it, and
-FerroSYS builds the receiving Audit Record Repository on it. This
+FerroFED, FerroEHR and FerroPIX send their audit records through it.
+`ihe-atna` carries the whole audit trail, sending, forwarding and
+retrieving, and each product keeps its own audit store. This
 repository is where the design and the build happen; the tracker is the
 record of both.
 
