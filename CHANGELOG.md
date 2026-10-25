@@ -11,6 +11,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ihe-atna` serves Retrieve ATNA Audit Event (ITI-81) behind the new
+  `retrieve` feature (#89). `retrieve::Query::parse` reads the query string
+  of the FHIR R4 `AuditEvent` search into its `date` parameters and typed
+  criteria: the four token parameters of the RESTful ATNA supplement and the
+  R4 search parameters, typed by the `fhir-types` registry, with repeated
+  parameters combined by AND, values by OR, and an unsupported parameter
+  ignored and named. A query with no `date`, a modifier on a supported
+  parameter or a value outside its form is refused with a `QueryError` that
+  carries no value. `retrieve::date::DateParam::bounds` gives the interval of
+  `recorded` instants a `date` matches, and `retrieve::bundle::searchset`
+  and `retrieve::bundle::refusal` write the answer as `fhir_types::r4`
+  resources.
+
+### Changed
+
+- The workspace requires `fhir-types` 0.1.128, the release the products
+  build on, in place of the 0.1.113 line.
+
 ## [0.2.7] - 2026-10-25
 
 ### Changed

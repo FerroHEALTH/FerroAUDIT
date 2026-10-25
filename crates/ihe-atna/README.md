@@ -11,6 +11,7 @@ ITI-20's ATX: FHIR Feed, with a feature per layer.
 |---|---|---|
 | `atna` | Audit Trail and Node Authentication: the DICOM audit message over syslog with TLS, the spool and the forwarder | ITI-20 |
 | `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of an IHE FHIR transaction, sent over the ITI-20 FHIR Feed through the same spool and forwarder, without the syslog sender or its TLS stack | ITI-20 |
+| `retrieve` | The retrieval an Audit Record Repository serves: the query string read into typed criteria, and the `searchset` Bundle and refusal `OperationOutcome` of the answer | ITI-81 |
 
 `recording` compiles `balp::recording` alone and `redact` compiles
 `redact::RedactedUrl` and `fhir_base` alone, for a profile crate that audits
@@ -79,6 +80,27 @@ The crate depends on no application. The profiles are published at
   `within`.
 - `Exchange::audit_event_value`: the record as a JSON value, for a store
   that keeps JSON.
+
+## Retrieve (`retrieve`)
+
+`ihe_atna::retrieve` serves Retrieve ATNA Audit Event (ITI-81), the FHIR R4
+search on `AuditEvent`:
+
+- `Query::parse`: the query string, percent-decoded, read into the `date`
+  parameters and the other criteria. Each parameter takes its type (date,
+  string, token, reference, uri) from the FHIR R4 search-parameter registry
+  of `fhir-types`, with the four token parameters the RESTful ATNA
+  supplement adds (`agent.identifier`, `patient.identifier`,
+  `entity.identifier`, `source.identifier`). Repeated parameters combine
+  with AND and the values of one with OR; a parameter the crate does not
+  support is ignored and named in `Query::ignored`. A query with no `date`
+  is refused.
+- `date::DateParam::bounds`: the interval of `recorded` instants a `date`
+  value matches, from its prefix and the range its precision implies.
+- `bundle::searchset` and `bundle::refusal`: the answer as `fhir_types::r4`
+  resources.
+
+The repository keeps its store, the query over it and who may read what.
 
 ## Whom an exchange is made for
 

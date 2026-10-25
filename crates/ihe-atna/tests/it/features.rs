@@ -166,3 +166,21 @@ fn recording_and_redact_take_no_audit_stack() {
         "redact takes no runtime"
     );
 }
+
+/// `retrieve` compiles the ITI-81 query and response over the FHIR model
+/// alone: no HTTP client, no runtime and no syslog sender, since the
+/// repository serves the request with its own stack.
+#[test]
+fn retrieve_takes_the_fhir_model_and_no_transport() {
+    let closure = tree("retrieve", None);
+    assert!(
+        closure.contains("fhir-types"),
+        "retrieve lost fhir-types: {closure:?}"
+    );
+    for name in ["reqwest", "tokio"].iter().chain(ATNA_ONLY) {
+        assert!(
+            !closure.contains(*name),
+            "retrieve compiles {name}: {closure:?}"
+        );
+    }
+}

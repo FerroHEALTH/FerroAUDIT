@@ -35,4 +35,6 @@ pub mod balp;
 #[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 pub mod fhir_base;
 pub mod redact;
+#[cfg(feature = "retrieve")]
+pub mod retrieve;
 pub mod user;
