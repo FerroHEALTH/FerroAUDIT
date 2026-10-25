@@ -9,8 +9,8 @@ metadata:
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
 
 FerroAUDIT (`ihe-atna` on crates.io, FerroHEALTH/FerroAUDIT) is the shared
-IHE audit crate of the FerroHEALTH products, the way FerroSMART is the shared
-SMART crate (owner, 2026-10-20, recorded on FerroHEALTH/FerroFED#367). The
+IHE audit crate of the FerroHEALTH products, the way FerroAUTH holds the
+shared SMART crate (owner, 2026-10-20, recorded on FerroHEALTH/FerroFED#367). The
 family architecture of 2026-10-25 gives `ihe-atna` the whole audit trail,
 sending, forwarding and retrieving, and `ehds-logging` the EHDS access
 record ([[family-architecture]]).
