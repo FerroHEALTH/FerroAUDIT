@@ -11,6 +11,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-10-25
+
+A BALP record names the audit source id in `source.observer.identifier`, so
+a repository answers the ITI-81 `source.identifier` parameter. Products pin
+`=0.2.9`; nothing they call changes.
+
 ### Changed
 
 - A BALP record names the audit source id in `source.observer.identifier`
@@ -348,7 +354,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.5...v0.2.6
