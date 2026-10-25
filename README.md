@@ -1,92 +1,121 @@
 <!-- SPDX-FileCopyrightText: Cadasto B.V. -->
 <!-- SPDX-License-Identifier: BUSL-1.1 -->
-# FerroAUDIT
+<div align="center">
 
-[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
+<img src="assets/brand/ferroaudit-lockup-auto.svg" alt="FerroAUDIT" width="290">
 
-The shared audit library of the FerroHEALTH products, in pure Rust: the IHE
-audit trail as `ihe-atna` and the EHDS logging component as `ehds-logging`
-on crates.io. Every product sends its audit trail through them, so no
-product implements audit on its own.
+**The audit trail of the FerroHEALTH products: who looked at which patient's data, recorded the standard way.**
 
-- **ATNA, ITI-20 Record Audit Event** (feature `atna`): the DICOM PS3.15
-  audit message, the RFC 5424 syslog message it travels in with the header
-  fields ITI-20 fixes, the RFC 5425 TLS connection to an Audit Record
-  Repository, the bounded store-and-forward spool ITI-20 requires of a
-  sender, and the forwarder that stores every record first and delivers it
-  oldest first, retrying with a jittered backoff.
-- **BALP, the Basic Audit Log Patterns** (feature `balp`): the FHIR R4
-  `AuditEvent` an IHE FHIR transaction is audited as, written from one
-  `Exchange` per transaction, and the ATX: FHIR Feed that posts it to an
-  Audit Record Repository through the same spool and forwarder.
-- **EHDS logging** (crate `ehds-logging`): the record of every access to
-  personal electronic health data that Regulation (EU) 2025/327 Annex II 3.2
-  asks of an EHR system, its Article 14(1) categories and the map that
-  classifies an access, its Article 9(2) retention and security labels, and
-  the record written as a BALP `AuditEvent` sent through `ihe-atna`.
+[Documentation](https://docs.rs/ihe-atna) ·
+[Quick start](#quick-start) ·
+[What ships today](#what-ships-today) ·
+[Licensing](https://ferrohealth.eu/docs/licensing.html)
 
-A record names a patient toward its repository and nowhere else: no `Debug`
-rendering, log line or error carries an identifier, a search, a user's values
-or a credential. A record the spool cannot take is refused at once, so the
-caller fails the exchange it audits; nothing is dropped silently.
+**Project**<br>
+[![Release](https://img.shields.io/github/v/release/FerroHEALTH/FerroAUDIT?sort=semver&logo=github&label=release)](https://github.com/FerroHEALTH/FerroAUDIT/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroAUDIT/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI)](https://github.com/FerroHEALTH/FerroAUDIT/actions/workflows/ci.yml)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue)](LICENSE)
+[![Docs](https://img.shields.io/docsrs/ihe-atna?logo=docsdotrs&label=docs.rs)](https://docs.rs/ihe-atna)
 
-FerroAUDIT is one of the [FerroHEALTH](https://ferrohealth.eu/) family.
-FerroFED, FerroEHR and FerroPIX send their audit records through it.
-`ihe-atna` carries the whole audit trail, sending, forwarding and
-retrieving, and each product keeps its own audit store. This
-repository is where the design and the build happen; the tracker is the
-record of both.
+**Quality and security**<br>
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/FerroHEALTH/FerroAUDIT/badge)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroAUDIT)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroAUDIT/codeql.yml?branch=main&logo=github&label=CodeQL)](https://github.com/FerroHEALTH/FerroAUDIT/actions/workflows/codeql.yml)
+[![Signed releases](https://img.shields.io/badge/releases-signed-brightgreen?logo=github)](docs/release.md)
+[![SLSA Build L3](https://slsa.dev/images/gh-badge-level3.svg)](docs/release.md)
 
-## Use it
+**Conformance and compliance**<br>
+[![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion)](crates/ehds-logging/README.md)
 
-```toml
-[dependencies]
-ihe-atna = { version = "=0.2.8", features = ["balp"] }
-ehds-logging = { version = "=0.2.8", features = ["balp"] }
+</div>
+
+## What FerroAUDIT does
+
+Patients and regulators have a right to know who looked at a health record.
+Every access to patient data has to be written down, kept safely and handed
+to the people who check it. FerroAUDIT does that for every FerroHEALTH
+product, in the formats hospitals already use, so their audit systems can
+read the records without a custom connection.
+
+It writes each access as a standard audit record (IHE ATNA, the profile
+hospitals use for audit trails), sends it to the hospital's audit
+repository, and keeps it in a local queue until the repository confirms it,
+so a record is never lost when the network is down. It also records what
+the European Health Data Space regulation asks of an electronic health
+record system: which categories of data were read, by whom, and how long
+the record is kept.
+
+### Who it is for
+
+- **Privacy officers and hospital IT**, who receive the audit trail of every
+  FerroHEALTH product in their existing audit repository.
+- **Developers of health software in Rust**, who need ATNA and EHDS logging
+  without writing it again.
+
+### Why you can trust what it claims
+
+Every release is signed and carries SLSA build provenance, so you can check
+that the crate you use is the one built here. The source is public, and
+every function is in this repository: there is no paid edition with extra
+features. A record names a patient toward its repository and nowhere else,
+and a record the queue cannot take is refused at once, so nothing is
+dropped silently. The IHE and EU texts the crates implement are vendored at
+the versions [`docs/VERSIONS.md`](docs/VERSIONS.md) pins, so you can check
+each record against its standard.
+
+## Part of FerroHEALTH
+
+FerroHEALTH is five servers, each its own product, that reach each other
+only over published standards: FerroEHR stores the record, FerroBRIDGE
+translates it to FHIR and the OMOP research model, FerroFED connects records
+across organisations and borders, FerroPIX matches patient identities, and
+FerroTERM serves the code systems (the shared lists of medical terms). Work
+that every server needs lives in three shared libraries: FerroAUTH for
+sign-in and access control, FerroAUDIT for the audit trail, and FerroUI for
+the web consoles. FerroEHR, FerroFED and FerroPIX send their audit records
+through FerroAUDIT, and each keeps its own audit store.
+
+## Quick start
+
+Add the crates to a Rust project:
+
+```sh
+cargo add ihe-atna@=0.2.8 --features balp
+cargo add ehds-logging@=0.2.8 --features balp
 ```
 
-The crate documentation on docs.rs is the integration guide; the design is
-in [`docs/architecture.md`](docs/architecture.md). The specifications the
-crates implement, ITI-20 Record Audit Event, the RESTful ATNA supplement,
-BALP 1.1.4 and Regulation (EU) 2025/327, are vendored under [`docs/specs/`](docs/specs/) at the versions
-[`docs/VERSIONS.md`](docs/VERSIONS.md) pins.
+Pin the versions exactly. The crate documentation on
+[docs.rs](https://docs.rs/ihe-atna) is the integration guide, and
+[`docs/architecture.md`](docs/architecture.md) has the design.
 
-## Build and test
+## What ships today
 
-```
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo nextest run --workspace --all-features --locked
-```
+- [ATNA audit messages (ITI-20)](crates/ihe-atna/README.md#atna-atna): the DICOM audit message over syslog with TLS, to any Audit Record Repository
+- [BALP audit events](crates/ihe-atna/README.md#balp-balp): the FHIR `AuditEvent` for every IHE FHIR transaction, posted over the FHIR feed
+- [A store-and-forward queue](crates/ihe-atna/README.md#atna-atna) that keeps every record until the repository takes it, oldest first
+- [Retrieving audit events (ITI-81)](crates/ihe-atna/README.md#retrieve-retrieve): the FHIR search a product serves over its own audit store
+- [The EHDS access record](crates/ehds-logging/README.md), as Annex II 3.2 of Regulation (EU) 2025/327 asks, with its data categories and retention
 
-Every Audit Record Repository in the tests is a local listener or a
-`wiremock` stub, and every patient identifier is synthetic.
+<details>
+<summary><b>Published crates</b> (2)</summary>
 
-## Contributing
+| Crate | What it does | Version | Docs | Downloads |
+|---|---|---|---|---|
+| [`ihe-atna`](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA (ITI-20) over syslog and TLS, BALP AuditEvents over the FHIR feed, the spool and forwarder, and ITI-81 retrieval | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | [![docs.rs](https://img.shields.io/docsrs/ihe-atna?logo=docsdotrs&label=docs.rs)](https://docs.rs/ihe-atna) | [![downloads](https://img.shields.io/crates/d/ihe-atna?logo=rust&label=downloads)](https://crates.io/crates/ihe-atna) |
+| [`ehds-logging`](https://crates.io/crates/ehds-logging) | The EHDS logging component: the Annex II 3.2 access record, its categories and retention, written as a BALP AuditEvent | [![crates.io](https://img.shields.io/crates/v/ehds-logging?logo=rust&label=crates.io)](https://crates.io/crates/ehds-logging) | [![docs.rs](https://img.shields.io/docsrs/ehds-logging?logo=docsdotrs&label=docs.rs)](https://docs.rs/ehds-logging) | [![downloads](https://img.shields.io/crates/d/ehds-logging?logo=rust&label=downloads)](https://crates.io/crates/ehds-logging) |
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and
-[SUPPORT.md](SUPPORT.md).
+</details>
+
+## Learn more
+
+- [`ihe-atna`](https://docs.rs/ihe-atna) and [`ehds-logging`](https://docs.rs/ehds-logging) on docs.rs, and the [FerroHEALTH book](https://ferrohealth.eu/docs/)
+- [Architecture](docs/architecture.md) and the [pinned specifications](docs/VERSIONS.md)
+- [Changelog](CHANGELOG.md) and [milestones](https://github.com/FerroHEALTH/FerroAUDIT/milestones)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md), [code of conduct](CODE_OF_CONDUCT.md), [support](SUPPORT.md), [governance](GOVERNANCE.md) and [maintainers](MAINTAINERS.md)
 
 ## Licence
 
-FerroAUDIT is source-available under the Business Source License 1.1. The
-parameters that apply, the Licensor, the Licensed Work, the Additional Use
-Grant and the Change Date, are in [LICENSE](LICENSE): free for non-commercial
-production use, a commercial licence for any other production use, and Apache
-2.0 four years after each version is published. The crates are hand-written
-code that implements the specifications above, which is why it is under the
-family's own licence and not the Apache-2.0 of the family's generated crates.
-
-A commercial licence is arranged with [Cadasto B.V.](https://www.cadasto.com),
-the Licensor, which handles the business side of FerroAUDIT: write to
-[info@cadasto.com](mailto:info@cadasto.com) or use
-[cadasto.com/contact](https://www.cadasto.com/contact/). Technical questions go
-to the maintainer named in [MAINTAINERS.md](MAINTAINERS.md).
-
-The vendored specifications under `docs/specs/` keep their upstream terms,
-recorded in the `PROVENANCE.md` beside each.
-
-Contributions carry the terms in
-[CONTRIBUTING.md](CONTRIBUTING.md#licensing-of-contributions): you keep your
-copyright, and you grant the Licensor the relicensing right that keeps the work
-one work under one licensor. There is no separate agreement to sign.
+Business Source License 1.1 ([LICENSE](LICENSE)), with Apache License 2.0 as
+the Change License four years after each version; the
+[licensing page](https://ferrohealth.eu/docs/licensing.html) says when you
+need a commercial licence from Cadasto B.V.

@@ -1,0 +1,21 @@
+<!-- SPDX-FileCopyrightText: Cadasto B.V. -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+<!-- The FerroAUDIT lockup in the parent's steel, the construction and the
+     wordmark of FerroHEALTH's assets/brand/ferrohealth-lockup-auto.svg. One file serves both themes through prefers-color-scheme. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="262" height="64" viewBox="0 0 262 64" role="img" aria-label="FerroAUDIT">
+  <title>FerroAUDIT</title>
+  <style>
+    .m1 { stroke: #3F6070 }
+    .ferro { fill: #0F172A }
+    .suf { fill: #3F6070 }
+    @media (prefers-color-scheme: dark) {
+      .m1 { stroke: #8FB6C4 }
+      .ferro { fill: #F1F5F9 }
+      .suf { fill: #8FB6C4 }
+    }
+  </style>
+  <g fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path class="m1" d="M4 33 H14 L19 20 L26 45 L32 26 L38 33 H60"/>
+  </g>
+  <text x="76" y="44" font-family="'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="30" font-weight="700" letter-spacing="-0.3"><tspan class="ferro">Ferro</tspan><tspan class="suf">AUDIT</tspan></text>
+</svg>
