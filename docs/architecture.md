@@ -9,8 +9,9 @@ product sends its audit trail (FerroFED's mandatory access log, FerroEHR's
 FHIR audit feed and FerroPIX's Manager-side BALP records), and
 `ehds-logging`, the logging software component of an EHR system under the
 European Health Data Space Regulation, whose access record travels as a BALP
-`AuditEvent` through `ihe-atna`. FerroSYS later builds the receiving Audit
-Record Repository on the same crates. It is the owner's decision of
+`AuditEvent` through `ihe-atna`. `ihe-atna` carries the whole audit trail,
+sending, forwarding and retrieving, and each product keeps its own audit
+store (owner decision 2026-10-25). It is the owner's decision of
 2026-10-20 (FerroHEALTH/FerroFED#367), and this document is the design of
 record. No product implements audit, or the EHDS access record, again.
 
@@ -58,8 +59,9 @@ the ATX: FHIR Feed Option the RESTful ATNA supplement adds, a FHIR
 `AuditEvent` posted as a `create` (RESTful ATNA §3.20.4.2).
 
 The receiving side, the Audit Record Repository with its query transactions
-(ITI-81), is not here yet. FerroSYS builds it on this crate, which then
-gains its server half as a feature of the same crate.
+(ITI-81), is not here yet. Retrieval belongs to this crate as its server
+half, a feature of the same crate, which a product uses over its own audit
+store (owner decision 2026-10-25); no separate product builds it.
 
 ## 2. Pinned versions
 
@@ -390,7 +392,6 @@ product's repository:
 - **FerroEHR:** its `[audit.fhir_feed]` sends through `balp` and the feed,
   and its own implementation of the EHDS access record moves onto
   `ehds-logging` (its own issue).
-- **FerroSYS:** builds the Audit Record Repository on this crate.
 
 ## 10. Naming and licence
 
