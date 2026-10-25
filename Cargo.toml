@@ -35,12 +35,16 @@ tokio = { version = "1.53.3", default-features = false }
 tokio-rustls = { version = "0.26.6", default-features = false }
 tracing = "0.1.44"
 url = "2.5.8"
-# BALP: the FHIR R4 `AuditEvent` and the ATX: FHIR Feed client. fhir-types
-# stays on the 0.1.113 line FerroFED and FerroBRIDGE's fhirconnect build on,
-# so a product carries one copy.
+# BALP: the FHIR R4 `AuditEvent` and the ATX: FHIR Feed client, and the
+# ITI-81 searchset Bundle. fhir-types tracks its newest release, the line the
+# products build on, so a product carries one copy. Verified on crates.io
+# 2026-10-25 (0.1.128).
 async-trait = "0.1.92"
-fhir-types = { version = "0.1.113", default-features = false }
+fhir-types = { version = "0.1.128", default-features = false }
 http = "1.5.0"
+# ITI-81: RFC 3986 percent-decoding of the query string. Verified on
+# crates.io 2026-10-25 (2.3.2).
+percent-encoding = "2.3.2"
 reqwest = { version = "0.13.5", default-features = false }
 serde_json = "1.0.154"
 # The serde form of the access record (ehds-logging), and test-only the JSON

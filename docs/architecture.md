@@ -218,6 +218,49 @@ value (RFC 6750 §3.1). `FeedRepository::new` takes `https` alone;
 records cross the network in clear text. No redirect is followed, and no
 error carries the record, the credential or the answer body.
 
+### 4.4 The retrieval (feature `retrieve`)
+
+Retrieve ATNA Audit Event [ITI-81] is the read side of a repository: an
+HTTP `GET` that is a FHIR R4 search on `AuditEvent` (RESTful ATNA
+§3.81.4.1.2). `retrieve::Query::parse` reads its query string and nothing
+else; the store, the query over it and the decision who may read which
+records stay the repository's (§3.81.4.1.3, ITI TF-1 §9.4).
+
+- **The parameters.** At least one `date` is required (§3.81.4.1.2.1), and a
+  query without one is refused, which §3.81.4.2.2 lets a repository answer
+  with a `400`. The other parameters are the four token parameters
+  §3.81.4.1.2.2 adds (`agent.identifier`, `patient.identifier`,
+  `entity.identifier`, `source.identifier`) and the FHIR R4 `AuditEvent`
+  search parameters, each typed by the registry `fhir-types` generates from
+  the R4 core package, which covers the rest of §3.81.4.1.2.2 (`address`,
+  `entity-type`, `entity-role`, `type`, `subtype`, `outcome`). Repeated
+  parameters combine with AND, values with OR (§3.81.4.1.2.2). Any other
+  parameter, `_sort` and `_include` among them, is ignored and named
+  (§3.81.4.1.3). `_count` is FHIR R4 Search §3.1.1.5.3; `_offset` is the
+  page offset, which no specification governs: our own design, since FHIR
+  leaves the paging link to the server. A modifier on a supported parameter
+  is refused, as FHIR R4 Search §3.1.1.4.4 has a server do.
+- **The values.** The query string is percent-decoded as RFC 3986 §2.1
+  says (§3.81.4.1.2.2), so `+` stays a plus; `\` escapes follow FHIR R4
+  Search §3.1.1.4.19, tokens the four forms of §3.1.1.4.10. A date is held
+  as an R4 `dateTime` and checked against its lexical form, after `:00` is
+  written into a time of hours and minutes, which §3.1.1.4.7 allows in a
+  search.
+- **The dates.** `recorded` is an instant, a point (§3.1.1.4.7), so each
+  prefix of §3.1.1.4.5 becomes an interval around the range the value's
+  precision implies: `eq` within it, `ne` outside it, `ge` from its start,
+  `le` until its end, `gt` and `sa` from its end, `lt` and `eb` until its
+  start. A value without a time is read in the time zone the repository
+  names, as §3.1.1.4.7 has a server assume its local zone. `ap` is refused:
+  FHIR leaves its approximation to the server, and the crate chooses none.
+- **The answer.** `bundle::searchset` writes the `searchset` Bundle of
+  §3.81.4.2.2.2 with `total`, the `self` link and an optional `next` link,
+  each entry in `search.mode` `match`; `bundle::refusal` the
+  `OperationOutcome` with the human-readable description §3.81.4.2.2 asks
+  for. Both are `fhir_types::r4` resources, never hand-built JSON. The
+  retrieval needs no transport of its own: the feature takes `fhir-types`,
+  `jiff` and `percent-encoding`, and neither an HTTP client nor a runtime.
+
 ## 5. Whom an exchange is made for
 
 `user::OnBehalfOf` is a `User`, as a verified OAuth 2.0 access token names
@@ -247,6 +290,7 @@ uses the same rule. No specification governs this: our own design.
 | `recording` | `balp::recording` alone | tokio, thiserror |
 | `redact` | `redact::RedactedUrl`, `fhir_base` | url |
 | `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (R4 `resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
+| `retrieve` | `retrieve` | `fhir-types` (R4 `resources`), timestamps, percent-encoding |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
 no HTTP client, and `balp` compiles no TLS stack and takes no XML writer of

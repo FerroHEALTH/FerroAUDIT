@@ -70,6 +70,18 @@ balp = [
   "dep:reqwest",
   "dep:serde_json",
 ]
+# Retrieve ATNA Audit Event (ITI-81): the query an Audit Consumer sends, read
+# into typed criteria over the FHIR R4 AuditEvent search parameters, and the
+# searchset Bundle and refusal OperationOutcome a repository answers with,
+# as fhir-types resources. The repository keeps its store and its query.
+retrieve = [
+  "dep:fhir-types",
+  "fhir-types/r4",
+  "fhir-types/resources",
+  "dep:jiff",
+  "dep:percent-encoding",
+  "dep:thiserror",
+]
 
 [dependencies]
 async-trait = { workspace = true, optional = true }
@@ -77,6 +89,7 @@ base64 = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
+percent-encoding = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
