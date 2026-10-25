@@ -24,9 +24,11 @@ implements a specification (`.claude/memory/crate-name.md`,
 Every product sends its audit trail through it, and no product implements
 audit again: FerroFED's mandatory access log, FerroEHR's
 `[audit.fhir_feed]`, FerroPIX's Manager-side BALP records and the profile
-audit records of FerroPIX's `ihe-iti`. FerroSYS later builds the receiving
-Audit Record Repository on it. The code came from FerroFED's `ihe-iti`
-(features `atna` and `balp`) with its history and its tests.
+audit records of FerroPIX's `ihe-iti`. `ihe-atna` carries the whole audit
+trail, sending, forwarding and retrieving, and `ehds-logging` the EHDS
+access record (`.claude/memory/family-architecture.md`). The code came from
+`ihe-iti` (features `atna` and `balp`) while that crate lived in FerroFED,
+with its history and its tests.
 
 - `atna` (feature): the DICOM PS3.15 audit message (`atna::message`), the
   RFC 5424 syslog message in its RFC 5425 frame (`atna::syslog`), the TLS

@@ -3,12 +3,17 @@
 
 # Memory index
 
+- [Family architecture](family-architecture.md): the FerroHEALTH family
+  is five separate servers that reach each other only over published
+  protocols, plus shared crates for cross-cutting work; nothing is
+  hand-written that a shared crate or another product provides; owner
+  2026-10-25
 - [Memory lives in the repo](memory-lives-in-repo.md): every learning is a
   tracked file here, never a per-user note
 - [What FerroAUDIT is](ferroaudit.md): the shared audit library, `ihe-atna`
-  (the ATNA ITI-20 sender and BALP, from FerroFED's ihe-iti) and
-  `ehds-logging` (the EHDS logging component); every product audits through
-  it; owner 2026-10-20
+  (the whole audit trail: the ATNA ITI-20 sender, BALP, forwarding and
+  retrieving) and `ehds-logging` (the EHDS access record); every product
+  audits through it; owner 2026-10-20 and 2026-10-25
 - [Crate name and licence](crate-name.md): the crate is `ihe-atna`, named
   for its specification, under BUSL-1.1; Trusted Publishing from 0.1.0
 - [Licence: BUSL 1.1](license-busl.md): the FerroHEALTH terms, Cadasto B.V.
