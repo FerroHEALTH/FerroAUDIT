@@ -46,11 +46,10 @@
 //! `ParticipantObjectSensitivity` in both directions (`RESTful` ATNA Rev. 3.6
 //! Tables 3.20.4.2.2.1-1 and 3.81.4.2.2.1-1), as BALP puts the labels of the
 //! data on its entity (`IHE.BasicAudit.Read`, `entity:data.securityLabel`).
-//! The categories are written there alone: that entity is the category
-//! record of Annex II 3.2(c), and `meta`, which neither mapping carries,
-//! would hold a second copy of all of them on every record. The origins'
-//! labels are also the record's `meta.security`, which a FHIR repository
-//! can limit access by.
+//! Each label is written there alone: the `ehds-categories` entity is the
+//! category record of Annex II 3.2(c), each `origin` entity the record of an
+//! origin, and `meta`, which neither mapping carries, would hold a second
+//! copy on every record, so the record writes no `meta.security`.
 //!
 //! An emergency access (Regulation (EU) 2025/327 Art 11(5)) keeps its
 //! purposes of use where every purpose is written, in `agent:user`
@@ -353,8 +352,8 @@ pub fn exchange(record: &AccessRecord, endpoint: &NetworkAddress) -> Exchange {
         on_behalf: OnBehalfOf::User(user),
         entities: entities(record),
         // NOTE: RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps `entity.securityLabel`
-        // and no `meta`, so the categories ride on their entity alone (#108).
-        security: security(&record.labels.origins()),
+        // and no `meta`, so every label rides on its entity alone (#108, #111).
+        security: Vec::new(),
     }
 }
 

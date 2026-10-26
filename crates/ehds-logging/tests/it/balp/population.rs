@@ -61,18 +61,26 @@ fn a_population_access_states_its_scope_in_its_own_entity() {
 }
 
 /// Annex II 3.4: a population record carries the security labels of its
-/// categories and origins as every record does.
+/// categories and origins on their entities, as every record does.
 #[test]
 fn a_population_record_is_labelled_as_any_record() {
     let population = written(&population_record(PopulationReason::NotProjected, None));
     let named = written(&record(Action::Query, Outcome::Success));
+    let categories = entity(&population, "ehds-categories");
     assert!(
-        population["meta"]["security"]
+        categories[0]["securityLabel"]
             .as_array()
             .is_some_and(|labels| !labels.is_empty()),
         "{population}"
     );
-    assert_eq!(population["meta"]["security"], named["meta"]["security"]);
+    assert_eq!(
+        categories[0]["securityLabel"],
+        entity(&named, "ehds-categories")[0]["securityLabel"]
+    );
+    assert!(
+        population.pointer("/meta/security").is_none(),
+        "{population}"
+    );
     let origins = entity(&population, "origin");
     assert_eq!(
         origins[0]["securityLabel"],

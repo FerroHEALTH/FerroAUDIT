@@ -3,7 +3,7 @@
 
 //! The security labels of a record (Regulation (EU) 2025/327 Annex II 3.4):
 //! the categories' on the `ehds-categories` entity alone, and each origin's
-//! on its `origin` entity and in `meta.security`.
+//! on its `origin` entity alone, never in `meta.security`.
 
 use ehds_logging::category::{PRIORITY_SYSTEM, PRIORITY_VERSION};
 use ehds_logging::classify::{Basis, Evidence, RootObject};
@@ -32,12 +32,12 @@ fn node_a() -> Value {
 }
 
 /// `RESTful` ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 carries `entity.securityLabel`
-/// and no `meta`, so the categories ride on their entity alone and
-/// `meta.security` holds the origins' labels (#108).
+/// and no `meta`, so every label rides on its entity alone and the record
+/// writes no `meta.security` (#108, #111).
 #[test]
-fn the_record_carries_the_labels_of_its_origins_in_meta_security() {
+fn the_record_writes_no_meta_security() {
     let written = written(&record(Action::Query, Outcome::Success));
-    assert_eq!(codings(&written, "/meta/security"), [node_a()]);
+    assert!(written.pointer("/meta/security").is_none(), "{written}");
     assert!(
         written["meta"]["profile"][0].is_string(),
         "the labels keep the pattern: {written}"
@@ -71,10 +71,11 @@ fn each_label_is_also_on_the_entity_it_belongs_to() {
 #[test]
 fn a_record_that_claims_no_pattern_is_labelled_all_the_same() {
     let written = written(&record(Action::Delete, Outcome::MinorFailure));
-    assert!(written.pointer("/meta/profile").is_none(), "{written}");
-    assert_eq!(codings(&written, "/meta/security"), [node_a()]);
+    assert!(written.pointer("/meta").is_none(), "{written}");
     let categories = entity(&written, "ehds-categories");
     assert_eq!(codings(categories[0], "/securityLabel"), [lab()]);
+    let origins = entity(&written, "origin");
+    assert_eq!(codings(origins[0], "/securityLabel"), [node_a()]);
 }
 
 /// Every label coding of `value` in a `security` or `securityLabel` list.
@@ -144,8 +145,34 @@ fn every_category_label_of_an_unclassified_access_is_written_once_on_its_entity(
     );
     let elsewhere = found.len() - on_entity.len();
     assert_eq!(
-        2, elsewhere,
-        "only the origin's label, on its entity and in meta: {written}"
+        1, elsewhere,
+        "only the origin's label, on its entity: {written}"
     );
-    assert_eq!(codings(&written, "/meta/security"), [node_a()]);
+    assert!(written.pointer("/meta/security").is_none(), "{written}");
+}
+
+/// Each origin's label is written once, on its `origin` entity, never again
+/// in `meta.security` (#111).
+#[test]
+fn each_origin_label_is_written_once_on_its_entity() {
+    let mut access = record(Action::Read, Outcome::Success);
+    let mut second = access.origins[0].clone();
+    second.endpoint = Some("node-b".to_owned());
+    second.node = Some("cdr-b".to_owned());
+    second.system_id = Some("cdr-b.example.org".to_owned());
+    access.origins.push(second);
+    access.labels = labels().label(&access.categories, ["node-a", "node-b"]);
+    let written = written(&access);
+    let mut found = Vec::new();
+    labels_in(&written, &mut found);
+    let origin_labels: Vec<&str> = found
+        .iter()
+        .filter(|coding| coding["system"] == ORIGIN_SYSTEM)
+        .filter_map(|coding| coding["code"].as_str())
+        .collect();
+    assert_eq!(origin_labels, ["node-a", "node-b"], "{written}");
+    for origin in entity(&written, "origin") {
+        assert_eq!(codings(origin, "/securityLabel").len(), 1, "{origin}");
+    }
+    assert!(written.pointer("/meta/security").is_none(), "{written}");
 }
