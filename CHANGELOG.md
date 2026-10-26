@@ -11,6 +11,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-10-26
+
 ### Changed
 
 - The BALP `AuditEvent` of an EHDS access record writes the labels of the
@@ -415,7 +417,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.13...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.14...HEAD
+[0.2.14]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.10...v0.2.11
