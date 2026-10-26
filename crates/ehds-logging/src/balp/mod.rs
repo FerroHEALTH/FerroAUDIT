@@ -39,13 +39,18 @@
 //! and a correlation identifier the client sent is a `detail` of the request
 //! id's entity.
 //!
-//! The record's security labels ([`crate::label`], Annex II 3.4) are its
-//! `meta.security`, which a FHIR repository can limit access by, and each is
-//! also the `securityLabel` of the entity it belongs to: the categories' on
-//! the `ehds-categories` entity and each origin's on its `origin` entity,
-//! which the `RESTful` ATNA mapping keeps as the DICOM
-//! `ParticipantObjectSensitivity` (`RESTful` ATNA Rev. 3.6
-//! Table 3.20.4.2.2.1-1).
+//! The record's security labels ([`crate::label`], Annex II 3.4) are each
+//! the `securityLabel` of the entity it belongs to: the categories' on the
+//! `ehds-categories` entity and each origin's on its `origin` entity, which
+//! the `RESTful` ATNA mapping keeps as the DICOM
+//! `ParticipantObjectSensitivity` in both directions (`RESTful` ATNA Rev. 3.6
+//! Tables 3.20.4.2.2.1-1 and 3.81.4.2.2.1-1), as BALP puts the labels of the
+//! data on its entity (`IHE.BasicAudit.Read`, `entity:data.securityLabel`).
+//! The categories are written there alone: that entity is the category
+//! record of Annex II 3.2(c), and `meta`, which neither mapping carries,
+//! would hold a second copy of all of them on every record. The origins'
+//! labels are also the record's `meta.security`, which a FHIR repository
+//! can limit access by.
 //!
 //! An emergency access (Regulation (EU) 2025/327 Art 11(5)) keeps its
 //! purposes of use where every purpose is written, in `agent:user`
@@ -347,7 +352,9 @@ pub fn exchange(record: &AccessRecord, endpoint: &NetworkAddress) -> Exchange {
         },
         on_behalf: OnBehalfOf::User(user),
         entities: entities(record),
-        security: security(&record.labels.all()),
+        // NOTE: RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps `entity.securityLabel`
+        // and no `meta`, so the categories ride on their entity alone (#108).
+        security: security(&record.labels.origins()),
     }
 }
 
