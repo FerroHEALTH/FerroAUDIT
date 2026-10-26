@@ -55,6 +55,8 @@ const PROVIDER: &str = "Qz7-provider-44";
 const PROFESSIONAL: &str = "Qz7-professional-45";
 const NAME: &str = "Qz7-name-47";
 const IDENTIFIER: &str = "Qz7-identifier-48";
+const TOKEN: &str = "Qz7-jti-49";
+const PERMIT: &str = "Qz7-permit-50";
 /// The code system the test records label an origin in.
 const ORIGIN_SYSTEM: &str = "https://example.org/fhir/CodeSystem/access-log-origin";
 const EHR_ID: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
@@ -94,6 +96,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
                 system: Some("http://terminology.hl7.org/CodeSystem/v3-ActReason".to_owned()),
                 code: "TREAT".to_owned(),
             }],
+            policies: Vec::new(),
             relayed: None,
             roles: Vec::new(),
             token_id: None,
@@ -560,9 +563,57 @@ fn no_other_part_of_the_record_carries_the_professional_or_the_level() {
     }
 }
 
+/// A data permit the access was authorised under (Regulation (EU) 2025/327
+/// Art 68) is an `agent:user` `policy` after the token's `jti` (FHIR R4
+/// `AuditEvent.agent.policy`), and the record claims no OAuth pattern, which
+/// fixes that `policy` to the `jti` alone (BALP 1.1.4
+/// `OAUTHaccessTokenUse.Comprehensive`, `agent:oUser.policy` `1..1`).
+#[test]
+fn a_data_permit_is_the_persons_policy_after_the_token() {
+    let mut record = record(Action::Query, Outcome::Success);
+    record.accessor.token_id = Some(TOKEN.to_owned());
+    record.accessor.policies = vec![PERMIT.to_owned()];
+    let permitted = written(&record);
+    assert_eq!(
+        person(&permitted)["policy"],
+        serde_json::json!([TOKEN, PERMIT]),
+        "{permitted}"
+    );
+    assert!(
+        permitted["meta"]["profile"]
+            .as_array()
+            .expect("profiles")
+            .iter()
+            .all(|profile| !profile.as_str().unwrap_or_default().contains("OAUTH")),
+        "{permitted}"
+    );
+    assert!(
+        permitted["agent"]
+            .as_array()
+            .expect("agents")
+            .iter()
+            .filter(|agent| agent["type"]["coding"][0]["code"] != "IRCP")
+            .all(|agent| agent.get("policy").is_none()),
+        "the permit is the person's alone: {permitted}"
+    );
+
+    record.accessor.policies = Vec::new();
+    let tokened = written(&record);
+    assert_eq!(person(&tokened)["policy"], serde_json::json!([TOKEN]));
+    assert!(
+        tokened["meta"]["profile"]
+            .as_array()
+            .expect("profiles")
+            .iter()
+            .any(|profile| profile.as_str().unwrap_or_default().contains("OAUTH")),
+        "the token alone keeps the pattern: {tokened}"
+    );
+}
+
 #[test]
 fn no_debug_shows_the_patient_the_person_or_an_id() {
-    let record = record(Action::Query, Outcome::Success);
+    let mut record = record(Action::Query, Outcome::Success);
+    record.accessor.policies = vec![PERMIT.to_owned()];
     let shown = format!("{record:?} {:?}", exchange(&record, &gateway()));
     for value in [
         PATIENT,
@@ -574,6 +625,7 @@ fn no_debug_shows_the_patient_the_person_or_an_id() {
         IDENTIFIER,
         LAB_REPORT,
         EHR_ID,
+        PERMIT,
     ] {
         assert!(!shown.contains(value), "{value} in {shown}");
     }

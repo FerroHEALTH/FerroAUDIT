@@ -4,7 +4,8 @@
 //! What a record writes beyond its pattern's fixed codings: a subtype known
 //! only at run time, the DICOM event codes, the major-failure outcome,
 //! `outcomeDesc` and `source.type` (FHIR R4 `AuditEvent`), the token's `jti`
-//! at `agent[user].policy` (BALP 1.1.4 §3:5.7.5.4), a user with no OAuth
+//! at `agent[user].policy` (BALP 1.1.4 §3:5.7.5.4) with any other policy
+//! after it, a user with no OAuth
 //! identity, an endpoint known by its host, a patient identifier whose
 //! namespace is no URI, and the record as a JSON value.
 #![expect(
@@ -29,6 +30,9 @@ use super::{CLIENT, ISSUER, SUBJECT, observer};
 
 /// The synthetic token id, unlike any other text.
 const TOKEN: &str = "Qz7-jti-61";
+/// The synthetic data permits, unlike any other text.
+const PERMIT: &str = "urn:uuid:5b0f3c2e-8d1a-4f6b-9c7e-2a4d6f8b0c11";
+const SECOND_PERMIT: &str = "Qz7-permit-62";
 
 fn read_kind() -> EventKind {
     EventKind {
@@ -243,6 +247,44 @@ fn a_record_that_does_not_hold_to_the_token_pattern_does_not_claim_it() {
         requestor(&record)["policy"][0],
         TOKEN,
         "the jti is still written"
+    );
+}
+
+/// A policy the user acts under beside the token, such as a data permit, is
+/// another `agent[user].policy` after the `jti` (FHIR R4
+/// `AuditEvent.agent.policy`, `0..*`), and the record then claims no
+/// Comprehensive pattern, whose `agent:oUser.policy` is `..1`.
+#[test]
+fn a_policy_beside_the_token_follows_the_jti_and_drops_the_token_pattern() {
+    let user = User::new(ISSUER.to_owned(), SUBJECT.to_owned(), CLIENT.to_owned())
+        .with_token_id(Some(TOKEN.to_owned()))
+        .with_policies(vec![PERMIT.to_owned(), SECOND_PERMIT.to_owned()]);
+    let record = written(&exchange(OnBehalfOf::User(user)));
+    assert_eq!(
+        requestor(&record)["policy"],
+        serde_json::json!([TOKEN, PERMIT, SECOND_PERMIT]),
+        "{record}"
+    );
+    assert!(
+        !profiles(&record).contains(&OAUTH_COMPREHENSIVE),
+        "{record}"
+    );
+    let profile =
+        vendored("StructureDefinition-IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive.json");
+    let policy = profile["differential"]["element"]
+        .as_array()
+        .expect("elements")
+        .iter()
+        .find(|element| element["path"] == "AuditEvent.agent.policy")
+        .expect("the policy element");
+    assert_eq!(policy["max"], "1");
+
+    let local = User::local(SUBJECT.to_owned()).with_policies(vec![PERMIT.to_owned()]);
+    let record = written(&exchange(OnBehalfOf::User(local)));
+    assert_eq!(
+        requestor(&record)["policy"],
+        serde_json::json!([PERMIT]),
+        "a user with no token keeps the permit alone"
     );
 }
 

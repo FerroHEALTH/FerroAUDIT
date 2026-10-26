@@ -71,6 +71,7 @@ struct Stated {
     assurance: Option<Code>,
     roles: Vec<Code>,
     token_id: Option<String>,
+    policies: Vec<String>,
 }
 
 impl User {
@@ -224,6 +225,26 @@ impl User {
     #[must_use]
     pub fn token_id(&self) -> Option<&str> {
         self.stated.token_id.as_deref()
+    }
+
+    /// Returns this user, acting under `policies` beside the token: each the
+    /// identifier of a policy or plan that authorised the exchange, such as
+    /// the data permit of a health data access body (Regulation (EU)
+    /// 2025/327 Art 68), which the record writes at `agent[user].policy`
+    /// after the token's `jti` (FHIR R4 `AuditEvent.agent.policy`, 0..*).
+    ///
+    /// The DICOM PS3.15 audit message carries none: its `ActiveParticipant`
+    /// has no element for a policy (`atna::message::ActiveParticipant`).
+    #[must_use]
+    pub fn with_policies(mut self, policies: Vec<String>) -> Self {
+        self.stated.policies = policies;
+        self
+    }
+
+    /// Returns every policy the user acts under beside the token, in order.
+    #[must_use]
+    pub fn policies(&self) -> &[String] {
+        &self.stated.policies
     }
 
     /// Returns this user, vouched for by the authorization server `issuer`
