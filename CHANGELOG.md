@@ -460,7 +460,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.15...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.15...v0.3.0
 [0.2.15]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.12...v0.2.13
