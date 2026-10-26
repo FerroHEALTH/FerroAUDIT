@@ -27,6 +27,17 @@
 //! extension coded `low`, `substantial` or `high` (Regulation (EU) No
 //! 910/2014 Art 8(2)); and who acts, `person` or `client`, as its `role`.
 //!
+//! The policies the access was authorised under, such as a data permit
+//! (Regulation (EU) 2025/327 Art 68), are `agent:user` `policy` entries
+//! after the token's `jti`: FHIR R4 defines `AuditEvent.agent.policy` as
+//! "the policy or plan that authorized the activity being recorded", and "a
+//! single activity may have multiple applicable policies". BALP 1.1.4's
+//! OAuth patterns fix that `policy` to the `jti` alone, so a record with a
+//! policy beside the token claims no `OAUTHaccessTokenUse` profile. A DICOM
+//! PS3.15 audit message has no element for a policy (A.5.1.1), so the
+//! permit reaches an Audit Record Repository in the `AuditEvent` the FHIR
+//! Feed sends.
+//!
 //! What Annex II 3.2 adds to a BALP record has no element of its own (BALP
 //! defines none for a data category), so it rides in entities of type `4`,
 //! which no slice of a pattern is discriminated by: one for the categories
@@ -138,6 +149,7 @@
 //!         professional: Professional::default(),
 //!         alt_id: None,
 //!         purposes: Vec::new(),
+//!         policies: Vec::new(),
 //!         relayed: None,
 //!     },
 //!     subject: DataSubject::default(),
@@ -306,6 +318,7 @@ pub fn exchange(record: &AccessRecord, endpoint: &NetworkAddress) -> Exchange {
         .with_issuer(accessor.issuer.clone())
         .with_client_id(accessor.client_id.clone())
         .with_token_id(accessor.token_id.clone())
+        .with_policies(accessor.policies.clone())
         .with_audience(accessor.audience.clone())
         .with_purposes(
             accessor

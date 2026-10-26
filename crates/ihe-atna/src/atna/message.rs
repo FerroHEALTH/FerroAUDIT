@@ -83,6 +83,12 @@ pub struct AccessPoint {
 ///
 /// A participant may be a person, so `Debug` shows neither its `UserID` nor
 /// its `UserName`.
+///
+/// It names no policy the participant acted under: DICOM PS3.15 A.5.1.1
+/// defines no such element of `ActiveParticipant`. `RESTful` ATNA Rev. 3.6
+/// Tables 3.20.4.2.2.1-1 and 3.81.4.2.2.1-1 map `AuditEvent.agent.policy` to
+/// a `ParticipantRoleIDCode` that schema does not hold, so a policy, such as
+/// a data permit, travels in the FHIR `AuditEvent` alone.
 #[derive(Clone)]
 pub struct ActiveParticipant {
     /// `UserID`.

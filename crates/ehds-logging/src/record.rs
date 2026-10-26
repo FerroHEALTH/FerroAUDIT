@@ -8,8 +8,9 @@
 //! that accessed the data, (b) the specific natural person or persons, (c)
 //! the categories of data accessed, (d) the time and date, and (e) the
 //! origin or origins of the data. An [`AccessRecord`] carries each, and
-//! beside them the data subject whose data were accessed and the purpose of
-//! use the access was made for, which Art 9(2) asks the patient be told. A
+//! beside them the data subject whose data were accessed, the purpose of
+//! use the access was made for, which Art 9(2) asks the patient be told, and
+//! the policies it was authorised under, such as a data permit (Art 68). A
 //! record whose accessor declared an emergency purpose carries the mark
 //! Art 11(5) asks for ([`emergency`](crate::emergency)).
 //!
@@ -269,6 +270,12 @@ pub struct Accessor {
     pub alt_id: Option<String>,
     /// Every purpose of use the token declares.
     pub purposes: Vec<Purpose>,
+    /// The identifier of every policy or plan the access was authorised
+    /// under beside the token, such as the data permit of a health data
+    /// access body (Art 68) a secondary-use caller declares it acts under,
+    /// in order. The BALP record writes each at `agent[user].policy` (FHIR R4
+    /// `AuditEvent.agent.policy`).
+    pub policies: Vec<String>,
     /// The professional and the provider of another Member State a national
     /// contact point relays, marked as asserted by it, when the client is
     /// one (Implementing Regulation (EU) 2026/2099 Art 7).
@@ -286,6 +293,7 @@ impl fmt::Debug for Accessor {
             .field("professional", &self.professional)
             .field("alt_id", &self.alt_id.is_some())
             .field("purposes", &self.purposes)
+            .field("policies", &self.policies.len())
             .field("relayed", &self.relayed)
             .finish_non_exhaustive()
     }

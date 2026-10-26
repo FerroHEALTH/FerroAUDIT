@@ -111,8 +111,9 @@ impl Exchange {
                 _ => false,
             };
             // NOTE: BALP 1.1.4 OAUTHaccessTokenUse.Comprehensive fixes agent:oUser.policy 1..1
-            // and an 110150 oClient with who.identifier.value, so only such a record claims it.
-            if user.token_id().is_some() && named_client {
+            // (the jti) and an 110150 oClient with who.identifier.value, so only such a record
+            // claims it: one whose user names a token and no other policy.
+            if user.token_id().is_some() && user.policies().is_empty() && named_client {
                 profiles.push(OAUTH_COMPREHENSIVE);
             }
             agent.extend(organisation_agent(user));
@@ -176,8 +177,9 @@ fn purposes_of_event(agents: &[AuditEventAgent]) -> Vec<CodeableConcept> {
 
 /// The agents that name `user` (BALP 1.1.4 §3:5.7.5.4): the `agent:user`
 /// slice with the token's `iss` and `sub` as `who.identifier`, as
-/// `requestor`, with its purposes of use and the token's `jti` as `policy`,
-/// and, when a token named a client, the Application agent with its
+/// `requestor`, with its purposes of use and the token's `jti` as `policy`
+/// followed by every other policy it acts under, and, when a token named a
+/// client, the Application agent with its
 /// `client_id` as `who.identifier.value`.
 fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
     let identified = |system: Option<&str>, value: &str| Reference {
@@ -202,8 +204,9 @@ fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
         requestor: primitives::Boolean::from(true),
         policy: user
             .token_id()
-            .map(primitives::Uri::from)
             .into_iter()
+            .chain(user.policies().iter().map(String::as_str))
+            .map(primitives::Uri::from)
             .collect(),
         purpose_of_use: user.purposes().iter().map(purpose).collect(),
         ..AuditEventAgent::default()

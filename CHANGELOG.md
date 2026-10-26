@@ -11,6 +11,36 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-27
+
+### Added
+
+- `ehds_logging::record::Accessor::policies`: the identifier of every
+  policy or plan an access was authorised under beside the token, such as
+  the data permit of a health data access body (Regulation (EU) 2025/327
+  Art 68) a secondary-use caller declares (#116). The BALP record writes
+  each as an `agent:user` `policy` after the token's `jti`, as FHIR R4
+  defines `AuditEvent.agent.policy` ("the policy or plan that authorized
+  the activity being recorded", `0..*`). `Debug` shows how many, never one.
+- `ihe_atna::user::User::with_policies` and `User::policies`, which carry
+  those policies to `agent[user].policy`.
+
+### Changed
+
+- Breaking: `ehds_logging::record::Accessor` has the public field
+  `policies`, so a product that builds an `Accessor` with a struct literal
+  names it: `policies: Vec::new()` for an access authorised under no
+  policy, or the permit identifiers it was declared under.
+- A BALP record whose user acts under a policy beside the token no longer
+  claims `IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive`: that pattern
+  fixes `agent:oUser.policy` to the `jti` alone (`1..1`). A record without
+  such a policy claims it as before.
+- The DICOM PS3.15 `ActiveParticipant` of `ihe_atna::atna::message` says why
+  it carries no policy: PS3.15 A.5.1.1 defines no element for one, and the
+  `RESTful` ATNA mapping names a `ParticipantRoleIDCode` that schema does
+  not hold, so a permit reaches an Audit Record Repository in the FHIR
+  `AuditEvent` alone.
+
 ## [0.2.15] - 2026-10-26
 
 ### Changed

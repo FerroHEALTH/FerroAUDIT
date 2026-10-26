@@ -310,7 +310,9 @@ pub const SOURCE_OTHER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "9", "Other")
 /// The BALP pattern of an OAuth access token's Comprehensive use.
 ///
 /// Its recorder reads every field of the token; a record claims it when it
-/// names the token's `jti` and its client (BALP 1.1.4 §3:5.7.5.4).
+/// names the token's `jti` and its client (BALP 1.1.4 §3:5.7.5.4), and its
+/// user acts under no other policy, because the pattern fixes
+/// `agent:oUser.policy` to the one `jti`.
 pub const OAUTH_COMPREHENSIVE: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive";
 
 /// The `detail` name of the namespace a patient identifier was issued in,
