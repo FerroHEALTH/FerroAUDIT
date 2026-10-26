@@ -44,6 +44,8 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
   # The family's SMART crate, the same Licensor's code (feature `smart`).
   { allow = ["BUSL-1.1"], crate = "ferrohealth-smart" },
+  # The family's shared mask crate, the same Licensor's code.
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-secret" },
 ]
 
 [bans]

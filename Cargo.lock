@@ -502,6 +502,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ferrohealth-secret"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e41064ea7f807d837b9e61d4b8b493d426fb0da7570a915864f71b422d55d87e"
+dependencies = [
+ "secrecy",
+ "serde",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "ferrohealth-smart"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -959,6 +971,7 @@ version = "0.2.11"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
+ "ferrohealth-secret",
  "ferrohealth-smart",
  "fhir-types",
  "http",

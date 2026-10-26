@@ -90,6 +90,7 @@ smart = ["balp", "dep:ferrohealth-smart"]
 [dependencies]
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
+ferrohealth-secret = { workspace = true }
 ferrohealth-smart = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
