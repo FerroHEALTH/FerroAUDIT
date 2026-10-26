@@ -17,6 +17,11 @@ depend on `ferrohealth-smart` (FerroAUTH) and FerroUI.
   out as a pin-bump or migration pull request in each consuming repository,
   coordinated from the orchestrating session, each green on its own gates
   and keeping every existing test.
+- **A shared crate takes a caret requirement** on another shared crate
+  (owner, 2026-10-26): this workspace requires `ferrohealth-smart = "0.7.4"`
+  and `ferrohealth-secret = "0.2.0"`, and `ihe-iti` requires `ihe-atna` the
+  same way, so a patch reaches a product through its lockfile without a
+  release of every shared crate first. Only the products pin exactly.
 - **Shared, never single use.** A behaviour a product needs and FerroAUDIT
   lacks is filed on FerroAUDIT and built there, never as a local copy.
 

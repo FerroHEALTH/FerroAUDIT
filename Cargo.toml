@@ -6,7 +6,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.2.12"
+version = "0.2.13"
 edition = "2024"
 rust-version = "1.98"
 license = "BUSL-1.1"
@@ -46,15 +46,15 @@ http = "1.5.0"
 # crates.io 2026-10-25 (2.3.2).
 percent-encoding = "2.3.2"
 # The family's SMART crate, whose client credentials token a FHIR Feed
-# repository takes (feature `smart`): the same Licensor's BUSL-1.1 code,
-# pinned exactly as every product pins it. Verified on crates.io 2026-10-26
-# (0.7.3).
-ferrohealth-smart = { version = "=0.7.3", default-features = false, features = ["fetch"] }
+# repository takes (feature `smart`): the same Licensor's BUSL-1.1 code, a
+# caret requirement on the newest release it needs, as a shared crate takes
+# another. Verified on crates.io 2026-10-26 (0.7.4).
+ferrohealth-smart = { version = "0.7.4", default-features = false, features = ["fetch"] }
 reqwest = { version = "0.13.5", default-features = false }
 # The family's one mask, which `redact::REDACTED` and `redact::RedactedUrl`
 # render through: the same Licensor's BUSL-1.1 code. Verified on crates.io
-# 2026-10-26 (0.1.0).
-ferrohealth-secret = "=0.1.0"
+# 2026-10-26 (0.2.0).
+ferrohealth-secret = "0.2.0"
 serde_json = "1.0.154"
 # The serde form of the access record (ehds-logging), and test-only the JSON
 # reader of the written records.
@@ -73,7 +73,7 @@ openehr-base = "0.0.93"
 # run time, on the aws-lc-rs provider rustls already uses.
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
 # The workspace's own crates, each at the workspace version.
-ihe-atna = { path = "crates/ihe-atna", version = "=0.2.12" }
+ihe-atna = { path = "crates/ihe-atna", version = "=0.2.13" }
 # Test-only: the spool directories, the log capture of the forwarder tests,
 # and the stub FHIR Feed repository.
 tempfile = "3.27.0"
