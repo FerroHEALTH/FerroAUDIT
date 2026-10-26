@@ -49,25 +49,32 @@ fn private_cargo_home() -> tempfile::TempDir {
 /// The package names `cargo tree` lists for this crate with only `feature`
 /// on, through normal dependencies, down to `depth` when given.
 fn tree(feature: &str, depth: Option<&str>) -> BTreeSet<String> {
+    let mut args = vec!["--no-default-features", "--features", feature];
+    if let Some(depth) = depth {
+        args.extend(["--depth", depth]);
+    }
+    package_tree("ehds-logging", &args)
+}
+
+/// The package names `cargo tree` lists for `package` through normal
+/// dependencies, with `extra` added to the command.
+fn package_tree(package: &str, extra: &[&str]) -> BTreeSet<String> {
     let home = private_cargo_home();
-    let mut command = Command::new(env!("CARGO"));
-    command
+    let output = Command::new(env!("CARGO"))
         .env("CARGO_HOME", home.path())
         .env("CARGO_CACHE_AUTO_CLEAN_FREQUENCY", "never")
         .arg("tree")
         .arg("--manifest-path")
         .arg(Path::new(ROOT).join("Cargo.toml"))
-        .args(["--package", "ehds-logging"])
+        .args(["--package", package])
         .args(["--edges", "normal"])
-        .args(["--prefix", "none", "--format", "{p}"])
-        .args(["--no-default-features", "--features", feature, "--frozen"]);
-    if let Some(depth) = depth {
-        command.args(["--depth", depth]);
-    }
-    let output = command.output().expect("cargo tree runs");
+        .args(["--prefix", "none", "--format", "{p}", "--frozen"])
+        .args(extra)
+        .output()
+        .expect("cargo tree runs");
     assert!(
         output.status.success(),
-        "cargo tree failed for {feature}: {}",
+        "cargo tree failed for {package} {extra:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let names: BTreeSet<String> = String::from_utf8(output.stdout)
@@ -77,11 +84,16 @@ fn tree(feature: &str, depth: Option<&str>) -> BTreeSet<String> {
         .map(str::to_owned)
         .collect();
     assert!(
-        names.contains("ehds-logging"),
-        "cargo tree for {feature} did not list the crate itself, so its output was not read"
+        names.contains(package),
+        "cargo tree for {package} {extra:?} did not list the crate itself, so its output was not read"
     );
     names
 }
+
+/// The family crates that carry the `ferro` prefix and are no product.
+// NOTE: Regulation (EU) 2025/327 Art 2(2)(n), (o); a shared redaction crate with no product,
+// interoperability or network surface is neither a product nor an interoperability component.
+const SHARED: &[&str] = &["ferrohealth-secret"];
 
 #[test]
 fn no_feature_depends_on_an_interoperability_component_or_a_product() {
@@ -95,12 +107,33 @@ fn no_feature_depends_on_an_interoperability_component_or_a_product() {
         }
         let products: Vec<&String> = closure
             .iter()
-            .filter(|name| name.starts_with("ferro"))
+            .filter(|name| name.starts_with("ferro") && !SHARED.contains(&name.as_str()))
             .collect();
         assert!(
             products.is_empty(),
             "{feature:?} compiles a product: {products:?}"
         );
+    }
+}
+
+#[test]
+fn a_shared_family_crate_brings_no_product_with_it() {
+    for shared in SHARED {
+        let closure = package_tree(shared, &[]);
+        let products: Vec<&String> = closure
+            .iter()
+            .filter(|name| name.starts_with("ferro") && name.as_str() != *shared)
+            .collect();
+        assert!(
+            products.is_empty(),
+            "{shared} compiles a family crate: {products:?}"
+        );
+        for name in INTEROPERABILITY {
+            assert!(
+                !closure.contains(*name),
+                "{shared} compiles {name}: {closure:?}"
+            );
+        }
     }
 }
 

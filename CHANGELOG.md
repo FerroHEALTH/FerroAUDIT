@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `redact::REDACTED` and `redact::RedactedUrl` render through
+  `ferrohealth-secret`, the family's one mask, so every product shows a
+  secret and a masked URL the same way. The rendering is unchanged (`***`,
+  `scheme://***@host/path?***`), and both items keep their place and form.
+
 ## [0.2.11] - 2026-10-26
 
 The `smart` feature follows `ferrohealth-smart` to 0.7.1, which fixes
