@@ -160,6 +160,11 @@ check_version() {
 
 check_changelog_structure() { bash scripts/checks/changelog-structure.sh; }
 
+# Each crate's public API against its newest version on crates.io: a break
+# needs a minor bump (https://doc.rust-lang.org/cargo/reference/semver.html),
+# which keeps a caret requirement on these crates safe.
+check_semver() { bash scripts/checks/semver.sh; }
+
 # Regulation (EU) 2024/2847 Annex I Part II(2), (4) and (8): the section
 # being cut says why a security fix ships with functional changes and names
 # every advisory.
@@ -188,6 +193,7 @@ list() {
   cat <<'EOF'
 check_milestone The milestone titled as the tag holds no open item
 check_version The tag matches the workspace version
+check_semver The public API breaks nothing the version does not allow (cargo-semver-checks)
 check_changelog_structure Changelog structure (no duplicate subsections, Keep a Changelog types only)
 check_changelog_security The Security section of the cut names its advisories and its reason
 check_notes The changelog section for this tag becomes the release notes
