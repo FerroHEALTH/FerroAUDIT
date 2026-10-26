@@ -11,6 +11,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-10-26
+
+### Changed
+
+- `ihe-atna` and `ehds-logging` require `ferrohealth-smart` 0.7.4 and
+  `ferrohealth-secret` 0.2.0 as caret requirements, so a patch of either
+  reaches a product through its lockfile without a FerroAUDIT release first.
+  The products keep pinning `ihe-atna` and `ehds-logging` exactly.
+
 ## [0.2.12] - 2026-10-26
 
 `ihe-atna` renders its masks through `ferrohealth-secret`, the family's one
@@ -391,7 +400,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.12...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.13...HEAD
+[0.2.13]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.9...v0.2.10
