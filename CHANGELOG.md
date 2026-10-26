@@ -11,6 +11,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-10-26
+
+The `smart` feature follows `ferrohealth-smart` to 0.7.1, which fixes
+GHSA-vphj-3f8c-5hpx. Products pin `=0.2.11`; nothing they call changes.
+
+### Security
+
+- The `smart` feature takes `ferrohealth-smart` 0.7.1 in place of 0.7.0:
+  every earlier release can render a configured URL's credentials in full
+  (CWE-532, GHSA-vphj-3f8c-5hpx). A product that takes `ihe-atna` with
+  `smart` can now take the patched `ferrohealth-smart`.
+
 ## [0.2.10] - 2026-10-25
 
 The `smart` feature follows `ferrohealth-smart` to 0.7.0, so a product moves
@@ -364,7 +376,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.11...HEAD
+[0.2.11]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.7...v0.2.8
