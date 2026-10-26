@@ -11,6 +11,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The BALP `AuditEvent` of an EHDS access record writes the labels of the
+  data categories once, as the `securityLabel` of the `ehds-categories`
+  entity, and no longer repeats them in `meta.security` (#108). RESTful ATNA
+  Rev. 3.6 Table 3.81.4.2.2.1-1 maps `entity.securityLabel` to the DICOM
+  `ParticipantObjectSensitivity` and maps no `meta`, BALP puts the labels of
+  the data on its entity (`IHE.BasicAudit.Read`, `entity:data.securityLabel`),
+  and that entity is the record of the categories accessed (Regulation (EU)
+  2025/327 Annex II 3.2(c)). An unclassified access carried all six
+  categories in both places; the record is about 155 bytes smaller after
+  compression. `meta.security` keeps the origins' labels. A store that
+  limits access by category reads the entity's `securityLabel`.
+  `label::Labels::origins` returns the origins' labels each once.
+
 ## [0.2.13] - 2026-10-26
 
 ### Changed

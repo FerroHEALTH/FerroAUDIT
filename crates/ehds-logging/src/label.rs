@@ -316,6 +316,17 @@ impl Labels {
             .map_or(&[], |(_, labels)| labels.as_slice())
     }
 
+    /// The labels of every origin, each once, in the order the record names
+    /// the origins.
+    #[must_use]
+    pub fn origins(&self) -> Vec<Label> {
+        let mut all = Vec::new();
+        for (_, labels) in &self.origins {
+            extend(&mut all, labels.iter().cloned());
+        }
+        all
+    }
+
     /// Every label of the record, each once: the categories' first, then
     /// each origin's in the order the record names the origins.
     #[must_use]
