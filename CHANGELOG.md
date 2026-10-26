@@ -11,6 +11,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The BALP `AuditEvent` of an EHDS access record writes each origin's
+  security labels once, as the `securityLabel` of its `origin` entity, and
+  no longer repeats them in `meta.security` (#111), on the ground #108 used
+  for the categories: RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps
+  `entity.securityLabel` to the DICOM `ParticipantObjectSensitivity` and maps
+  no `meta`. The record now writes no `meta.security`. A store that filtered
+  on the FHIR `_security` search parameter, which reads `meta.security`,
+  finds no label there and reads the entities' `securityLabel` instead.
+
 ## [0.2.14] - 2026-10-26
 
 ### Changed
