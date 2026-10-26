@@ -11,12 +11,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-10-26
+
+`ihe-atna` renders its masks through `ferrohealth-secret`, the family's one
+mask, and the `smart` feature follows `ferrohealth-smart` to 0.7.3, which
+renders through the same mask. Products pin `=0.2.12`; nothing they call
+changes.
+
 ### Changed
 
 - `redact::REDACTED` and `redact::RedactedUrl` render through
   `ferrohealth-secret`, the family's one mask, so every product shows a
   secret and a masked URL the same way. The rendering is unchanged (`***`,
   `scheme://***@host/path?***`), and both items keep their place and form.
+- The `smart` feature takes `ferrohealth-smart` 0.7.3 in place of 0.7.1.
 
 ## [0.2.11] - 2026-10-26
 
@@ -383,7 +391,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.11...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.12...HEAD
+[0.2.12]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.8...v0.2.9
