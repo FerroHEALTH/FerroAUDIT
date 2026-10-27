@@ -399,6 +399,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: The guard reads files larger than a pipe buffer
+        run: bash scripts/checks/crate-version-guard.sh --self-test
       - name: The version, the lock and the changelog agree
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
