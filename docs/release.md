@@ -23,7 +23,9 @@ On the branch `release/vX.Y.Z`:
    it. The date is the day of the cut: the release notes count the support
    period from it. Read the section as the release notes, and reread the
    reason of a Security section (§ Security entries).
-4. **The gates pass.** The crate-version guard checks that the version, the
+4. **Move the install lines.** The `cargo add <crate>@=X.Y.Z` lines of
+   `README.md` name the new version.
+5. **The gates pass.** The crate-version guard checks that the version, the
    lock and the changelog section agree.
 
 ## Security entries
@@ -79,6 +81,7 @@ tracker, and the pinned `cargo-semver-checks` installed
 | The `[workspace.package]` version of `Cargo.toml` names the tag's version | `plan.sh` |
 | Every section of the changelog holds Keep a Changelog types, each once | `scripts/checks/changelog-structure.sh` |
 | The section being cut opens its `### Security` with the reason when it sits beside other changes, and every Security entry names a GHSA id or an existing `security/vex/` path | `scripts/checks/changelog-security.sh --section X.Y.Z` |
+| Every install line of either crate in `README.md` and the crate READMEs pins the tag's version, and `README.md` carries one for each crate | `plan.sh` |
 | The changelog section becomes the notes, with the support period appended: the month five years after the heading's date (Regulation (EU) 2024/2847 Art 13(19)) | `plan.sh notes` |
 
 `scripts/release/plan.sh prev-tag vX.Y.Z` prints the previous release by
