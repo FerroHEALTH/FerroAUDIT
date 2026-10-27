@@ -24,7 +24,8 @@
 #   plan.sh support-end <YYYY-MM-DD>
 #       Prints the month the support period of a release of that date ends.
 #   plan.sh --self-test
-#       Proves prev-tag's ordering and support-end's arithmetic offline.
+#       Proves prev-tag's ordering, support-end's arithmetic and the reading
+#       of a README install line offline.
 #
 # The milestone check reads the tracker through gh (GH_TOKEN in CI, the
 # logged-in gh locally). Exit 2 on a usage error.
@@ -173,6 +174,49 @@ check_changelog_security() {
   bash scripts/checks/changelog-security.sh --section "$VERSION"
 }
 
+# readme_pins CRATE: reads a README on stdin and prints the version of every
+# install line that pins CRATE exactly, one per line: a manifest line
+# (`<crate> = "=X.Y.Z"` or `<crate> = { version = "=X.Y.Z", ... }`) or a
+# `cargo add <crate>@=X.Y.Z` command.
+readme_pins() {
+  awk -v crate="$1" '
+    index($0, crate " = ") == 1 && match($0, /"=[^"]*"/) { print substr($0, RSTART + 2, RLENGTH - 3); next }
+    index($0, "cargo add " crate "@=") == 1 {
+      v = substr($0, length("cargo add " crate "@=") + 1)
+      sub(/[[:space:]].*/, "", v)
+      print v
+    }
+  '
+}
+
+# Both crates release at the workspace version: the repository README carries
+# an install line for each, and every install line of either crate, there or
+# in a crate README, pins the version being released. A pre-release keeps the
+# lines of the release before it.
+check_readme_pin() {
+  local crate file pins stale failed=0
+  if [[ "$VERSION" == *-* ]]; then
+    echo "a pre-release moves no install line"
+    return 0
+  fi
+  for crate in ihe-atna ehds-logging; do
+    if [[ -z "$(readme_pins "$crate" <README.md)" ]]; then
+      echo "::error::README.md has no install line pinning $crate as 'cargo add $crate@=$VERSION'." >&2
+      failed=1
+    fi
+    for file in README.md crates/*/README.md; do
+      [[ -f "$file" ]] || continue
+      pins="$(readme_pins "$crate" <"$file")"
+      stale="$(grep -vxF "$VERSION" <<<"$pins" || true)"
+      if [[ -n "$pins" && -n "$stale" ]]; then
+        echo "::error::$file pins $crate at $(paste -sd, - <<<"$stale"); the release is $VERSION." >&2
+        failed=1
+      fi
+    done
+  done
+  [[ "$failed" -eq 0 ]] && echo "OK: the install lines of both crates pin $VERSION"
+}
+
 check_notes() {
   notes "$TAG" "$NOTES"
   echo "Release notes for $VERSION ($(wc -l <"$NOTES" | tr -d ' ') lines):"
@@ -196,6 +240,7 @@ check_version The tag matches the workspace version
 check_semver The public API breaks nothing the version does not allow (cargo-semver-checks)
 check_changelog_structure Changelog structure (no duplicate subsections, Keep a Changelog types only)
 check_changelog_security The Security section of the cut names its advisories and its reason
+check_readme_pin The install lines of both crates pin the version being released
 check_notes The changelog section for this tag becomes the release notes
 check_notes_content The release notes carry the support period
 EOF
@@ -264,6 +309,16 @@ self_test() {
   expect "an empty date" "$(support_end "" || echo "$refused")" "$refused"
   expect "a month out of range" "$(support_end 2026-13-01 || echo "$refused")" "$refused"
   expect "a day out of range" "$(support_end 2026-04-31 || echo "$refused")" "$refused"
+  got="$(printf '%s\n' '```toml' '[dependencies]' 'ihe-atna = "=0.3.1"' '```' | readme_pins ihe-atna)"
+  expect "a plain install line" "$got" "0.3.1"
+  got="$(printf '%s\n' 'ihe-atna = { version = "=0.3.1", features = ["balp"] }' | readme_pins ihe-atna)"
+  expect "an install line with features" "$got" "0.3.1"
+  got="$(printf '%s\n' 'cargo add ehds-logging@=0.3.1 --features balp' | readme_pins ehds-logging)"
+  expect "a cargo add line" "$got" "0.3.1"
+  got="$(printf '%s\n' 'cargo add ihe-atna@=0.3.0 --features balp' 'cargo add ehds-logging@=0.3.1' | readme_pins ehds-logging)"
+  expect "another crate's line is not this crate's" "$got" "0.3.1"
+  got="$(printf '%s\n' 'Pin ihe-atna = "=9.9.9" in prose.' 'ihe-atna = "0.3"' 'cargo add ihe-atna' | readme_pins ihe-atna)"
+  expect "prose and an inexact requirement are no install line" "$got" ""
   if [[ "$fails" -gt 0 ]]; then
     echo "plan.sh self-test FAILED ($fails case(s))" >&2
     exit 1
