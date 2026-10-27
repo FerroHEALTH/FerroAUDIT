@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `ihe-atna` requires `ferrohealth-smart` 0.8 (caret `0.8.2`) in place of
+  0.7.4, so the `smart` feature's `atna::bearer::Bearer` takes a
+  `TokenSource` of the 0.8 line; `ehds-logging` follows through `ihe-atna`.
+  A product that hands its token source to the FHIR Feed moves to
+  `ferrohealth-smart` 0.8 with this release (#120).
+
 ## [0.3.0] - 2026-10-27
 
 ### Added
