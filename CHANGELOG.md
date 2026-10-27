@@ -11,6 +11,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-27
+
+`ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.8 line.
+Products pin `=0.3.1`; a product that hands its token source to the FHIR
+Feed moves to `ferrohealth-smart` 0.8 with it.
+
 ### Changed
 
 - `ihe-atna` requires `ferrohealth-smart` 0.8 (caret `0.8.2`) in place of
@@ -468,7 +474,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.15...v0.3.0
 [0.2.15]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.13...v0.2.14
