@@ -12,7 +12,43 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-base="${1:?usage: crate-version-guard.sh <base-ref> [head-ref]}"
+# NOTE: a reader that stops at its first match would end a `git show` pipe early, and
+# under pipefail the writer's SIGPIPE fails the guard; each file is read whole first.
+if [[ "${1:-}" == "--self-test" ]]; then
+  guard="$(pwd)/scripts/checks/crate-version-guard.sh"
+  scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
+  mkdir -p "$scratch/scripts/checks"
+  cp "$guard" "$scratch/scripts/checks/"
+  cd "$scratch"
+  git init -q -b main
+  git -c user.email=t@example.org -c user.name=t commit -q --allow-empty -m base
+  printf '[workspace.package]\nversion = "0.9.0"\n' > Cargo.toml
+  {
+    printf '[[package]]\nname = "ihe-atna"\nversion = "0.9.0"\n'
+    for i in $(seq 1 4000); do printf '\n[[package]]\nname = "filler-%s"\nversion = "1.0.0"\n' "$i"; done
+  } > Cargo.lock
+  {
+    printf '# Changelog\n\n## [0.9.0] - 2026-10-27\n'
+    for i in $(seq 1 4000); do printf -- '- An entry long enough to fill the pipe buffer, number %s.\n' "$i"; done
+  } > CHANGELOG.md
+  git add -A
+  git -c user.email=t@example.org -c user.name=t commit -q -m "release 0.9.0"
+  for run in 1 2 3 4 5; do
+    bash scripts/checks/crate-version-guard.sh main~1 HEAD > /dev/null ||
+      { echo "crate-version-guard self-test: run $run refused files larger than a pipe buffer" >&2; exit 1; }
+  done
+  printf '# Changelog\n\n## [0.8.0] - 2026-10-01\n' > CHANGELOG.md
+  git -c user.email=t@example.org -c user.name=t commit -q -am "drop the section"
+  if bash scripts/checks/crate-version-guard.sh main~1 HEAD > /dev/null 2>&1; then
+    echo "crate-version-guard self-test: a missing changelog section passed" >&2
+    exit 1
+  fi
+  echo "crate-version-guard self-test: OK"
+  exit 0
+fi
+
+base="${1:?usage: crate-version-guard.sh <base-ref> [head-ref] | --self-test}"
 head="${2:-HEAD}"
 
 # The `version` key of `[workspace.package]` in a Cargo.toml read on stdin.
@@ -27,10 +63,15 @@ locked_version() {
        p && /^version = /{gsub(/version = "|"/, ""); print; exit}'
 }
 
-want="$(git show "$head:Cargo.toml" | workspace_version)"
+manifest="$(git show "$head:Cargo.toml")"
 # The base has no manifest before the workspace's first change.
-was="$(git show "$base:Cargo.toml" 2> /dev/null | workspace_version || true)"
-locked="$(git show "$head:Cargo.lock" | locked_version)"
+base_manifest="$(git show "$base:Cargo.toml" 2> /dev/null || true)"
+lock="$(git show "$head:Cargo.lock")"
+changelog="$(git show "$head:CHANGELOG.md")"
+
+want="$(workspace_version <<< "$manifest")"
+was="$(workspace_version <<< "$base_manifest")"
+locked="$(locked_version <<< "$lock")"
 
 failed=0
 if [[ -z "$want" ]]; then
@@ -51,7 +92,7 @@ if [[ "$locked" != "$want" ]]; then
   failed=1
 fi
 
-if ! git show "$head:CHANGELOG.md" | grep -qF "## [$want]"; then
+if ! grep -qF "## [$want]" <<< "$changelog"; then
   echo "crate-version-guard: CHANGELOG.md has no section for $want" >&2
   failed=1
 fi
