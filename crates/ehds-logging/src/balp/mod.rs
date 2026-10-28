@@ -27,6 +27,14 @@
 //! extension coded `low`, `substantial` or `high` (Regulation (EU) No
 //! 910/2014 Art 8(2)); and who acts, `person` or `client`, as its `role`.
 //!
+//! The data a read, create, update or delete accessed is `entity:data`,
+//! named by `Request::resource` as the recording system declares its ids
+//! ([`ObjectIds`]): `what.reference` for a literal reference to a resource
+//! it serves, and `what.identifier` for any other id, such as an openEHR
+//! version uid, since FHIR R4 names an object no FHIR server makes available
+//! by `Reference.identifier` (references.html §2.3.0.2, §2.3.0.3). BALP
+//! 1.1.4 requires `entity:data.what` and admits either.
+//!
 //! The policies the access was authorised under, such as a data permit
 //! (Regulation (EU) 2025/327 Art 68), are `agent:user` `policy` entries
 //! after the token's `jti`: FHIR R4 defines `AuditEvent.agent.policy` as
@@ -190,7 +198,7 @@ use ihe_atna::balp::{
     APPLICATION, AuditRecorder, CREATE, CUSTODIAN, Coded, DELETE, DESTINATION_ROLE,
     DOMAIN_RESOURCE, Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress,
     OTHER, Peer, READ, REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT,
-    SecurityLabel, UPDATE, What,
+    SecurityLabel, UPDATE, What, is_literal_reference,
 };
 use ihe_atna::user::{Code, OnBehalfOf, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -228,6 +236,34 @@ pub const POPULATION_DESCRIPTION: &str = "Population access: a query over many \
 pub struct BalpSink {
     recorder: Arc<dyn AuditRecorder>,
     endpoint: NetworkAddress,
+    ids: ObjectIds,
+}
+
+/// What the ids a recording system passes as `Request::resource` are, which
+/// decides how `entity:data` names the data a read, create, update or delete
+/// accessed.
+///
+/// FHIR R4 `Reference.reference` holds a location a FHIR server resolves, a
+/// relative `[type]/[id]` or an absolute URL, and `Reference.identifier`
+/// names an object no FHIR server makes available (references.html
+/// §2.3.0.2, §2.3.0.3). The record writes no other value as a reference, so
+/// an id that is no literal reference is an identifier whatever is declared.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ObjectIds {
+    /// The ids are literal references to the FHIR resources the recording
+    /// system serves, written as `what.reference`. An id that is no literal
+    /// reference ([`ihe_atna::balp::is_literal_reference`]) is written as
+    /// `what.identifier` with no `system`.
+    #[default]
+    References,
+    /// The ids are identifiers the recording system issues in the namespace
+    /// `system`, written as `what.identifier` whatever their form.
+    Identifiers {
+        /// `what.identifier.system`: the namespace, an absolute URI (FHIR R4
+        /// `Identifier.system`), or `None` when the system names none.
+        system: Option<Url>,
+    },
 }
 
 impl std::fmt::Debug for BalpSink {
@@ -243,7 +279,19 @@ impl BalpSink {
     /// the network address of the recording system's agent.
     #[must_use]
     pub fn new(recorder: Arc<dyn AuditRecorder>, endpoint: NetworkAddress) -> Self {
-        Self { recorder, endpoint }
+        Self {
+            recorder,
+            endpoint,
+            ids: ObjectIds::default(),
+        }
+    }
+
+    /// The sink whose records name the data a read, create, update or delete
+    /// accessed as `ids` declares the recording system's ids; a sink built
+    /// by [`new`](Self::new) takes them as [`ObjectIds::References`].
+    #[must_use]
+    pub fn with_object_ids(self, ids: ObjectIds) -> Self {
+        Self { ids, ..self }
     }
 }
 
@@ -251,7 +299,7 @@ impl BalpSink {
 impl AccessSink for BalpSink {
     async fn store(&self, record: AccessRecord) -> Result<(), SinkError> {
         self.recorder
-            .record(exchange(&record, &self.endpoint))
+            .record(exchange_with(&record, &self.endpoint, &self.ids))
             .await
             .map_err(|error| SinkError(Box::new(error)))
     }
@@ -266,6 +314,7 @@ impl AccessSink for BalpSink {
             place,
             recorder: Arc::clone(&self.recorder),
             endpoint: self.endpoint.clone(),
+            ids: self.ids.clone(),
         }))
     }
 }
@@ -276,6 +325,7 @@ struct BalpReservation {
     place: Option<Box<dyn Reserved>>,
     recorder: Arc<dyn AuditRecorder>,
     endpoint: NetworkAddress,
+    ids: ObjectIds,
 }
 
 impl std::fmt::Debug for BalpReservation {
@@ -289,7 +339,7 @@ impl std::fmt::Debug for BalpReservation {
 #[async_trait::async_trait]
 impl Reservation for BalpReservation {
     async fn store(self: Box<Self>, record: AccessRecord) -> Result<(), SinkError> {
-        let exchange = exchange(&record, &self.endpoint);
+        let exchange = exchange_with(&record, &self.endpoint, &self.ids);
         match self.place {
             Some(place) => place.record(exchange).await,
             None => self.recorder.record(exchange).await,
@@ -299,9 +349,21 @@ impl Reservation for BalpReservation {
 }
 
 /// The BALP exchange `record` is written as, the recording system named by
-/// `endpoint`, the address its requests arrive at.
+/// `endpoint`, the address its requests arrive at, with its ids taken as
+/// [`ObjectIds::References`].
 #[must_use]
 pub fn exchange(record: &AccessRecord, endpoint: &NetworkAddress) -> Exchange {
+    exchange_with(record, endpoint, &ObjectIds::default())
+}
+
+/// The BALP exchange `record` is written as, the recording system named by
+/// `endpoint`, the address its requests arrive at, whose ids `ids` declares.
+#[must_use]
+pub fn exchange_with(
+    record: &AccessRecord,
+    endpoint: &NetworkAddress,
+    ids: &ObjectIds,
+) -> Exchange {
     let accessor = &record.accessor;
     // NOTE: no specification governs the acting codes: our own design; BALP 1.1.4 names no element
     // for who acts, and §3:5.7.5.4 writes the IUA subject_role at agent[user].role beside it.
@@ -363,7 +425,7 @@ pub fn exchange(record: &AccessRecord, endpoint: &NetworkAddress) -> Exchange {
             endpoint: endpoint.clone(),
         },
         on_behalf: OnBehalfOf::User(user),
-        entities: entities(record),
+        entities: entities(record, ids),
         // NOTE: RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps `entity.securityLabel`
         // and no `meta`, so every label rides on its entity alone (#108, #111).
         security: Vec::new(),
@@ -463,7 +525,7 @@ fn kind(record: &AccessRecord) -> EventKind {
 
 /// The entities of `record`: the request id, the query or the resource,
 /// the patient, each `ehr_id`, the categories, and each origin.
-fn entities(record: &AccessRecord) -> Vec<Entity> {
+fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
     let request = &record.request;
     let correlation = request
         .correlation
@@ -498,13 +560,7 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
         )),
         Action::Read | Action::Create | Action::Update | Action::Delete => {
             entities.push(Entity::Described(Described {
-                what: Some(What::Reference {
-                    reference: request
-                        .resource
-                        .clone()
-                        .unwrap_or_else(|| request.operation.clone()),
-                    resource_type: None,
-                }),
+                what: Some(data(request.resource.as_deref(), &request.operation, ids)),
                 kind: SYSTEM_OBJECT,
                 role: Some(DOMAIN_RESOURCE),
                 name: Some(request.operation.clone()),
@@ -551,6 +607,34 @@ fn entities(record: &AccessRecord) -> Vec<Entity> {
     entities.extend(record.inserted.map(inserted::entity));
     entities.extend(record.transformations.iter().map(transformation::entity));
     entities
+}
+
+/// The `what` of `entity:data`: `resource` as `ids` declares it, or, for a
+/// request that addressed none, the operation as an identifier no namespace
+/// issues.
+fn data(resource: Option<&str>, operation: &str, ids: &ObjectIds) -> What {
+    // NOTE: BALP 1.1.4 IHE.BasicAudit.Read requires entity:data.what (1..1), so a request that
+    // addressed no resource names its operation, which no FHIR server resolves (R4 §2.3.0.3).
+    let Some(resource) = resource else {
+        return What::Identifier {
+            system: None,
+            value: operation.to_owned(),
+        };
+    };
+    match ids {
+        ObjectIds::References if is_literal_reference(resource) => What::Reference {
+            reference: resource.to_owned(),
+            resource_type: None,
+        },
+        ObjectIds::References => What::Identifier {
+            system: None,
+            value: resource.to_owned(),
+        },
+        ObjectIds::Identifiers { system } => What::Identifier {
+            system: system.as_ref().map(|system| system.as_str().to_owned()),
+            value: resource.to_owned(),
+        },
+    }
 }
 
 /// The `detail` entries of how long a record is kept: its years, for a

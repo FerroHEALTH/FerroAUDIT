@@ -35,6 +35,8 @@ use super::support::{LAB_REPORT, map};
 #[cfg(test)]
 mod content;
 #[cfg(test)]
+mod data;
+#[cfg(test)]
 mod emergency;
 #[cfg(test)]
 mod inserted;
