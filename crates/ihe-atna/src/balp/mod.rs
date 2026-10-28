@@ -39,6 +39,7 @@ mod write;
 
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::primitives;
+use fhir_types::r4::schema::SCHEMAS;
 use jiff::Timestamp;
 use secrecy::{SecretSlice, SecretString};
 use url::Url;
@@ -576,6 +577,10 @@ pub struct Described {
 #[non_exhaustive]
 pub enum What {
     /// `what.reference`, with `what.type` when the type is known.
+    ///
+    /// The reference is a literal one, which [`is_literal_reference`] holds
+    /// to the FHIR R4 form; an object no FHIR server makes available is an
+    /// [`Identifier`](Self::Identifier).
     Reference {
         /// `what.reference`.
         reference: String,
@@ -589,6 +594,53 @@ pub enum What {
         /// `what.identifier.value`.
         value: String,
     },
+}
+
+/// Whether `reference` has the form FHIR R4 gives a literal reference
+/// (`Reference.reference`, references.html §2.3.0.2).
+///
+/// That is a relative URL `[type]/[id]`, with `/_history/[vid]` when it
+/// names a version, whose type is an R4 resource type and whose id and
+/// version are each an R4 `id` (1 to 64 of `A-Z`, `a-z`, `0-9`, `-` and
+/// `.`), or an absolute `http` or `https` URL.
+///
+/// An id that is neither, such as an openEHR version uid, is no location a
+/// FHIR server resolves, and FHIR R4 names such an object by
+/// `Reference.identifier` (references.html §2.3.0.3): [`What::Identifier`].
+/// A local reference to a contained resource (`#id`) is no literal reference
+/// here, since an `AuditEvent` entity contains none (invariant `ref-1`).
+#[must_use]
+pub fn is_literal_reference(reference: &str) -> bool {
+    match Url::parse(reference) {
+        Ok(url) => matches!(url.scheme(), "http" | "https") && url.has_host(),
+        Err(_) => is_relative_reference(reference),
+    }
+}
+
+/// Whether `reference` is `[type]/[id]` or `[type]/[id]/_history/[vid]` of an
+/// R4 resource type (FHIR R4 references.html §2.3.0.2).
+fn is_relative_reference(reference: &str) -> bool {
+    let mut segments = reference.split('/');
+    let (Some(resource_type), Some(id)) = (segments.next(), segments.next()) else {
+        return false;
+    };
+    if !SCHEMAS.is_resource(resource_type) || !is_id(id) {
+        return false;
+    }
+    match (segments.next(), segments.next(), segments.next()) {
+        (None, _, _) => true,
+        (Some("_history"), Some(version), None) => is_id(version),
+        _ => false,
+    }
+}
+
+/// Whether `value` is a FHIR R4 `id`: 1 to 64 of `A-Z`, `a-z`, `0-9`, `-`
+/// and `.` (FHIR R4 datatypes.html#id).
+fn is_id(value: &str) -> bool {
+    (1..=64).contains(&value.len())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'.')
 }
 
 /// A security label: the `Coding` a record or one of its entities is

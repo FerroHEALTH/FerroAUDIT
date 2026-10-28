@@ -636,7 +636,11 @@ pub struct Request {
     /// ITS-REST operation ids: when it is named, the record writes the
     /// operation as a `subtype` in it.
     pub operation_system: Option<String>,
-    /// The resource the request addressed, when it addressed one.
+    /// The resource the request addressed, when it addressed one: a FHIR
+    /// literal reference (`[type]/[id]`) to a resource the recording system
+    /// serves, or an id it issues, such as an openEHR version uid, which the
+    /// BALP record names by an identifier (`balp::ObjectIds`, feature
+    /// `balp`).
     pub resource: Option<String>,
     /// The query text, for a query.
     pub query: Option<SecretString>,

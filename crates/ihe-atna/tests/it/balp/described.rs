@@ -12,6 +12,7 @@
 use ihe_atna::balp::{
     DESTINATION_ROLE, Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress,
     OTHER, Outcome, Peer, READ, REQUEST_ID, REST, SOURCE_ROLE, SecurityLabel, What,
+    is_literal_reference,
 };
 use ihe_atna::user::{Code, OnBehalfOf, User};
 use secrecy::ExposeSecret as _;
@@ -309,4 +310,37 @@ fn meta_is_written_for_labels_alone_and_left_out_with_neither() {
     let record = written(&exchange);
     assert!(record.pointer("/meta/profile").is_none(), "{record}");
     assert_eq!(record["meta"]["security"].as_array().map(Vec::len), Some(2));
+}
+
+#[test]
+fn a_literal_reference_is_held_to_the_r4_form() {
+    for literal in [
+        "Patient/p-1",
+        "Composition/c.1-a",
+        "Composition/c-1/_history/2",
+        "https://cdr.example.org/fhir/Composition/c-1",
+        "http://cdr.example.org/documents/1",
+    ] {
+        assert!(is_literal_reference(literal), "{literal}");
+    }
+    for opaque in [
+        "01a18433-b15c-7695-bd26-eeca892cfa02::ferroehr.local::1",
+        "abc-def::ferroehr.local::1",
+        "ehr/7d44b88c-4199-4bad-97dc-d78268e01398/composition/c-1",
+        "NoSuchType/1",
+        "Resource/1",
+        "Patient/",
+        "Patient/a/b",
+        "Patient/1/_history/",
+        "Patient/a_b",
+        "#contained",
+        "urn:uuid:7d44b88c-4199-4bad-97dc-d78268e01398",
+        "",
+    ] {
+        assert!(!is_literal_reference(opaque), "{opaque}");
+    }
+    assert!(
+        !is_literal_reference(&format!("Patient/{}", "a".repeat(65))),
+        "an id holds at most 64 characters"
+    );
 }

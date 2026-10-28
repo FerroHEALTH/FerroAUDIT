@@ -11,6 +11,33 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ehds_logging::balp::ObjectIds`, `BalpSink::with_object_ids` and
+  `balp::exchange_with`, through which a recording system declares what
+  the ids it passes as `Request::resource` are: literal references to the
+  FHIR resources it serves (`ObjectIds::References`, the default), or
+  identifiers it issues in a namespace it names
+  (`ObjectIds::Identifiers { system }`) (#127).
+- `ihe_atna::balp::is_literal_reference`, which holds a value to the form
+  FHIR R4 gives a literal reference: `[type]/[id]` of an R4 resource type,
+  with an optional `/_history/[vid]`, or an absolute `http` or `https` URL
+  (references.html §2.3.0.2) (#127).
+
+### Fixed
+
+- The BALP record of a read, create, update or delete names its data
+  (`AuditEvent.entity[data].what`) by `what.identifier` when the id is no
+  FHIR literal reference, such as the openEHR version uid FerroEHR passes,
+  in place of a `what.reference` holding that id, which an independent
+  Audit Record Repository refuses (HAPI FHIR answers `400`, `HAPI-0505`).
+  A literal reference stays `what.reference`; under
+  `ObjectIds::Identifiers` every id is `what.identifier` with the declared
+  `system`, which the ITI-81 `entity.identifier` search matches. A request
+  that addressed no resource names its operation by `what.identifier` in
+  place of `what.reference` (FHIR R4 references.html §2.3.0.3; BALP 1.1.4
+  `entity:data.what` admits either) (#127).
+
 ## [0.3.1] - 2026-10-27
 
 `ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.8 line.
