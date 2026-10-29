@@ -79,8 +79,8 @@ through FerroAUDIT, and each keeps its own audit store.
 Add the crates to a Rust project:
 
 ```sh
-cargo add ihe-atna@=0.3.1 --features balp
-cargo add ehds-logging@=0.3.1 --features balp
+cargo add ihe-atna@=0.3.2 --features balp
+cargo add ehds-logging@=0.3.2 --features balp
 ```
 
 Pin the versions exactly. The crate documentation on

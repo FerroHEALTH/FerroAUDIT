@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-29
+
+`ehds-logging`'s BALP record names the data of a read, create, update or
+delete by `what.identifier` when its id is no FHIR literal reference, so an
+independent Audit Record Repository accepts it. Products pin `=0.3.2`; a
+product whose object ids are no FHIR resources, such as FerroEHR's openEHR
+version uids, declares their namespace with `ObjectIds::Identifiers`.
+
 ### Added
 
 - `ehds_logging::balp::ObjectIds`, `BalpSink::with_object_ids` and
