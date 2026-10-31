@@ -27,8 +27,6 @@
   only signed commits through pull requests and the merge queue
 - [Auto-merge](pr-auto-merge.md): arm `gh pr merge <n> --auto` the moment a
   pull request opens; no `--squash`, no `--delete-branch`
-- [PR licence box](pr-licence-box.md): tick the contribution-licence box in
-  every pull request body; the owner's standing consent
 - [Release tag](release-tag.md): the tag is signed on the merge commit and the
   crates-io environment waits for the owner's approval
 - [Release closes milestone](release-closes-milestone.md): release.yml refuses
