@@ -7,10 +7,6 @@
 
 Closes #NNN
 
-## Licensing of contributions
-
-- [ ] I accept the terms in [CONTRIBUTING.md § Licensing of contributions](../CONTRIBUTING.md#licensing-of-contributions): I have the right to submit this work, I license it under the project licence of the version it lands in, and I grant the Licensor the relicensing right stated there.
-
 ## Checklist
 
 - [ ] Every conformance decision cites the specification (IHE ITI-20 and the RESTful ATNA supplement, BALP, DICOM PS3.15 Annex A.5, RFC 5424 and RFC 5425, FHIR R4), never memory and never another implementation.

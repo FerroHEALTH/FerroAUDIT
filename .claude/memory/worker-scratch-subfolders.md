@@ -28,4 +28,4 @@ collision waiting for the next worker.
 - After setting a PR body, re-read it
   (`gh pr view <n> --json body,closingIssuesReferences`) and confirm the
   `Closes #N` lines name exactly your issues.
-- Related: [[worker-wait-loops]], [[pr-licence-box]].
+- Related: [[worker-wait-loops]].
