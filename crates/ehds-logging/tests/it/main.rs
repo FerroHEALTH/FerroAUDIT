@@ -28,6 +28,8 @@ mod map;
 mod property;
 #[cfg(test)]
 mod retention;
+#[cfg(test)]
+mod withheld;
 
 #[cfg(test)]
 mod support {

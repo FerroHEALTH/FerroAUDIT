@@ -37,6 +37,10 @@ what classifies it.
   holds the record can limit who reads it.
 - `sink`: where records go, and the error a sink returns when it cannot
   store one.
+- `withheld`: the holds a product keeps on resources whose access by the
+  person it delays under Art 3(3), and the person's own access trail (Art 9)
+  read without the records about a held resource until the hold is released
+  or expires; professional and supervisory reads see every record.
 - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`
   through the audit types of `ihe-atna`, and a sink over an `ihe-atna` audit
   recorder, such as one that spools records for an ATNA Audit Record

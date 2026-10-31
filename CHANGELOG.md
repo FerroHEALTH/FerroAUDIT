@@ -11,6 +11,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ehds_logging::withheld`: the person's own access trail under a hold of
+  Regulation (EU) 2025/327 Art 3(3). The product that delays a person's
+  access to a resource sets the hold with `Holds::hold` (withheld from the
+  person until a time) and lifts it with `Holds::release`; the person-facing
+  read (`Holds::shows` or `Holds::trail` with `Reader::Person`) leaves out
+  every access record that names the resource until the hold is released or
+  expires, then shows it unchanged with its original time (Art 9). A hold on
+  an openEHR versioned object covers each of its versions. Professional and
+  supervisory reads are unchanged (#130).
+
 ## [0.3.2] - 2026-10-29
 
 `ehds-logging`'s BALP record names the data of a read, create, update or
