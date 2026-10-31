@@ -335,6 +335,24 @@ natural person, the categories of the data, when, and where it came from
 - `sink`: where records go; `balp` (feature `balp`): the record written as a
   BALP `AuditEvent` through `ihe-atna`'s `balp` feature, and the sink over an
   `ihe-atna` `AuditRecorder`.
+- `withheld`: the person's own access trail under a hold. Article 3(3) lets
+  a Member State delay a person's access to their data until a health
+  professional can explain it, and Article 9 gives the person the record of
+  every access, naming which data were accessed (Article 9(2)(c)), which
+  would tell them a held result exists. The product that holds a resource
+  sets the hold (`Holds::hold`, a "withheld from the person until" time) and
+  lifts it (`Holds::release`, the release event); the person-facing read
+  (`Holds::shows`, `Holds::trail` with `Reader::Person`) leaves out every
+  record that names the resource, by its request, a version a write left or
+  a version the access reached, until the hold is released or expires, and
+  then shows it unchanged with its original time. A hold on an openEHR
+  versioned object covers each `OBJECT_VERSION_ID` under it. A record whose
+  versions the map's evidence limit cut waits until no hold of the register
+  is in force. Professional and supervisory reads are unchanged. No record is
+  altered or stored here: the product keeps its holds and its records and
+  builds the register for one person's read. No specification governs how
+  the hold reaches the trail: our own design, by the owner's ruling of
+  2026-10-31.
 
 The crate depends on no interoperability component and on nothing of the
 system that builds the records, so the logging component stays independent

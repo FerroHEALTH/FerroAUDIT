@@ -29,6 +29,9 @@
 //!   applied, which rides on its access record (eHealth Network General
 //!   Guidelines Release 3.1 Art 6(3));
 //! - [`sink`]: where records go, and why one could not be stored;
+//! - [`withheld`]: the holds a product keeps on resources it delays the
+//!   person's access to (Art 3(3)), and the person's own access trail (Art 9)
+//!   read without the records about a held resource until the hold ends;
 //! - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`
 //!   through `ihe-atna`, and the sink over an `ihe-atna` audit recorder.
 //!
@@ -73,3 +76,4 @@ pub mod record;
 pub mod retention;
 pub mod sink;
 pub mod transformation;
+pub mod withheld;
