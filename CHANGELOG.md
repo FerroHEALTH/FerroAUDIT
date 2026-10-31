@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-31
+
+`ehds-logging` keeps access records about a resource held from the person
+under Regulation (EU) 2025/327 Art 3(3) out of the person's own access trail
+(Art 9) until the hold is released or expires. Products pin `=0.3.3`; a
+product that delays the person's access builds a `withheld::Holds` register
+for the person's read.
+
 ### Added
 
 - `ehds_logging::withheld`: the person's own access trail under a hold of
