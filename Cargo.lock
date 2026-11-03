@@ -1284,9 +1284,9 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "openehr-base"
-version = "0.0.93"
+version = "0.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67dd9a06d50450570938b20ca1802c2d7c0173257c6eba9dee3aa6cb583e9505"
+checksum = "14071a834b98361d9bb10fe23e86d6d147607a6fb4544fc3751465f6834d8b3a"
 dependencies = [
  "serde",
  "serde_json",
