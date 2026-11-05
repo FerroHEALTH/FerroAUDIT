@@ -69,16 +69,34 @@ the oracle, pinned in `docs/VERSIONS.md` and held to their provenance by
   `category`, `map`, `classify`, `retention`, `label`, `emergency`,
   `transformation`, `sink`, `balp` behind its feature, and `atna`, the DICOM
   rendering, behind its own), `tests/it/`.
-- `docs/`: `architecture.md`, `VERSIONS.md`, `specs/` (the vendored ITI-20
-  page and RESTful ATNA supplement, the BALP package and pages, the EHDS
-  Regulation with the acts and guidelines `ehds-logging` cites, the HL7
-  Europe and MyHealth@EU packages the categories are held to, the IETF
-  syslog and audit RFCs, the openEHR BASE Base Types specification, and the
-  pin of DICOM PS3.15, which is read from the git-ignored `.vendor-cache/`
-  and never committed, each with a `PROVENANCE.md`).
+- `docs/`: `architecture.md`, `VERSIONS.md` and `specs/`, the vendored
+  corpora, each with a `PROVENANCE.md` that records its licence
+  (`.claude/rules/vendored-inputs.md`):
+  - `ihe-atna`, the ITI-20 page and the RESTful ATNA supplement (IHE
+    General Introduction §9); `ihe-balp` and `ihe-balp-pages`, the BALP
+    package and pages (CC BY 4.0);
+  - `eu-ehds`, Regulation (EU) 2025/327 with Implementing Regulations (EU)
+    2026/2083 and 2026/2099, the eHealth Network guidelines and the reuse
+    Decision; `eu-gdpr`, the GDPR and its corrigendum (both reusable under
+    Commission Decision 2011/833/EU); `nl-law`, the Wabvpz and the UAVG
+    (Auteurswet Art. 11);
+  - `eu-hl7-health-data-api`, `eu-hl7-imaging`, `eu-hl7-hdr` and
+    `ehdsi-mvc`, the HL7 Europe and MyHealth@EU packages the categories are
+    held to (CC0-1.0);
+  - `ietf-syslog`, the syslog and audit RFCs, and `ietf-oauth`, RFC 8693
+    (IETF Trust Legal Provisions);
+  - `ehdsi-specifications`, the eHDSI Audit Trail Profile, SAML Profile,
+    Section I Security Policies, NCPeH and OpenNCP specifications the owner
+    supplies (reuse authorised with the source acknowledged);
+  - `openehr-base`, the openEHR BASE Base Types specification (CC BY-SA
+    3.0);
+  - `dicom-ps3-15`, the pin alone: NEMA grants no licence to redistribute,
+    so the page is read from the git-ignored `.vendor-cache/` and never
+    committed.
 - `scripts/`: `vendor/` (the corpus fetchers), `checks/` (the committed
   guards), `release/` (the crate publish and the milestone check), `gh/`
-  (the tracker helpers).
+  (the tracker helpers; `project.sh` only reports that FerroAUDIT has no
+  roadmap board).
 - `.github/`: CI with a single required `conclusion` job, the vendored
   specification guard, CodeQL, SonarQube Cloud (advisory), Scorecard,
   Dependabot, the release lane with crates.io Trusted Publishing (`release.yml`, `release-crate.yml`,
@@ -129,8 +147,10 @@ upstream terms, recorded beside them.
 
 - Rules: `writing-style`, `rust-style`, `reliability`, `comments`, `testing`,
   `spec-adherence`, `vendored-inputs`, `ci-cd`, `ai-code-review`,
-  `crates-publishing`, `issue-workflow`, `issue-relationships`,
-  `project-board`.
+  `crates-publishing`, `issue-workflow`, `issue-relationships`, and
+  `project-board`, which records that FerroAUDIT has no roadmap board: the
+  tracker and its milestones are the whole plan, and no step moves an issue
+  on a board.
 - Agents: `implementer`, `spec-researcher`. Skills: `next-task`,
   `phase-done`, `phase-status`.
 - Memory: `.claude/memory/MEMORY.md` is the index; every learning is a

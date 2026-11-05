@@ -21,10 +21,10 @@ version `docs/VERSIONS.md` pins, and the design of record,
    patterns, their slices and fixed codings, and the token-to-agent mapping
    of §3:5.7.5.4.
 4. **For `ehds-logging`, Regulation (EU) 2025/327** (`docs/specs/eu-ehds/`,
-   with Implementing Regulation (EU) 2026/2099, the eHealth Network Patient
-   Summary and General Guidelines and the reuse Decision), and the HL7 Europe
-   and MyHealth@EU packages the Article 14(1) categories are held to
-   (`docs/specs/eu-hl7-*/`, `docs/specs/ehdsi-mvc/`).
+   with Implementing Regulations (EU) 2026/2083 and 2026/2099, the eHealth
+   Network Patient Summary and General Guidelines and the reuse Decision),
+   and the HL7 Europe and MyHealth@EU packages the Article 14(1) categories
+   are held to (`docs/specs/eu-hl7-*/`, `docs/specs/ehdsi-mvc/`).
 5. **The texts they cite**: RFC 3881, RFC 5424, RFC 5425, RFC 5426 and RFC
    6750 (`docs/specs/ietf-syslog/`), the openEHR BASE Base Types
    specification (`docs/specs/openehr-base/`), DICOM PS3.15 Annex A.5,

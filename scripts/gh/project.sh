@@ -6,9 +6,10 @@
 # The FerroHEALTH products each keep a public GitHub Project (v2) board; this
 # library repository keeps none, and this helper never creates one. The
 # tracker is the issue list, milestones are the release spine, and the
-# milestone page is the public view (.claude/rules/project-board.md). The
-# helper stays so the shared skills and habits that call it get a clear
-# answer instead of a GraphQL failure.
+# milestone page is the public view (.claude/rules/project-board.md). No
+# step of the issue loop calls it; it stays so the products' shared habit of
+# `project.sh status <n> in-progress` gets a clear answer instead of a
+# GraphQL failure.
 #
 # Policy: no specification governs it: our own design.
 #
@@ -28,6 +29,6 @@ usage() {
 case "${1:-}" in
   '' | -h | --help) usage ;;
   *)
-    echo "gh-project: FerroAUDIT has no roadmap board; nothing to do (.claude/rules/project-board.md)" >&2
+    echo "gh-project: FerroAUDIT has no roadmap board, so '$1' moved nothing; no step of the issue loop needs it (.claude/rules/project-board.md)" >&2
     ;;
 esac
