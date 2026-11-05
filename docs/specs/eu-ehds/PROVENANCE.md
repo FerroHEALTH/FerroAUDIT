@@ -8,25 +8,27 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `437682c4109f855d475ed052b80a4540b8d6f805da05f5b4130107445a76e1e8`
-- Fetched: 2026-10-20, with the User-Agent `ferroaudit-vendor (scripts/vendor)`
-- Artefacts: 5 committed, 0 cache only, 0 needing
+  the pins): `c08ca50d2fb427e2cc4e5b10130ae83ec24181dff529075f1d22d4e997cbf4f6`
+- Fetched: 2026-11-05, with the User-Agent `ferroaudit-vendor (scripts/vendor)`
+- Artefacts: 6 committed, 0 cache only, 0 needing
   manual retrieval
-- Files in this directory: 5 besides this one, each verbatim as the
+- Files in this directory: 6 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `e31444d208f701270a84cae37c637c048498b1efc5a2ff9e3bfb524aa5d7acc5`
+  `PROVENANCE.md` excluded): `64fec790cf984836a4bc665ef775fabe58b3f447c4beed44318e5b81b0da0fb1`
 - Read by: the citations and the tests of crates/ehds-logging
 
 Regulation (EU) 2025/327 on the European Health Data Space, Commission
+Implementing Regulation (EU) 2026/2083 on MyHealth@EU, Commission
 Implementing Regulation (EU) 2026/2099 on the cross-border identification
 and authentication mechanism, the eHealth Network guidelines on the Patient
 Summary and the General Guidelines they defer to, and Commission Decision
 2011/833/EU of 12 December 2011 on the reuse of Commission documents, which
-governs the reuse of all of them. The Regulation, the implementing act and
-the Decision are official EU legal acts published in the Official Journal;
-the Commission legal notice (https://commission.europa.eu/legal-notice_en)
-licenses the guidelines under CC BY 4.0.
+governs the reuse of all of them and of the GDPR in docs/specs/eu-gdpr/.
+The Regulation, the implementing acts and the Decision are official EU
+legal acts published in the Official Journal; the Commission legal notice
+(https://commission.europa.eu/legal-notice_en) licenses the guidelines
+under CC BY 4.0.
 
 ## Artefacts
 
@@ -37,6 +39,14 @@ licenses the guidelines under CC BY 4.0.
 - sha256: `bf331ac48264118fb0461f793123a2726da88195a11d4bccb2075fd6326909da`
 - Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
 - Note: Pinned at the Publications Office (Cellar) manifestation, the XHTML EUR-Lex serves at https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:L_202500327. The EUR-Lex copy adds a monitoring script tag with per-request ids, so its sha256 differs on every fetch.
+
+### `impl-reg-eu-2026-2083-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/5a79d49d-b554-11f1-81de-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ L, 2026/2083, 21.9.2026 (CELEX 32026R2083), English
+- sha256: `51340e65db3e85bc892d723a630663172ce89001f376dea0b870d74ab2231c58`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission Implementing Regulation (EU) 2026/2083 of 18 September 2026 on MyHealth@EU, adopted under Article 23(4) and (8) of Regulation (EU) 2025/327; applies from 26 March 2027 (its Article 19). Pinned at the Cellar manifestation the CELEX resource resolves to.
 
 ### `impl-reg-eu-2026-2099-en.xhtml` (committed)
 

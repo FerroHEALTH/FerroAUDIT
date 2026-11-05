@@ -13,8 +13,9 @@
 #   2. the BALP package  the PROVENANCE.md names the pinned version and
 #                        tarball sha256, and the tree still hashes to the
 #                        digest it records.
-#   3. the pinned corpora  the BALP pages, the EHDS acts, the four packages
-#                        the categories are read against, the IETF RFCs, the
+#   3. the pinned corpora  the BALP pages, the EHDS acts, the GDPR, the Dutch
+#                        acts, the four packages the categories are read
+#                        against, the IETF syslog and OAuth RFCs, the
 #                        eHDSI specifications and DICOM PS3.15: each PROVENANCE.md names its row's
 #                        pin-set digest, and each tree still hashes to the
 #                        digest it records.
@@ -144,11 +145,14 @@ pinned_at() {
 
 pinned_at docs/specs/ihe-balp-pages "IHE BALP narrative pages"
 pinned_at docs/specs/eu-ehds "EU EHDS Regulation"
+pinned_at docs/specs/eu-gdpr "EU GDPR"
+pinned_at docs/specs/nl-law "Dutch acts"
 pinned_at docs/specs/eu-hl7-health-data-api "HL7 Europe EU Health Data API"
 pinned_at docs/specs/eu-hl7-imaging "HL7 Europe Imaging Report"
 pinned_at docs/specs/eu-hl7-hdr "HL7 Europe Hospital Discharge Report"
 pinned_at docs/specs/ehdsi-mvc "MyHealth@EU Master Value Sets Catalogue"
 pinned_at docs/specs/ietf-syslog "IETF syslog and audit RFCs"
+pinned_at docs/specs/ietf-oauth "IETF OAuth RFCs"
 pinned_at docs/specs/ehdsi-specifications "eHDSI specifications"
 pinned_at docs/specs/dicom-ps3-15 "DICOM PS3.15"
 

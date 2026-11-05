@@ -7,8 +7,10 @@
 # into docs/specs/eu-ehds/: Regulation (EU) 2025/327 on the European Health
 # Data Space (the access record of Annex II 3.2 to 3.4, the categories of
 # Article 14(1), the retention of Article 9(2)), Commission Implementing
-# Regulation (EU) 2026/2099 on the cross-border identification and
-# authentication mechanism, which the crate cites for the assurance level,
+# Regulation (EU) 2026/2083 on MyHealth@EU, which the crate cites for the
+# binding of the national contact points (its Article 4(1)), Commission
+# Implementing Regulation (EU) 2026/2099 on the cross-border identification
+# and authentication mechanism, which the crate cites for the assurance level,
 # the eHealth Network Patient Summary and General Guidelines, which it cites
 # for the transformation record and the emergency access, and Commission
 # Decision 2011/833/EU on the reuse of Commission documents, the reuse terms
@@ -17,7 +19,7 @@
 # Each artefact is pinned by URL and sha256 (scripts/vendor/lib/pinned.sh),
 # and the corpus row of docs/VERSIONS.md carries its pin-set digest. The pins
 # are carried from FerroHEALTH/FerroFED's scripts/vendor/eu.sh, whose eu-ehds
-# corpus holds these five documents beside others this crate does not cite.
+# corpus holds these six documents beside others this crate does not cite.
 #
 # Usage:
 #   scripts/vendor/eu-ehds.sh
@@ -45,6 +47,10 @@ pin commit reg-eu-2025-327-en.xhtml "OJ L, 2025/327, 5.3.2025 (CELEX 32025R0327)
   'An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents' \
   'Pinned at the Publications Office (Cellar) manifestation, the XHTML EUR-Lex serves at https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:L_202500327. The EUR-Lex copy adds a monitoring script tag with per-request ids, so its sha256 differs on every fetch.'
 eu_act='An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents'
+pin commit impl-reg-eu-2026-2083-en.xhtml "OJ L, 2026/2083, 21.9.2026 (CELEX 32026R2083), English" \
+  https://publications.europa.eu/resource/cellar/5a79d49d-b554-11f1-81de-01aa75ed71a1.0006.03/DOC_1 \
+  51340e65db3e85bc892d723a630663172ce89001f376dea0b870d74ab2231c58 "$eu_act" \
+  'Commission Implementing Regulation (EU) 2026/2083 of 18 September 2026 on MyHealth@EU, adopted under Article 23(4) and (8) of Regulation (EU) 2025/327; applies from 26 March 2027 (its Article 19). Pinned at the Cellar manifestation the CELEX resource resolves to.'
 pin commit impl-reg-eu-2026-2099-en.xhtml "OJ L, 2026/2099, 22.9.2026 (CELEX 32026R2099), English" \
   https://publications.europa.eu/resource/cellar/dff777d4-b61d-11f1-81de-01aa75ed71a1.0006.03/DOC_1 \
   6389d047750ed8fca879d53ebeda22af444d1f1619ed3bf6f13560097aa887d0 "$eu_act" \
@@ -64,13 +70,15 @@ pin commit dec-eu-2011-833-en.xhtml "OJ L 330, 14.12.2011, p. 39 (CELEX 32011D08
 pinned_corpus eu-ehds "EU EHDS Regulation" \
   "the European Health Data Space Regulation and the acts ehds-logging cites" \
   "Regulation (EU) 2025/327 on the European Health Data Space, Commission
+Implementing Regulation (EU) 2026/2083 on MyHealth@EU, Commission
 Implementing Regulation (EU) 2026/2099 on the cross-border identification
 and authentication mechanism, the eHealth Network guidelines on the Patient
 Summary and the General Guidelines they defer to, and Commission Decision
 2011/833/EU of 12 December 2011 on the reuse of Commission documents, which
-governs the reuse of all of them. The Regulation, the implementing act and
-the Decision are official EU legal acts published in the Official Journal;
-the Commission legal notice (https://commission.europa.eu/legal-notice_en)
-licenses the guidelines under CC BY 4.0." "" "the citations and the tests of crates/ehds-logging"
+governs the reuse of all of them and of the GDPR in docs/specs/eu-gdpr/.
+The Regulation, the implementing acts and the Decision are official EU
+legal acts published in the Official Journal; the Commission legal notice
+(https://commission.europa.eu/legal-notice_en) licenses the guidelines
+under CC BY 4.0." "" "the citations and the tests of crates/ehds-logging"
 
 say "done"
