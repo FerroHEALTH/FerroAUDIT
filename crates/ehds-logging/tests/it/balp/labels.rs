@@ -60,10 +60,8 @@ fn each_label_is_also_on_the_entity_it_belongs_to() {
         panic!("one origin entity: {written}");
     };
     assert_eq!(codings(origin, "/securityLabel"), [node_a()]);
-    for unlabelled in ["ehr"] {
-        for entity in entity(&written, unlabelled) {
-            assert!(entity.get("securityLabel").is_none(), "{entity}");
-        }
+    for ehr in entity(&written, "ehr") {
+        assert!(ehr.get("securityLabel").is_none(), "{ehr}");
     }
 }
 

@@ -73,7 +73,8 @@ provenance_digest() {
 
 # The sha256 tokens of a pin cell, in the order the cell names them.
 hashes() {
-  awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t ~ /^[0-9a-f]{64}$/) print t } }' <<< "$1"
+  local cell="$1"
+  awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t ~ /^[0-9a-f]{64}$/) print t } }' <<< "$cell"
 }
 
 # tree_at DIR: the tree of DIR hashes to the digest its PROVENANCE.md records.
@@ -81,12 +82,12 @@ tree_at() {
   local dir="$1" want got
   want="$(provenance_digest "$dir/PROVENANCE.md" "Tree digest")"
   got="$(corpus_tree_digest "$dir")"
-  [ "$got" = "$want" ] || fail "$dir hashes to $got, its PROVENANCE.md records ${want:-nothing}"
+  [[ "$got" = "$want" ]] || fail "$dir hashes to $got, its PROVENANCE.md records ${want:-nothing}"
 }
 
 # ---- 1. ITI-20 and RESTful ATNA ---------------------------------------------
 atna="docs/specs/ihe-atna"
-if [ -f "$atna/PROVENANCE.md" ]; then
+if [[ -f "$atna/PROVENANCE.md" ]]; then
   page_pin="$(corpus_pin_cell "IHE ITI-20 Record Audit Event")"
   supplement_pin="$(corpus_pin_cell "IHE RESTful ATNA supplement")"
   for pair in \
@@ -95,12 +96,12 @@ if [ -f "$atna/PROVENANCE.md" ]; then
     "IHE_ITI_Suppl_RESTful-ATNA.pdf:$(hashes "$supplement_pin" | sed -n 1p)"; do
     file="${pair%%:*}"
     want="${pair#*:}"
-    if [ ! -f "$atna/$file" ]; then
+    if [[ ! -f "$atna/$file" ]]; then
       fail "$atna/$file is missing"
       continue
     fi
     got="$(corpus_sha256 "$atna/$file")"
-    [ "$got" = "$want" ] || fail "$atna/$file hashes to $got, docs/VERSIONS.md pins $want"
+    [[ "$got" = "$want" ]] || fail "$atna/$file hashes to $got, docs/VERSIONS.md pins $want"
     grep -F "| \`$file\` |" "$atna/PROVENANCE.md" | grep -qF "\`$want\`" ||
       fail "$atna/PROVENANCE.md does not record $file at $want"
   done
@@ -112,12 +113,12 @@ fi
 
 # ---- 2. the BALP package ----------------------------------------------------
 balp="docs/specs/ihe-balp"
-if [ -f "$balp/PROVENANCE.md" ]; then
+if [[ -f "$balp/PROVENANCE.md" ]]; then
   pin="$(corpus_pin_cell "IHE BALP FHIR package")"
   version="$(awk '{ for (i = 1; i < NF; i++) if ($i == "version") { v = $(i + 1); gsub(/[`,.;:]+$/, "", v); gsub(/`/, "", v); print v; exit } }' <<< "$pin")"
   sha="$(hashes "$pin" | sed -n 1p)"
   got_pin="$(provenance_line "$balp/PROVENANCE.md" Pin)"
-  [ "$got_pin" = "package ihe.iti.balp version $version, tarball sha256 $sha" ] ||
+  [[ "$got_pin" = "package ihe.iti.balp version $version, tarball sha256 $sha" ]] ||
     fail "$balp/PROVENANCE.md names '$got_pin', docs/VERSIONS.md pins version $version at $sha"
   tree_at "$balp"
   ok "the BALP package $version at its digest"
@@ -130,13 +131,13 @@ fi
 # ITEM row, and the tree still hashes to the digest it records.
 pinned_at() {
   local dir="$1" item="$2" want got
-  if [ ! -f "$dir/PROVENANCE.md" ]; then
+  if [[ ! -f "$dir/PROVENANCE.md" ]]; then
     fail "$dir/PROVENANCE.md is missing"
     return 0
   fi
   want="$(hashes "$(corpus_pin_cell "$item")" | sed -n 1p)"
   got="$(provenance_digest "$dir/PROVENANCE.md" "Pin-set digest")"
-  [ "$got" = "$want" ] || fail "$dir/PROVENANCE.md records pin-set digest ${got:-nothing}, docs/VERSIONS.md $want"
+  [[ "$got" = "$want" ]] || fail "$dir/PROVENANCE.md records pin-set digest ${got:-nothing}, docs/VERSIONS.md $want"
   tree_at "$dir"
   ok "$item at pin-set digest $want"
 }
@@ -152,7 +153,7 @@ pinned_at docs/specs/dicom-ps3-15 "DICOM PS3.15"
 
 # ---- 3b. openEHR BASE --------------------------------------------------------
 base="docs/specs/openehr-base"
-if [ -f "$base/PROVENANCE.md" ]; then
+if [[ -f "$base/PROVENANCE.md" ]]; then
   commit="$(corpus_pin_commit "$(corpus_pin_cell "openEHR BASE specification source")")"
   grep -qF "Pin: commit \`$commit\`" "$base/PROVENANCE.md" ||
     fail "$base/PROVENANCE.md does not name commit $commit, which docs/VERSIONS.md pins"
@@ -164,7 +165,7 @@ fi
 
 # ---- 4. the design ----------------------------------------------------------
 architecture="docs/architecture.md"
-if [ -f "$architecture" ]; then
+if [[ -f "$architecture" ]]; then
   matrix="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$(corpus_pin_cell "BALP")" | head -n1)"
   design="$(awk -F'|' '
     NF >= 3 {
@@ -172,7 +173,7 @@ if [ -f "$architecture" ]; then
       gsub(/`/, "", k); gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
       if (k == "BALP") { print v; exit }
     }' "$architecture" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
-  [ "$design" = "$matrix" ] ||
+  [[ "$design" = "$matrix" ]] ||
     fail "$architecture pins BALP '$design', docs/VERSIONS.md $matrix"
   ok "$architecture agrees on BALP $matrix"
 else
@@ -183,12 +184,12 @@ fi
 licence="$(awk '{ print $1; exit }' <<< "$(corpus_pin_cell "Project licence")")"
 while IFS= read -r path; do
   claimed="$(grep -m1 -oE 'SPDX-License-Identifier: [A-Za-z0-9.+-]+' "$path" | cut -d' ' -f2 || true)"
-  [ -z "$claimed" ] || [ "$claimed" = "$licence" ] ||
+  [[ -z "$claimed" ]] || [[ "$claimed" = "$licence" ]] ||
     fail "$path claims $claimed, the project licence is $licence"
 done < <(git ls-files -z | tr '\0' '\n' | grep -v '^docs/specs/' | grep -v '^LICENSE$')
 ok "every first-party SPDX header names $licence"
 
-if [ "$failures" -gt 0 ]; then
+if [[ "$failures" -gt 0 ]]; then
   printf 'versions: %d failure(s)\n' "$failures" >&2
   exit 1
 fi

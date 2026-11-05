@@ -179,7 +179,8 @@ check_changelog_security() {
 # (`<crate> = "=X.Y.Z"` or `<crate> = { version = "=X.Y.Z", ... }`) or a
 # `cargo add <crate>@=X.Y.Z` command.
 readme_pins() {
-  awk -v crate="$1" '
+  local crate="$1"
+  awk -v crate="$crate" '
     index($0, crate " = ") == 1 && match($0, /"=[^"]*"/) { print substr($0, RSTART + 2, RLENGTH - 3); next }
     index($0, "cargo add " crate "@=") == 1 {
       v = substr($0, length("cargo add " crate "@=") + 1)

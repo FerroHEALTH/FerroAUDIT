@@ -77,7 +77,8 @@ pin() {
 # The pin-set digest of the table $1: sha256 over its sorted
 # `mode  file  url  sha256` lines.
 pinned_digest() {
-  awk -F'\t' 'NF >= 5 { print $1 "  " $2 "  " $4 "  " $5 }' <<< "$1" |
+  local table="$1"
+  awk -F'\t' 'NF >= 5 { print $1 "  " $2 "  " $4 "  " $5 }' <<< "$table" |
     LC_ALL=C sort | shasum -a 256 | cut -d' ' -f1
 }
 
@@ -99,21 +100,21 @@ pinned_md() {
 pinned_corpus() {
   local dir="$1" item="$2" title="$3" about="$4" agent="${5:-}"
   local read_by='the tests of crates/ihe-atna'
-  [ -n "${6:-}" ] && read_by="$6"
+  [[ -n "${6:-}" ]] && read_by="$6"
   local pins="$pinned_table"
   local dest="docs/specs/$dir" cache="$pinned_cache_root/$dir"
   # shellcheck disable=SC2154 # corpus_ua is set by corpus.sh, sourced first
   local ua="$corpus_ua" cell want digest tmp
   local mode file version url sha licence note got bad=0
   pinned_table=""
-  [ "$agent" = "browser" ] && ua="$pinned_browser_ua"
-  [ -d "${pinned_scratch:-}" ] || die "pinned_begin was not called"
-  [ -n "$pins" ] || die "$dir: no artefact is pinned"
+  [[ "$agent" = "browser" ]] && ua="$pinned_browser_ua"
+  [[ -d "${pinned_scratch:-}" ]] || die "pinned_begin was not called"
+  [[ -n "$pins" ]] || die "$dir: no artefact is pinned"
 
   digest="$(pinned_digest "$pins")"
   # A re-pin reads the new digest for docs/VERSIONS.md here, with nothing
   # fetched and nothing written.
-  if [ "${PINNED_DIGESTS_ONLY:-}" = "1" ]; then
+  if [[ "${PINNED_DIGESTS_ONLY:-}" = "1" ]]; then
     printf '%s %s\n' "$dir" "$digest"
     return 0
   fi
@@ -121,8 +122,8 @@ pinned_corpus() {
   cell="$(corpus_pin_cell "$item")"
   want="$(grep -oE '[0-9a-f]{64}' <<< "$cell" | head -n1)"
   # shellcheck disable=SC2154 # corpus_matrix is set by corpus.sh, sourced first
-  [ -n "$want" ] || die "the '$item' row of $corpus_matrix names no pin-set digest"
-  [ "$digest" = "$want" ] \
+  [[ -n "$want" ]] || die "the '$item' row of $corpus_matrix names no pin-set digest"
+  [[ "$digest" = "$want" ]] \
     || die "$dir: the pins have pin-set digest $digest, $corpus_matrix records $want"
 
   tmp="$pinned_scratch/$dir"
@@ -137,14 +138,14 @@ pinned_corpus() {
     curl --proto '=https' --tlsv1.2 -fsSL --retry 2 -m 300 -A "$ua" -o "$tmp/$file" "$url" \
       || die "$dir: the download of $file from $url failed"
     got="$(corpus_sha256 "$tmp/$file")"
-    if [ "$got" != "$sha" ]; then
+    if [[ "$got" != "$sha" ]]; then
       # shellcheck disable=SC2154 # corpus_script is set by corpus.sh, sourced first
       printf '%s: %s: %s has sha256 %s, the pin records %s\n' \
         "$corpus_script" "$dir" "$file" "$got" "$sha" >&2
       bad=1
     fi
   done <<< "$pins"
-  [ "$bad" -eq 0 ] || die "$dir: an upstream hash moved; the tree is unchanged"
+  [[ "$bad" -eq 0 ]] || die "$dir: an upstream hash moved; the tree is unchanged"
 
   rm -rf "$dest" "$cache"
   mkdir -p "$dest"
@@ -170,7 +171,7 @@ pinned_provenance() {
   local n_commit=0 n_cache=0 n_manual=0 fetched files tree body=""
 
   while IFS=$'\t' read -r mode file version url sha licence note; do
-    [ -n "$mode" ] || continue
+    [[ -n "$mode" ]] || continue
     case "$mode" in
       commit)
         n_commit=$((n_commit + 1))
@@ -191,7 +192,7 @@ pinned_provenance() {
 
 - Source: <$url>
 - Version: $(pinned_md "$version")"
-    if [ "$mode" = "manual" ]; then
+    if [[ "$mode" = "manual" ]]; then
       body="$body
 - sha256: none, nothing is fetched"
     else
@@ -214,7 +215,7 @@ pinned_provenance() {
         ;;
       *) ;;
     esac
-    if [ "$note" != "-" ]; then
+    if [[ "$note" != "-" ]]; then
       body="$body
 - Note: $(pinned_md "$note")"
     fi

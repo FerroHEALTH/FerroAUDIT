@@ -39,8 +39,8 @@ name="ihe.iti.balp"
 pin="$(corpus_pin_cell "IHE BALP FHIR package")"
 version="$(awk '{ for (i = 1; i < NF; i++) if ($i == "version") { v = $(i + 1); gsub(/[`,.;:]+$/, "", v); gsub(/`/, "", v); print v; exit } }' <<< "$pin")"
 want="$(awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t ~ /^[0-9a-f]{64}$/) { print t; exit } } }' <<< "$pin")"
-[ -n "$version" ] || die "the pin names no package version"
-[ -n "$want" ] || die "the pin names no package sha256"
+[[ -n "$version" ]] || die "the pin names no package version"
+[[ -n "$want" ]] || die "the pin names no package sha256"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -49,21 +49,21 @@ url="https://packages.fhir.org/$name/$version"
 say "fetching $url"
 corpus_download "$url" "$tmp/package.tgz"
 got="$(corpus_sha256 "$tmp/package.tgz")"
-[ "$got" = "$want" ] || die "the $name $version tarball has sha256 $got, the pin records $want"
+[[ "$got" = "$want" ]] || die "the $name $version tarball has sha256 $got, the pin records $want"
 tar -xzf "$tmp/package.tgz" -C "$tmp"
 
 manifest_name="$(jq -r .name "$tmp/package/package.json")"
 manifest_version="$(jq -r .version "$tmp/package/package.json")"
 licence="$(jq -r .license "$tmp/package/package.json")"
 fhir="$(jq -r '.fhirVersions | join(", ")' "$tmp/package/package.json")"
-[ "$manifest_name" = "$name" ] || die "the package names itself $manifest_name, not $name"
-[ "$manifest_version" = "$version" ] || die "the package declares version $manifest_version, not $version"
-[ "$licence" = "CC-BY-4.0" ] || die "the package declares licence $licence, not CC-BY-4.0"
+[[ "$manifest_name" = "$name" ]] || die "the package names itself $manifest_name, not $name"
+[[ "$manifest_version" = "$version" ]] || die "the package declares version $manifest_version, not $version"
+[[ "$licence" = "CC-BY-4.0" ]] || die "the package declares licence $licence, not CC-BY-4.0"
 
 # The manifest is accounted for by its sha256 and left out; every other file
 # of the package is taken at its upstream path.
 dropped="$(corpus_drop_manifests "$tmp")"
-[ -n "$dropped" ] || die "the package carries no package.json"
+[[ -n "$dropped" ]] || die "the package carries no package.json"
 
 rm -rf "$dest"
 mkdir -p "$dest"
@@ -71,7 +71,7 @@ corpus_take "$tmp" "$dest" package
 
 # Each pattern an audit record names by canonical URL must be here.
 for pattern in Query PatientQuery Read PatientRead Create PatientCreate Update PatientUpdate Delete PatientDelete; do
-  [ -f "$dest/package/StructureDefinition-IHE.BasicAudit.$pattern.json" ] \
+  [[ -f "$dest/package/StructureDefinition-IHE.BasicAudit.$pattern.json" ]] \
     || die "the package has no IHE.BasicAudit.$pattern pattern"
 done
 

@@ -38,8 +38,8 @@ corpus_require() {
 # The Pin cell of the docs/VERSIONS.md row whose Item cell is $1, backticks
 # removed. The matrix is the single source of truth for every pin.
 corpus_pin_cell() {
-  local cell
-  cell="$(awk -F'|' -v item="$1" '
+  local item="$1" cell
+  cell="$(awk -F'|' -v item="$item" '
     NF >= 3 {
       k = $2; v = $3
       gsub(/`/, "", k); gsub(/`/, "", v)
@@ -48,50 +48,52 @@ corpus_pin_cell() {
       if (k == item) { print v; exit }
     }
   ' "$corpus_matrix")"
-  [ -n "$cell" ] || die "$corpus_matrix has no '$1' row"
+  [[ -n "$cell" ]] || die "$corpus_matrix has no '$item' row"
   printf '%s\n' "$cell"
 }
 
 # The owner/repo a pin cell names: its first token.
 corpus_pin_repo() {
-  local repo
-  repo="$(awk '{ print $1; exit }' <<< "$1")"
+  local pin="$1" repo
+  repo="$(awk '{ print $1; exit }' <<< "$pin")"
   case "$repo" in
     */*) printf '%s\n' "$repo" ;;
-    *) die "the pin '$1' does not open with an owner/repo" ;;
+    *) die "the pin '$pin' does not open with an owner/repo" ;;
   esac
 }
 
 # The commit a pin cell names: its first 40-hex token.
 corpus_pin_commit() {
-  local commit
-  commit="$(grep -oE '[0-9a-f]{40}' <<< "$1" | head -n1)"
-  [ -n "$commit" ] || die "the pin '$1' names no commit"
+  local pin="$1" commit
+  commit="$(grep -oE '[0-9a-f]{40}' <<< "$pin" | head -n1)"
+  [[ -n "$commit" ]] || die "the pin '$pin' names no commit"
   printf '%s\n' "$commit"
 }
 
 # The tag a pin cell names: the token after the word `tag`, without trailing
 # punctuation.
 corpus_pin_tag() {
-  local tag
+  local pin="$1" tag
   tag="$(awk '{
     for (i = 1; i < NF; i++) {
       if ($i == "tag") { t = $(i + 1); gsub(/[,.;:]+$/, "", t); print t; exit }
     }
-  }' <<< "$1")"
-  [ -n "$tag" ] || die "the pin '$1' names no tag"
+  }' <<< "$pin")"
+  [[ -n "$tag" ]] || die "the pin '$pin' names no tag"
   printf '%s\n' "$tag"
 }
 
 # Downloads the one file at URL $1 to $2, for a pin that names a single file
 # rather than a tree.
 corpus_download() {
-  curl --proto '=https' --tlsv1.2 -fsSL -A "$corpus_ua" -o "$2" "$1"
+  local url="$1" dest="$2"
+  curl --proto '=https' --tlsv1.2 -fsSL -A "$corpus_ua" -o "$dest" "$url"
 }
 
 corpus_api() {
+  local url="$1"
   curl --proto '=https' --tlsv1.2 -fsSL -A "$corpus_ua" \
-    -H 'Accept: application/vnd.github+json' "$1"
+    -H 'Accept: application/vnd.github+json' "$url"
 }
 
 # The commit a tag resolves to. A tag is mutable, so the resolved commit is what
@@ -102,7 +104,7 @@ corpus_resolve_tag() {
     || die "cannot resolve tag $tag of $repo"
   kind="$(jq -r '.object.type // empty' <<< "$ref")"
   sha="$(jq -r '.object.sha // empty' <<< "$ref")"
-  if [ "$kind" = "tag" ]; then
+  if [[ "$kind" = "tag" ]]; then
     url="$(jq -r '.object.url // empty' <<< "$ref")"
     sha="$(corpus_api "$url" | jq -r '.object.sha // empty')"
   fi
@@ -121,7 +123,7 @@ corpus_fetch() {
   mkdir -p "$into/tree"
   tar -xzf "$into/corpus.tar.gz" -C "$into/tree"
   root="$into/tree/${repo##*/}-$commit"
-  [ -d "$root" ] || die "the archive of $repo does not carry commit $commit"
+  [[ -d "$root" ]] || die "the archive of $repo does not carry commit $commit"
   printf '%s\n' "$root"
 }
 
@@ -131,22 +133,25 @@ corpus_take() {
   local src="$1" dest="$2" path
   shift 2
   for path in "$@"; do
-    [ -e "$src/$path" ] || die "the archive has no $path"
+    [[ -e "$src/$path" ]] || die "the archive has no $path"
     mkdir -p "$dest/$(dirname "$path")"
     cp -R "$src/$path" "$dest/$path"
   done
 }
 
-corpus_sha256() { shasum -a 256 "$1" | cut -d' ' -f1; }
+corpus_sha256() {
+  local file="$1"
+  shasum -a 256 "$file" | cut -d' ' -f1
+}
 
 # The git blob id of a file: the object name git records for those bytes
 # (<https://git-scm.com/book/en/v2/Git-Internals-Git-Objects>).
 corpus_blob_id() {
-  local size
-  size="$(wc -c < "$1" | tr -d '[:space:]')"
+  local file="$1" size
+  size="$(wc -c < "$file" | tr -d '[:space:]')"
   {
     printf 'blob %s\0' "$size"
-    cat "$1"
+    cat "$file"
   } | shasum -a 1 | cut -d' ' -f1
 }
 
@@ -155,21 +160,26 @@ corpus_blob_id() {
 # digest covers only upstream bytes. One shasum over the sorted list gives the
 # same listing as one shasum per file, without a process per file.
 corpus_tree_digest() {
+  local tree="$1"
   (
-    cd "$1" || exit 1
+    cd "$tree" || exit 1
     find . -type f ! -name PROVENANCE.md -print0 | LC_ALL=C sort -z |
       xargs -0 -r shasum -a 256 |
       shasum -a 256 | cut -d' ' -f1
   )
 }
 
-corpus_file_count() { find "$1" -type f ! -name PROVENANCE.md | wc -l | tr -d '[:space:]'; }
+corpus_file_count() {
+  local tree="$1"
+  find "$tree" -type f ! -name PROVENANCE.md | wc -l | tr -d '[:space:]'
+}
 
 corpus_fetched() { date -u +%Y-%m-%d; }
 
 # The token after the word $1 in the pin cell $2.
 corpus_pin_field() {
-  awk -v key="$1" '{ for (i = 1; i < NF; i++) if ($i == key) { print $(i + 1); exit } }' <<< "$2"
+  local key="$1" pin="$2"
+  awk -v key="$key" '{ for (i = 1; i < NF; i++) if ($i == key) { print $(i + 1); exit } }' <<< "$pin"
 }
 
 # Dependency manifests of an upstream's own build tooling. A vendored manifest
@@ -192,7 +202,7 @@ corpus_drop_manifests() {
   local tree="$1" name file
   local -a args=()
   for name in "${corpus_manifest_names[@]}"; do
-    [ "${#args[@]}" -eq 0 ] || args+=(-o)
+    [[ "${#args[@]}" -eq 0 ]] || args+=(-o)
     args+=(-name "$name")
   done
   while IFS= read -r file; do
@@ -204,17 +214,17 @@ corpus_drop_manifests() {
 
 # The URL a pin cell names: its first `https://` token.
 corpus_pin_url() {
-  local url
-  url="$(awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^https:\/\//) { t = $i; gsub(/[,;]+$/, "", t); print t; exit } }' <<< "$1")"
-  [ -n "$url" ] || die "the pin '$1' names no https URL"
+  local pin="$1" url
+  url="$(awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^https:\/\//) { t = $i; gsub(/[,;]+$/, "", t); print t; exit } }' <<< "$pin")"
+  [[ -n "$url" ]] || die "the pin '$pin' names no https URL"
   printf '%s\n' "$url"
 }
 
 # The sha256 a pin cell names: its first 64-hex token.
 corpus_pin_sha256() {
-  local sha
-  sha="$(grep -oE '[0-9a-f]{64}' <<< "$1" | head -n1)"
-  [ -n "$sha" ] || die "the pin '$1' names no sha256"
+  local pin="$1" sha
+  sha="$(grep -oE '[0-9a-f]{64}' <<< "$pin" | head -n1)"
+  [[ -n "$sha" ]] || die "the pin '$pin' names no sha256"
   printf '%s\n' "$sha"
 }
 
@@ -222,11 +232,11 @@ corpus_pin_sha256() {
 # $2, and fails when the bytes are not the pinned ones: a document published
 # at a fixed URL is immutable only as far as its hash says.
 corpus_fetch_pinned() {
-  local pin url want got
-  pin="$(corpus_pin_cell "$1")"
+  local item="$1" dest="$2" pin url want got
+  pin="$(corpus_pin_cell "$item")"
   url="$(corpus_pin_url "$pin")"
   want="$(corpus_pin_sha256 "$pin")"
-  corpus_download "$url" "$2" || die "download of $url failed"
-  got="$(corpus_sha256 "$2")"
-  [ "$got" = "$want" ] || die "$url has sha256 $got, the '$1' pin records $want"
+  corpus_download "$url" "$dest" || die "download of $url failed"
+  got="$(corpus_sha256 "$dest")"
+  [[ "$got" = "$want" ]] || die "$url has sha256 $got, the '$item' pin records $want"
 }
