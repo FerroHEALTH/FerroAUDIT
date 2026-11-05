@@ -22,8 +22,14 @@
 #   3b. openEHR BASE     the PROVENANCE.md names the pinned commit, and the
 #                        tree still hashes to the digest it records.
 #   4. the design        the pin table of docs/architecture.md names the
-#                        same BALP version as the matrix.
-#   5. the licence       no first-party file claims a licence other than
+#                        same BALP version as the matrix, a row for every
+#                        item of its specification table and for every
+#                        corpus it pins, and each act number, version,
+#                        package, RFC, commit, BWB id and consolidation date
+#                        of a corpus row in the row that names the corpus.
+#   5. the crate         the matrix names the [workspace.package] version of
+#                        Cargo.toml and its release tag.
+#   6. the licence       no first-party file claims a licence other than
 #                        BUSL-1.1 in its SPDX header; the vendored trees are
 #                        third-party material and are left out.
 #
@@ -181,11 +187,88 @@ if [[ -f "$architecture" ]]; then
   [[ "$design" = "$matrix" ]] ||
     fail "$architecture pins BALP '$design', docs/VERSIONS.md $matrix"
   ok "$architecture agrees on BALP $matrix"
+
+  # The rows of a markdown table under the heading HEADING of FILE, up to the
+  # next heading of the same level, as `key|row` lines with backticks
+  # removed and the key trimmed.
+  table_rows() {
+    awk -v heading="$2" '
+      index($0, heading) == 1 { inside = 1; next }
+      inside && /^## / { exit }
+      inside && /^\|/ && !/^\|[-| ]+\|$/ {
+        row = $0; gsub(/`/, "", row)
+        split(row, cell, "|"); k = cell[2]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+        if (k != "Item") print k "|" row
+      }' "$1"
+  }
+  design_rows="$(table_rows "$architecture" "## 2. Pinned versions")"
+  spec_rows="$(table_rows docs/VERSIONS.md "## Specifications")"
+  corpus_rows="$(table_rows docs/VERSIONS.md "## Corpora and machine-readable inputs")"
+
+  # Every item of the specification table is a row of the design's table.
+  while IFS='|' read -r item _; do
+    [[ -n "$item" ]] || continue
+    grep -qxF "$item" < <(cut -d'|' -f1 <<< "$design_rows") ||
+      fail "$architecture §2 has no '$item' row, which docs/VERSIONS.md pins"
+  done <<< "$spec_rows"
+
+  # The corpora the two tables name are the same.
+  corpus_dirs() { grep -oE 'docs/specs/[a-z0-9-]+/' | sort -u; }
+  matrix_dirs="$(corpus_dirs <<< "$corpus_rows")"
+  design_dirs="$(corpus_dirs <<< "$design_rows")"
+  while IFS= read -r dir; do
+    [[ -n "$dir" ]] && fail "$architecture §2 names no row for $dir, which docs/VERSIONS.md pins"
+  done < <(comm -23 <(printf '%s\n' "$matrix_dirs") <(printf '%s\n' "$design_dirs"))
+  while IFS= read -r dir; do
+    [[ -n "$dir" ]] && fail "$architecture §2 names $dir, which docs/VERSIONS.md pins no corpus row for"
+  done < <(comm -13 <(printf '%s\n' "$matrix_dirs") <(printf '%s\n' "$design_dirs"))
+
+  # Each fact a corpus row pins that the design can repeat word for word (an
+  # act number, a version, a package, an RFC, a commit, a BWB id or a
+  # consolidation date) is in a design row that names the same corpus.
+  # The cell is split into whole tokens first, since `\b` is not portable
+  # across grep implementations; a release date (4.5.2016) is no version.
+  pinned_facts() {
+    local tokens
+    grep -oE '[a-z0-9-]+(\.[a-z0-9-]+)+ (version )?[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+)?' <<< "$1" |
+      awk '{ print $1; print $NF }' || true
+    tokens="${1//RFC /RFC_}"
+    tokens="$(tr -c 'A-Za-z0-9./_-' '\n' <<< "$tokens" | sed 's/[.]*$//')"
+    grep -oE '^[0-9]{4}/[0-9]+' <<< "$tokens" || true
+    grep -xE 'RFC_[0-9]+' <<< "$tokens" | sed 's/_/ /' || true
+    grep -xE '[0-9a-f]{40}|BWBR[0-9]+|[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{4}[a-z]|[0-9]+\.[0-9]+\.[0-9]{1,3}(-[a-z]+)?' <<< "$tokens" || true
+  }
+  while IFS='|' read -r item row; do
+    [[ -n "$item" ]] || continue
+    design=""
+    while IFS= read -r dir; do
+      design+="$(grep -F "$dir" <<< "$design_rows" || true)"$'\n'
+    done < <(corpus_dirs <<< "$row")
+    while IFS= read -r fact; do
+      [[ -z "$fact" ]] || grep -qF -- "$fact" <<< "$design" ||
+        fail "$architecture §2 does not name '$fact', which the '$item' row of docs/VERSIONS.md pins"
+    done < <(pinned_facts "$row" | sort -u)
+  done <<< "$corpus_rows"
+  ok "$architecture §2 names every item, corpus and pinned fact of docs/VERSIONS.md"
 else
   fail "$architecture is missing"
 fi
 
-# ---- 5. the licence ---------------------------------------------------------
+# ---- 5. the crate -----------------------------------------------------------
+manifest="$(awk '
+  /^\[workspace\.package\]/ { inside = 1; next }
+  inside && /^\[/ { exit }
+  inside && $1 == "version" { v = $3; gsub(/"/, "", v); print v; exit }' Cargo.toml)"
+crate="$(awk '{ print $1; exit }' <<< "$(corpus_pin_cell "ihe-atna, ehds-logging")")"
+crate="${crate%,}"
+[[ -n "$manifest" ]] && [[ "$crate" = "$manifest" ]] ||
+  fail "docs/VERSIONS.md pins the crates at $crate, Cargo.toml [workspace.package] at ${manifest:-nothing}"
+grep -qF "the release tag v$manifest " <<< "$(corpus_pin_cell "ihe-atna, ehds-logging")" ||
+  fail "docs/VERSIONS.md does not name the release tag v$manifest"
+ok "the crates at $manifest, as Cargo.toml has them"
+
+# ---- 6. the licence ---------------------------------------------------------
 licence="$(awk '{ print $1; exit }' <<< "$(corpus_pin_cell "Project licence")")"
 while IFS= read -r path; do
   claimed="$(grep -m1 -oE 'SPDX-License-Identifier: [A-Za-z0-9.+-]+' "$path" | cut -d' ' -f2 || true)"

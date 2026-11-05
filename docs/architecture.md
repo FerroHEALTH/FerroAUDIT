@@ -65,20 +65,32 @@ store (owner decision 2026-10-25); no separate product builds it.
 
 ## 2. Pinned versions
 
-| Item | Pin | Ground |
-|---|---|---|
-| ITI-20 | ITI TF-2 §3.20, Revision 20.2 Final Text | the published Technical Framework at the time of the move |
-| RESTful ATNA | Rev. 3.6 Trial Implementation | the supplement that defines the ATX: FHIR Feed Option |
-| BALP | 1.1.4 | the version the PIXm, PDQm, mCSD and PMIR audit profiles build on |
-| FHIR | R4 (4.0.1) | BALP 1.1.4 declares FHIR 4.0.1 |
-| EHDS Regulation | Regulation (EU) 2025/327 as published, with Implementing Regulations (EU) 2026/2083 and 2026/2099 | the law `ehds-logging` implements, with the acts on MyHealth@EU (2026/2083) and on cross-border identification and authentication (2026/2099) it cites; no consolidated text exists |
-| Article 14(1) category codes | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the code system HL7 Europe publishes for the six priority categories |
-| DICOM PS3.15 | 2026c | the release current when the optional message elements and the code tables were added; pinned by sha256 and read locally, since NEMA grants no licence to redistribute it |
-| Syslog and audit RFCs | RFC 3881, 5424, 5425, 5426, 6750 | the RFCs ITI TF-2 §3.20.3 references, the RFC 3881 codes the IHE tables write, and the bearer token usage the Feed's credentials follow |
-| openEHR BASE | Release 1.1.0 | the release FerroFED vendors, whose identification package fixes the case rule and the `ARCHETYPE_ID` grammar |
+| Item | Pin | Corpus | Ground |
+|---|---|---|---|
+| IHE ITI-20 | ITI TF-2 §3.20, Revision 20.2 Final Text | `docs/specs/ihe-atna/` | the published Technical Framework at the time of the move |
+| RESTful ATNA | Rev. 3.6 Trial Implementation | `docs/specs/ihe-atna/` | the supplement that defines the ATX: FHIR Feed Option |
+| BALP | 1.1.4, package `ihe.iti.balp` | `docs/specs/ihe-balp/`, `docs/specs/ihe-balp-pages/` | the version the PIXm, PDQm, mCSD and PMIR audit profiles build on |
+| FHIR | R4 (4.0.1) | none: the `fhir-types` crate's `r4` module | BALP 1.1.4 declares FHIR 4.0.1 |
+| EHDS Regulation | Regulation (EU) 2025/327 as published, with Implementing Regulations (EU) 2026/2083 and 2026/2099, the eHealth Network Patient Summary and General Guidelines, and Commission Decision 2011/833/EU | `docs/specs/eu-ehds/` | the law `ehds-logging` implements, with the acts on MyHealth@EU (2026/2083) and on cross-border identification and authentication (2026/2099) it cites, and the Decision that gives their reuse terms; no consolidated text exists |
+| GDPR | Regulation (EU) 2016/679 with its English corrigendum of 2018 | `docs/specs/eu-gdpr/` | the legal ground and the record of processing the access record cites |
+| Dutch acts | the Wabvpz (BWBR0023864, consolidation of 2025-07-05) and the UAVG (BWBR0040940, consolidation of 2026-09-01) | `docs/specs/nl-law/` | the consent condition (Wabvpz Art. 15a) and the Dutch legal ground (UAVG Art. 30(3)(a)) of the access record, at the consolidations FerroEHR pins |
+| Article 14(1) category codes | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | `docs/specs/eu-hl7-health-data-api/` | the code system HL7 Europe publishes for the six priority categories |
+| HL7 Europe Imaging Report | `hl7.fhir.eu.imaging` 1.0.0-ballot | `docs/specs/eu-hl7-imaging/` | its Composition and DiagnosticReport profiles require the priority category code `Medical-Imaging`, which the tests hold the categories to |
+| HL7 Europe Hospital Discharge Report | `hl7.fhir.eu.hdr` 0.1.0-ballot | `docs/specs/eu-hl7-hdr/` | the discharge report guide, which carries no priority category code |
+| MyHealth@EU Master Value Sets Catalogue | `myhealth.eu.fhir.mvc-package` 9.1.0 | `docs/specs/ehdsi-mvc/` | its document type value sets code each MyHealth@EU service by LOINC, with no category code system |
+| eHDSI specifications | the Audit Trail Profile 10.1.0, the SAML Profile 10.0.0, Section I Security Policies 10.0.0, the NCPeH Architecture and Components Specifications 10.0.0 and the OpenNCP Implementation 10.0.0 | `docs/specs/ehdsi-specifications/` | the versions the owner supplied, the first three the ones FerroFED pins; they fix the eHDSI fields of a relayed access, their DICOM rendering and the Section I SR 5 rule |
+| DICOM PS3.15 | 2026c | `docs/specs/dicom-ps3-15/` | the release current when the optional message elements and the code tables were added; pinned by sha256 and read locally, since NEMA grants no licence to redistribute it |
+| Syslog and audit RFCs | RFC 3881, RFC 5424, RFC 5425, RFC 5426, RFC 6750 | `docs/specs/ietf-syslog/` | the RFCs ITI TF-2 §3.20.3 references, the RFC 3881 codes the IHE tables write, and the bearer token usage the Feed's credentials follow |
+| OAuth RFCs | RFC 8693 | `docs/specs/ietf-oauth/` | the token exchange whose nested actors (§4.1) the access record's actor chain records |
+| openEHR BASE | commit `707b8ac28cea1ccc4410f8e930665d473475350f`, BASE Release 1.3.0 (unreleased) | `docs/specs/openehr-base/` | the commit FerroEHR vendors, whose identification package fixes the case rule and the `ARCHETYPE_ID` grammar |
 
-The corpora carry the pins FerroFED vendored them at, re-fetched here by the
-same scripts, so the two trees hold the same bytes.
+Most corpora carry the pins FerroFED vendored them at, re-fetched here by
+the same scripts, so the two trees hold the same bytes; the GDPR, the Dutch
+acts and RFC 8693 are pinned here. `scripts/checks/versions.sh` holds this
+table to `docs/VERSIONS.md`: every item of its specification table is a row
+here, the corpora named on both sides are the same, and each act number,
+version, package, RFC, commit and BWB id a corpus row pins appears in the
+row here that names its corpus.
 
 ## 3. The `atna` feature
 

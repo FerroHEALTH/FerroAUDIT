@@ -24,9 +24,11 @@ On the branch `release/vX.Y.Z`:
    period from it. Read the section as the release notes, and reread the
    reason of a Security section (§ Security entries).
 4. **Move the install lines.** The `cargo add <crate>@=X.Y.Z` lines of
-   `README.md` name the new version.
+   `README.md` and the `ihe-atna`, `ehds-logging` row of `docs/VERSIONS.md`
+   name the new version.
 5. **The gates pass.** The crate-version guard checks that the version, the
-   lock and the changelog section agree.
+   lock and the changelog section agree, and `scripts/checks/versions.sh`
+   that the `docs/VERSIONS.md` row names the version.
 
 ## Security entries
 
