@@ -32,8 +32,10 @@ A corpus is pinned by version and checksum, never by a moving tag or a
 `scripts/checks/versions.sh` reads each vendored `PROVENANCE.md` back and
 hashes the vendored bytes again, failing when either disagrees with its row.
 The pins are the ones FerroHEALTH/FerroFED vendored these corpora at, so the
-two trees hold the same bytes; the `eu-ehds` corpus here holds five of the
-documents FerroFED's holds, so its pin-set digest is its own.
+two trees hold the same bytes; the `eu-ehds` corpus here holds six of the
+documents FerroFED's holds, so its pin-set digest is its own. The GDPR, the Dutch acts and
+the RFC 8693 corpus are pinned here; the Dutch consolidations are the dates
+FerroHEALTH/FerroEHR pins.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -41,12 +43,15 @@ documents FerroFED's holds, so its pin-set digest is its own.
 | IHE BALP narrative pages | the IG of package `ihe.iti.balp` 1.1.4 at `profiles.ihe.net/ITI/BALP/1.1.4/`, pin-set digest `f682913c6c5d5d2599c1dcb3c41a22373240b126a2051dab6b58ca8d56d1524d`, the Volume 1 (1:52) and Volume 3 (3:5.7) pages | `scripts/vendor/ihe-balp-pages.sh`, `docs/specs/ihe-balp-pages/PROVENANCE.md` |
 | IHE ITI-20 Record Audit Event | `profiles.ihe.net/ITI/TF/Volume2/ITI-20.html`, Revision 20.2, page sha256 `881c7d6423fdf5ecaf4f9f50f8d25be61c3ed8ef97c87eff9591bd7fdf51570d` and its figure `media/Figure_3.20.4-1.png` sha256 `7aba1a2437e3492202460e150a6dda85b8a1886035bd2aa8daa4c892a579b734` | `scripts/vendor/ihe-atna.sh`, `docs/specs/ihe-atna/PROVENANCE.md` |
 | IHE RESTful ATNA supplement | `IHE_ITI_Suppl_RESTful-ATNA.pdf` from `www.ihe.net`, Rev. 3.6, sha256 `d8451a4a0d951662b6a04b745084c33afff6196db5647f2cf79d9149dfa7265a` | `scripts/vendor/ihe-atna.sh`, `docs/specs/ihe-atna/PROVENANCE.md` |
-| EU EHDS Regulation | Regulation (EU) 2025/327, Implementing Regulation (EU) 2026/2099, the eHealth Network Patient Summary and General Guidelines and Commission Decision 2011/833/EU on the reuse of Commission documents, each at the Cellar manifestation and sha256 FerroFED's `eu-ehds` corpus pins, pin-set digest `437682c4109f855d475ed052b80a4540b8d6f805da05f5b4130107445a76e1e8` | `scripts/vendor/eu-ehds.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
+| EU EHDS Regulation | Regulation (EU) 2025/327, Implementing Regulations (EU) 2026/2083 and 2026/2099, the eHealth Network Patient Summary and General Guidelines and Commission Decision 2011/833/EU on the reuse of Commission documents, each at the Cellar manifestation and sha256 FerroFED's `eu-ehds` corpus pins, pin-set digest `c08ca50d2fb427e2cc4e5b10130ae83ec24181dff529075f1d22d4e997cbf4f6` | `scripts/vendor/eu-ehds.sh`, `docs/specs/eu-ehds/PROVENANCE.md` |
+| EU GDPR | Regulation (EU) 2016/679 (OJ L 119, 4.5.2016) and its English corrigendum (OJ L 127, 23.5.2018), each at the Cellar manifestation its CELEX resource resolves to, by its sha256, pin-set digest `a74e5fdfdf744ca35d169b5f63a6db95e515e2fbed1d0ece44a7f8203d513091` | `scripts/vendor/eu-gdpr.sh`, `docs/specs/eu-gdpr/PROVENANCE.md` |
+| Dutch acts | the Wabvpz (BWBR0023864, consolidation of 2025-07-05) and the UAVG (BWBR0040940, consolidation of 2026-09-01), the consolidations FerroHEALTH/FerroEHR pins, each as the BWB repository XML by its sha256, pin-set digest `48d2e92b2c0298b103ded5deb7edd098390d724be0304eb885647e912662cfaf` | `scripts/vendor/nl-law.sh`, `docs/specs/nl-law/PROVENANCE.md` |
 | HL7 Europe EU Health Data API | package `hl7.fhir.eu.health-data-api` 1.0.0-ballot, pin-set digest `253ebbce321fc294ae582c3c3abb67274ad53de6578c3eb3360e1566697691ac`, tarball sha256 `5204af60bf7f74f301a627e641a34683d392014f53d5df8ba3651c964e92977b`, whose `EEHRxFDocumentPriorityCategoryCS` codes the priority categories the access record writes | `scripts/vendor/ehds-categories.sh`, `docs/specs/eu-hl7-health-data-api/PROVENANCE.md`, `crates/ehds-logging/src/category.rs` |
 | HL7 Europe Imaging Report | package `hl7.fhir.eu.imaging` 1.0.0-ballot, pin-set digest `aad98731a1f2597d6a7defa2c7f6ab7297781b677398383346c5592f913c9f4b`, tarball sha256 `bb6012bd7a019ac82f5e939dd6e892e6db6b15fd2931dcf7cc445c1ad92c3d70` | `scripts/vendor/ehds-categories.sh`, `docs/specs/eu-hl7-imaging/PROVENANCE.md` |
 | HL7 Europe Hospital Discharge Report | package `hl7.fhir.eu.hdr` 0.1.0-ballot, pin-set digest `2bc6073aedf1a6e4630b3763c2058ed5bbec53c29bc2e74ef5a9c2a60f0af918`, tarball sha256 `458b8ba0edcf22d75d455d6149c9264d486bb8ec052251a90afd8654410482ee` | `scripts/vendor/ehds-categories.sh`, `docs/specs/eu-hl7-hdr/PROVENANCE.md` |
 | MyHealth@EU Master Value Sets Catalogue | package `myhealth.eu.fhir.mvc-package` 9.1.0, pin-set digest `06f68a58f7382db396f029b1c0a420fcac6cbf53d8a948df47594937b0886749`, tarball sha256 `3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1` | `scripts/vendor/ehds-categories.sh`, `docs/specs/ehdsi-mvc/PROVENANCE.md` |
-| IETF syslog and audit RFCs | RFC 3881, RFC 5424, RFC 5425, RFC 5426, RFC 6750 and RFC 8693 from `www.rfc-editor.org`, each by its sha256, pin-set digest `14d566dc469c8c7f59544dce977776fb5abed8bd81fc193826b01e79f5f810ee` | `scripts/vendor/ietf-syslog.sh`, `docs/specs/ietf-syslog/PROVENANCE.md` |
+| IETF syslog and audit RFCs | RFC 3881, RFC 5424, RFC 5425, RFC 5426 and RFC 6750 from `www.rfc-editor.org`, each by its sha256, pin-set digest `9de9544040398351d75871f4074a2bde41a21e6b14aafe798678addb2d500bab` | `scripts/vendor/ietf-syslog.sh`, `docs/specs/ietf-syslog/PROVENANCE.md` |
+| IETF OAuth RFCs | RFC 8693 from `www.rfc-editor.org`, by its sha256, pin-set digest `d7b69f5252d133ce0bf8282e0c519b73d9ceec97543822d0de1a099934fad728` | `scripts/vendor/ietf-oauth.sh`, `docs/specs/ietf-oauth/PROVENANCE.md` |
 | eHDSI specifications | the Audit Trail Profile 10.1.0, the SAML Profile 10.0.0, Section I Security Policies 10.0.0, the NCPeH Architecture and Components Specifications 10.0.0 and the OpenNCP Implementation 10.0.0, supplied by the owner from the eHDSI wiki behind EU Login, each by its sha256 (the first three the ones FerroHEALTH/FerroFED pins), pin-set digest `8512647981c6727915ac641ad23fc4a2e73e23eb9ec2b3c1ec8031f102528a5b` | `scripts/vendor/ehdsi-specifications.sh`, `docs/specs/ehdsi-specifications/PROVENANCE.md` |
 | DICOM PS3.15 | release 2026c, `part15.html` from `dicom.nema.org`, cache only (not redistributed), pin-set digest `9a9b6eb4218785a873402cc045eff8aa16c05aa89a6df5909628301dc7a69ac7` | `scripts/vendor/dicom-ps3-15.sh`, `docs/specs/dicom-ps3-15/PROVENANCE.md` |
 | openEHR BASE specification source | `openEHR/specifications-BASE` commit `707b8ac28cea1ccc4410f8e930665d473475350f`, BASE Release 1.3.0 (unreleased), the commit FerroHEALTH/FerroEHR vendors: the Base Types specification and the licence | `scripts/vendor/openehr-base.sh`, `docs/specs/openehr-base/PROVENANCE.md` |
@@ -68,7 +73,8 @@ Vendored material keeps its upstream terms, recorded beside each vendored tree
 in its `PROVENANCE.md`: CC BY 4.0 for the BALP package and pages, the IHE
 Technical Frameworks General Introduction §9 licence for the ITI-20 page and
 the RESTful ATNA supplement, CC0-1.0 for the HL7 Europe and MyHealth@EU
-packages, and Commission Decision 2011/833/EU for the EU acts.
+packages, Commission Decision 2011/833/EU for the EU acts, the IETF Trust
+Legal Provisions for the RFCs, and Auteurswet Art. 11 for the Dutch acts.
 
 ## The toolchain and the crate
 
