@@ -79,8 +79,8 @@ the oracle, pinned in `docs/VERSIONS.md` and held to their provenance by
   guards), `release/` (the crate publish and the milestone check), `gh/`
   (the tracker helpers).
 - `.github/`: CI with a single required `conclusion` job, the vendored
-  specification guard, CodeQL, Scorecard, Dependabot, the release lane with
-  crates.io Trusted Publishing (`release.yml`, `release-crate.yml`,
+  specification guard, CodeQL, SonarQube Cloud (advisory), Scorecard,
+  Dependabot, the release lane with crates.io Trusted Publishing (`release.yml`, `release-crate.yml`,
   `publish-crates.yml`).
 - `.claude/`: the working discipline (rules, agents, skills, hooks, memory).
 
@@ -127,8 +127,9 @@ upstream terms, recorded beside them.
 ## Working discipline (`.claude/`)
 
 - Rules: `writing-style`, `rust-style`, `reliability`, `comments`, `testing`,
-  `spec-adherence`, `vendored-inputs`, `ci-cd`, `crates-publishing`,
-  `issue-workflow`, `issue-relationships`, `project-board`.
+  `spec-adherence`, `vendored-inputs`, `ci-cd`, `ai-code-review`,
+  `crates-publishing`, `issue-workflow`, `issue-relationships`,
+  `project-board`.
 - Agents: `implementer`, `spec-researcher`. Skills: `next-task`,
   `phase-done`, `phase-status`.
 - Memory: `.claude/memory/MEMORY.md` is the index; every learning is a
