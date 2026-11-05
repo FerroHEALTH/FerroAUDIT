@@ -1,0 +1,90 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# SonarQube Cloud analysis: the machine opinion beside CodeQL. Findings are
+# advisory. They never outrank the specifications, the project rules, or the
+# local gates, and they gate no merge (no specification governs this: our own
+# design, .claude/rules/ai-code-review.md). The quality gate is the built-in
+# "Sonar way" default.
+#
+# Rust is not in SonarQube Cloud's Automatic Analysis, so CI-based analysis is
+# the documented path, and Automatic Analysis stays off. Scan scope lives in
+# sonar-project.properties. SONAR_HOST_URL is not needed for SonarQube Cloud
+# (SonarSource/sonarqube-scan-action README).
+name: SonarQube Cloud
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# A new push to a pull request supersedes its running analysis. A run on main
+# keeps going: each analyzes a distinct commit.
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  scan:
+    name: analyze
+    # Pull-request analysis authenticates with SONAR_TOKEN, which neither a
+    # fork pull request nor a Dependabot one can read. The post-merge push to
+    # main analyzes the merged result of either.
+    if: github.event_name == 'push' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read # PR decoration reads the pull-request metadata
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: Sonar assigns issues and new-code status by blame.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          # llvm-tools-preview carries the profdata reader cargo-llvm-cov needs.
+          components: llvm-tools-preview
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-llvm-cov,cargo-nextest
+
+      # The lcov file sonar.rust.lcov.reportPaths names, over every feature so
+      # each module is measured. An empty report fails the scan, so coverage
+      # never shrinks unnoticed.
+      - name: Instrumented tests to lcov
+        run: |
+          set -euo pipefail
+          cargo llvm-cov nextest --locked --workspace --all-features --no-tests=pass --lcov --output-path lcov.info
+          lines="$(grep -c '^DA:' lcov.info || true)"
+          echo "lcov.info carries ${lines} line records"
+          if [[ "${lines}" == "0" ]]; then
+            echo "the coverage report is empty" >&2
+            exit 1
+          fi
+
+      # sonar.projectVersion anchors the "Previous version" New Code window:
+      # the workspace version bumps at every release cut, so new code means
+      # "since the last release". Read from the root Cargo.toml at scan time
+      # and appended to the properties file, so no context value reaches a
+      # shell or the action arguments.
+      - name: Derive sonar.projectVersion from the workspace version
+        run: |
+          set -euo pipefail
+          v="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2 || true)"
+          if [[ -z "$v" ]]; then
+            echo "Cargo.toml has no [workspace.package] version" >&2
+            exit 1
+          fi
+          echo "sonar.projectVersion=$v" >> sonar-project.properties
+
+      - uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
