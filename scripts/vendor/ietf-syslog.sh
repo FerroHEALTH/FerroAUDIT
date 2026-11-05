@@ -6,8 +6,9 @@
 # Vendors the IETF RFCs the ihe-atna crate cites into docs/specs/ietf-syslog/:
 # the Syslog Protocol (RFC 5424), its TLS transport (RFC 5425) and its UDP
 # transport (RFC 5426), which ITI TF-2 §3.20.3 references; RFC 3881, whose
-# participant object codes the IHE audit tables write as `RFC-3881`; and RFC
-# 6750, the bearer token usage the FHIR Feed's credential source follows.
+# participant object codes the IHE audit tables write as `RFC-3881`; RFC
+# 6750, the bearer token usage the FHIR Feed's credential source follows; and
+# RFC 8693, whose `act` claim (§4.1) the access record's actor chain records.
 #
 # Each RFC is pinned by its RFC Editor URL and the sha256 of its text
 # (scripts/vendor/lib/pinned.sh); a published RFC never changes, so a moved
@@ -47,15 +48,18 @@ pin commit rfc5426.txt "RFC 5426, March 2009, Standards Track" "$editor/rfc5426.
   e39b8df74e60d463d06fa9301f7347688184ad043e4ff026f9bf7697eae16bf5 "$trust"
 pin commit rfc6750.txt "RFC 6750, October 2012, Standards Track" "$editor/rfc6750.txt" \
   9dc385cf4ecdd85024e5a95e447ede9230e11700bf35251906b25b37557d604b "$trust"
+pin commit rfc8693.txt "RFC 8693, January 2020, Standards Track" "$editor/rfc8693.txt" \
+  358d658014738bf4dc56c8aae2094ce716ede23b6d5a80488a7dc8e8d72da609 "$trust"
 pinned_corpus ietf-syslog "IETF syslog and audit RFCs" \
   "the IETF syslog and audit RFCs" \
   "The text form of RFC 3881 (Security Audit and Access Accountability
 Message XML Data Definitions for Healthcare Applications), RFC 5424 (The
 Syslog Protocol), RFC 5425 (Transport Layer Security (TLS) Transport Mapping
-for Syslog), RFC 5426 (Transmission of Syslog Messages over UDP) and RFC 6750
-(The OAuth 2.0 Authorization Framework: Bearer Token Usage), each the whole
+for Syslog), RFC 5426 (Transmission of Syslog Messages over UDP), RFC 6750
+(The OAuth 2.0 Authorization Framework: Bearer Token Usage) and RFC 8693
+(OAuth 2.0 Token Exchange), each the whole
 document as the RFC Editor publishes it, with every legend and notice it
 carries, which is what the IETF Trust's grant covers." "" \
-  "the citations of crates/ihe-atna (the syslog message and frame, the triage of the UDP transport, the RFC 3881 codes, the FHIR Feed credential source)"
+  "the citations of crates/ihe-atna (the syslog message and frame, the triage of the UDP transport, the RFC 3881 codes, the FHIR Feed credential source) and FerroHEALTH/FerroAUDIT#140 (the actor chain of the access record)"
 
 say "done"

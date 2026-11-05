@@ -22,6 +22,13 @@ package and its narrative pages, each tree with a `PROVENANCE.md`.
   material keeps its upstream terms (CC BY 4.0 for the BALP package and
   pages, the IHE General Introduction §9 licence for the ITI-20 page and the
   supplement).
+- **A source behind a login** whose terms allow redistribution (the eHDSI
+  specifications behind EU Login) is `supplied`: the owner places the file
+  in a local directory, the script finds it by its pinned sha256 and
+  commits it verbatim, downloading nothing, and its `--check` holds the
+  committed bytes to the pins. A source whose terms do not allow
+  redistribution, or are unclear, is `cache` (fetched into the ignored
+  `.vendor-cache/`) or `withheld` (its sha256 recorded, copied nowhere).
 - **A new corpus** is a row in `docs/VERSIONS.md`, a fetch by the
   script and the citation that needs it, in one change.
 - **Bumping a pin** is a deliberate change: rerun the script, read what

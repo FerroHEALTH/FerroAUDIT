@@ -8,21 +8,22 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `9de9544040398351d75871f4074a2bde41a21e6b14aafe798678addb2d500bab`
-- Fetched: 2026-10-20, with the User-Agent `ferroaudit-vendor (scripts/vendor)`
-- Artefacts: 5 committed, 0 cache only, 0 needing
+  the pins): `14d566dc469c8c7f59544dce977776fb5abed8bd81fc193826b01e79f5f810ee`
+- Fetched: 2026-11-05, with the User-Agent `ferroaudit-vendor (scripts/vendor)`
+- Artefacts: 6 committed, 0 cache only, 0 needing
   manual retrieval
-- Files in this directory: 5 besides this one, each verbatim as the
+- Files in this directory: 6 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `17c453415f2bba0e83ac379a334b1d8cddc6876325d4528a720f6ec3bcee64a6`
-- Read by: the citations of crates/ihe-atna (the syslog message and frame, the triage of the UDP transport, the RFC 3881 codes, the FHIR Feed credential source)
+  `PROVENANCE.md` excluded): `74f9a8762ad527f10822a95943064e7a1127f1352604b12efab2f83c6d1b79f4`
+- Read by: the citations of crates/ihe-atna (the syslog message and frame, the triage of the UDP transport, the RFC 3881 codes, the FHIR Feed credential source) and FerroHEALTH/FerroAUDIT#140 (the actor chain of the access record)
 
 The text form of RFC 3881 (Security Audit and Access Accountability
 Message XML Data Definitions for Healthcare Applications), RFC 5424 (The
 Syslog Protocol), RFC 5425 (Transport Layer Security (TLS) Transport Mapping
-for Syslog), RFC 5426 (Transmission of Syslog Messages over UDP) and RFC 6750
-(The OAuth 2.0 Authorization Framework: Bearer Token Usage), each the whole
+for Syslog), RFC 5426 (Transmission of Syslog Messages over UDP), RFC 6750
+(The OAuth 2.0 Authorization Framework: Bearer Token Usage) and RFC 8693
+(OAuth 2.0 Token Exchange), each the whole
 document as the RFC Editor publishes it, with every legend and notice it
 carries, which is what the IETF Trust's grant covers.
 
@@ -61,4 +62,11 @@ carries, which is what the IETF Trust's grant covers.
 - Source: <https://www.rfc-editor.org/rfc/rfc6750.txt>
 - Version: RFC 6750, October 2012, Standards Track
 - sha256: `9dc385cf4ecdd85024e5a95e447ede9230e11700bf35251906b25b37557d604b`
+- Licence: IETF Trust Legal Provisions (BCP 78), section 3.c: the right "to copy, publish, display and distribute IETF Contributions and IETF Documents in full and without modification" (https://trustee.ietf.org/license-info)
+
+### `rfc8693.txt` (committed)
+
+- Source: <https://www.rfc-editor.org/rfc/rfc8693.txt>
+- Version: RFC 8693, January 2020, Standards Track
+- sha256: `358d658014738bf4dc56c8aae2094ce716ede23b6d5a80488a7dc8e8d72da609`
 - Licence: IETF Trust Legal Provisions (BCP 78), section 3.c: the right "to copy, publish, display and distribute IETF Contributions and IETF Documents in full and without modification" (https://trustee.ietf.org/license-info)

@@ -14,8 +14,8 @@
 #                        tarball sha256, and the tree still hashes to the
 #                        digest it records.
 #   3. the pinned corpora  the BALP pages, the EHDS acts, the four packages
-#                        the categories are read against, the IETF RFCs and
-#                        DICOM PS3.15: each PROVENANCE.md names its row's
+#                        the categories are read against, the IETF RFCs, the
+#                        eHDSI specifications and DICOM PS3.15: each PROVENANCE.md names its row's
 #                        pin-set digest, and each tree still hashes to the
 #                        digest it records.
 #   3b. openEHR BASE     the PROVENANCE.md names the pinned commit, and the
@@ -149,6 +149,7 @@ pinned_at docs/specs/eu-hl7-imaging "HL7 Europe Imaging Report"
 pinned_at docs/specs/eu-hl7-hdr "HL7 Europe Hospital Discharge Report"
 pinned_at docs/specs/ehdsi-mvc "MyHealth@EU Master Value Sets Catalogue"
 pinned_at docs/specs/ietf-syslog "IETF syslog and audit RFCs"
+pinned_at docs/specs/ehdsi-specifications "eHDSI specifications"
 pinned_at docs/specs/dicom-ps3-15 "DICOM PS3.15"
 
 # ---- 3b. openEHR BASE --------------------------------------------------------
