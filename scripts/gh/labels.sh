@@ -35,15 +35,17 @@ EXISTING="$(gh label list --limit 200 --json name --jq '.[].name')"
 
 # label <name> <hex-color> <description>
 label() {
-  gh label create "$1" --color "$2" --description "$3" --force > /dev/null
-  echo "ok: $1"
+  local name="$1" color="$2" description="$3"
+  gh label create "$name" --color "$color" --description "$description" --force > /dev/null
+  echo "ok: $name"
 }
 
 # retire <name>: delete a label the taxonomy no longer carries, if it exists.
 retire() {
-  if grep -qx -- "$1" <<< "$EXISTING"; then
-    gh label delete "$1" --yes > /dev/null
-    echo "retired: $1"
+  local name="$1"
+  if grep -qx -- "$name" <<< "$EXISTING"; then
+    gh label delete "$name" --yes > /dev/null
+    echo "retired: $name"
   fi
   return 0
 }

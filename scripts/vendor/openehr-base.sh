@@ -47,7 +47,7 @@ rm -rf "$dest"
 mkdir -p "$dest"
 corpus_take "$tree_root" "$dest" "${paths[@]}"
 dropped="$(corpus_drop_manifests "$dest")"
-[ -z "$dropped" ] || die "the release carries a dependency manifest: $dropped"
+[[ -z "$dropped" ]] || die "the release carries a dependency manifest: $dropped"
 
 identification="$dest/docs/base_types/master05-identification_package.adoc"
 grep -q '==== Composite Identifiers and Case' "$identification" ||
@@ -58,11 +58,11 @@ grep -q 'Attribution-ShareAlike 3.0' "$dest/LICENSE" ||
   die "the LICENSE is not Creative Commons Attribution-ShareAlike 3.0"
 release="$(sed -nE 's/^.*\*BASE Release ([0-9.]+)( \(unreleased\))?\*.*$/\1\2/p' \
   "$dest/docs/base_types/master00-amendment_record.adoc" | head -n1)"
-[ -n "$release" ] || die "the Base Types amendment record heads no BASE Release"
+[[ -n "$release" ]] || die "the Base Types amendment record heads no BASE Release"
 grep -qF "$release" <<< "$pin" ||
   die "the pin names no BASE Release $release, the head of the amendment record"
 status="$(sed -nE 's/^:spec_status:[[:space:]]*([A-Z_]+).*/\1/p' "$dest/docs/base_types/master.adoc" "$dest/docs/base_types/manifest_vars.adoc" | head -n1)"
-[ -n "$status" ] || die "docs/base_types declares no spec_status"
+[[ -n "$status" ]] || die "docs/base_types declares no spec_status"
 
 files="$(corpus_file_count "$dest")"
 digest="$(corpus_tree_digest "$dest")"

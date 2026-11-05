@@ -47,7 +47,8 @@ supplement_url="https://www.ihe.net/uploadedFiles/Documents/ITI/IHE_ITI_Suppl_RE
 
 # The sha256 tokens of a pin cell, in the order the cell names them.
 hashes() {
-  awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t ~ /^[0-9a-f]{64}$/) print t } }' <<< "$1"
+  local cell="$1"
+  awk '{ for (i = 1; i <= NF; i++) { t = $i; gsub(/[`,.;:]/, "", t); if (t ~ /^[0-9a-f]{64}$/) print t } }' <<< "$cell"
 }
 
 page_pin="$(corpus_pin_cell "IHE ITI-20 Record Audit Event")"
@@ -57,10 +58,10 @@ supplement_revision="$(corpus_pin_field Rev. "$supplement_pin" | tr -d ',')"
 page_want="$(hashes "$page_pin" | sed -n 1p)"
 figure_want="$(hashes "$page_pin" | sed -n 2p)"
 supplement_want="$(hashes "$supplement_pin" | sed -n 1p)"
-[ -n "$page_revision" ] || die "the ITI-20 pin names no Revision"
-[ -n "$supplement_revision" ] || die "the RESTful ATNA pin names no Rev."
-[ -n "$page_want" ] && [ -n "$figure_want" ] || die "the ITI-20 pin names no page and figure sha256"
-[ -n "$supplement_want" ] || die "the RESTful ATNA pin names no sha256"
+[[ -n "$page_revision" ]] || die "the ITI-20 pin names no Revision"
+[[ -n "$supplement_revision" ]] || die "the RESTful ATNA pin names no Rev."
+[[ -n "$page_want" ]] && [[ -n "$figure_want" ]] || die "the ITI-20 pin names no page and figure sha256"
+[[ -n "$supplement_want" ]] || die "the RESTful ATNA pin names no sha256"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -70,7 +71,7 @@ fetch() {
   say "fetching $url"
   corpus_download "$url" "$into"
   got="$(corpus_sha256 "$into")"
-  [ "$got" = "$want" ] || die "$url has sha256 $got, the pin records $want"
+  [[ "$got" = "$want" ]] || die "$url has sha256 $got, the pin records $want"
 }
 
 fetch "$page_url" "$tmp/ITI-20.html" "$page_want"
@@ -89,7 +90,7 @@ grep -q '3\.20\.4\.2 Send Audit Resource Request Message – FHIR Feed Interacti
 page_date="$(sed -nE 's/.*Revision [0-9.]+, ([A-Za-z]+ [0-9]+, [0-9]+) - Final Text.*/\1/p' "$tmp/ITI-20.html" | head -n1)"
 # pdftotext writes the cover's "Date:" label and its value as separate lines.
 supplement_date="$(awk '/^Date:/ { seen = 1; next } seen && NF { print; exit }' "$tmp/supplement.txt")"
-[ -n "$page_date" ] && [ -n "$supplement_date" ] || die "a document declares no date"
+[[ -n "$page_date" ]] && [[ -n "$supplement_date" ]] || die "a document declares no date"
 
 rm -rf "$dest"
 mkdir -p "$dest/Volume2/media"

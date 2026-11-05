@@ -32,8 +32,9 @@ readonly CRATES=(
 # The version cargo resolves for one member: its own, or the workspace's when
 # it inherits it.
 manifest_version() {
+  local name="$1"
   cargo metadata --format-version 1 --no-deps --locked |
-    jq -r --arg name "$1" '.packages[] | select(.name == $name) | .version'
+    jq -r --arg name "$name" '.packages[] | select(.name == $name) | .version'
 }
 
 # cargo colours the status word, so "Uploaded" is followed by a reset sequence
