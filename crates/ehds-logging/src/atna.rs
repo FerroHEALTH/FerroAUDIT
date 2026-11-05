@@ -298,6 +298,8 @@ fn object(entity: &Entity, record: &AccessRecord) -> Result<ParticipantObject, A
         } => ParticipantObject {
             type_code: Some("1"),
             type_code_role: Some("1"),
+            // NOTE: ITI TF-2 §3.20.7.1.3 and NCPeH Components Specifications 10.0.0 §4.4.7 write
+            // `RFC-3881` for code 2, where the Audit Trail Profile 10.1.0 tables write `DCM`.
             ..plain(
                 SecretString::from(cx(
                     value.expose_secret(),
