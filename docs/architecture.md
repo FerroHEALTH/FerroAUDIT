@@ -92,7 +92,15 @@ name a patient, so they are held as secrets, and the written XML (UTF-8, no
 byte order mark) is a secret too. The optional elements PS3.15 A.5.1 defines
 and the IHE tables leave not specialized, `EventOutcomeDescription`,
 `AuditSourceTypeCode` and `ParticipantObjectDataLifeCycle`, are written when
-the caller gives them, in the schema's order. `atna::codes` holds the DICOM
+the caller gives them, in the schema's order, with the `PurposeOfUse` ITI TF-2
+§3.20.7.1.2 adds after them and a participant object's
+`ParticipantObjectName` in place of a query. Every attribute and text value
+is written through `escape::untrusted`, which writes each control,
+bidirectional formatting and line separator character as its code point
+(`\u{202e}`); a detail value and a query stay base64 of the value as given,
+as PS3.15 A.5.1.1 has a `ValuePair` captured "without modification". The
+BALP writer escapes every string of the `AuditEvent` the same way. No
+specification governs the escape form: our own design. `atna::codes` holds the DICOM
 codes of the A.5.3 message tables and the RFC 3881 §5.5.4 participant object
 id types as `(code, codeSystemName, originalText)` triples.
 
@@ -276,8 +284,8 @@ records stay the repository's (§3.81.4.1.3, ITI TF-1 §9.4).
 
 `user::OnBehalfOf` is a `User`, as a verified OAuth 2.0 access token names
 them (`iss`, `sub`, `client_id`, `aud`, `jti`, purposes of use, and the
-optional organisation, alternative id, name, provider identifier, roles and
-assurance level, BALP §3:5.7.5.4), a `User::local` authenticated otherwise,
+optional organisation, alternative id, name, provider identifier, person
+id (`otherId` typed `PRN`), roles and assurance level, BALP §3:5.7.5.4), a `User::local` authenticated otherwise,
 with no issuer and no client, whose record writes neither, or `System`. The module compiles with no feature,
 since the identity profiles that audit name the user in their own records
 too (the ITI-55 Human Requestor, ITI TF-2 §3.55.5.1.1).
@@ -380,6 +388,35 @@ names the endpoint the access asked, the system stored data came from, or
 both, and is keyed for retention and labels by its endpoint, else its
 `system_id`. A request may have no id, and its operation can be written as a
 second subtype in a named code system.
+
+The accessor carries the binding outcome, one of a fixed code set, with the
+party (an openEHR `PARTY_REF` triple) and its groups on `bound` and
+`provisional` and the party alone on `refused-inactive` and
+`refused-abandoned`, so the type admits no other combination; the token's
+actor chain, outermost first (RFC 8693 §4.1); and the representation a
+representative acts under. A relayed accessor arrives through a MyHealth@EU
+contact point (Implementing Regulation (EU) 2026/2099) or a domestic
+federation, which one field (`Via`) tells apart because the two fall under
+different law, and is built through `Relayed::try_from`, which refuses a
+contact point that names no professional, a federation access with no
+agreement, an organisation whose agreement declares no access class, a
+contact point provider named by no `urn:oid:` or `urn:hl7ii:` identifier and
+a clerical support worker relayed without `on-behalf-of` (eHDSI SAML
+Profile 10.0.0 §2.3). The record keeps the assertion and message ids and
+never a security header (eHDSI Section I Security Policies 10.0.0 SR 5).
+`AccessRecord::validate` holds a `chained` organisation access to an
+attested correlation id; both sinks and the DICOM rendering refuse a record
+it refuses. Which fields carry the binding is our own design.
+
+The `atna` feature writes the record as a DICOM PS3.15 A.5 audit message
+from the same exchange as its BALP record, by the normative mapping of
+`RESTful` ATNA Rev. 3.6 Table 3.20.4.2.2.1-1, so the two renderings agree by
+construction. A relayed access adds the eHDSI Audit Trail Profile 10.1.0
+Patient Privacy participants: the requester by `SPProvidedID<NameID@Issuer>`
+(§2.3.13, §2.3.41), with the `subject-id` name and the role, and each
+contact point by the CN of its TLS certificate (§2.3.14, §2.3.15); the
+patient is its HL7 v2 CX identifier (§2.3.17). A member with no DICOM
+element rides as a detail of its participant object, as in the BALP record.
 
 Retention is a period in years, in days or without end, declared within
 bounds: inside the Union a floor of Art 9(2)'s three years, a national

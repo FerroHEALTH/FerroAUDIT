@@ -30,7 +30,8 @@ The crate depends on no application. The profiles are published at
 
 - `message::AuditMessage`: the DICOM PS3.15 Annex A.5 audit message, with
   its participant objects held as secrets and written to UTF-8 XML with no
-  byte order mark.
+  byte order mark, every value through `escape::untrusted`, so no control
+  or bidirectional character reaches the XML.
 - `syslog::Sender`: the RFC 5424 message with the PRI `<85>` and the MSGID
   `IHE+RFC-3881` §3.20.4.1.2 fixes, in its RFC 5425 octet-counted frame.
 - `repository::Repository`: the connection to an Audit Record Repository,

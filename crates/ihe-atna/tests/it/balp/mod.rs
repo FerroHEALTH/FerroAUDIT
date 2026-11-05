@@ -11,6 +11,7 @@ mod bearer;
 mod content;
 mod credentials;
 mod described;
+mod escaping;
 mod feed;
 mod hygiene;
 mod purposes;

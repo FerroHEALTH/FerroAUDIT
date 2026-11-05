@@ -33,7 +33,9 @@
 //!   person's access to (Art 3(3)), and the person's own access trail (Art 9)
 //!   read without the records about a held resource until the hold ends;
 //! - `balp` (feature `balp`): the record written as an IHE BALP `AuditEvent`
-//!   through `ihe-atna`, and the sink over an `ihe-atna` audit recorder.
+//!   through `ihe-atna`, and the sink over an `ihe-atna` audit recorder;
+//! - `atna` (feature `atna`): the record written as a DICOM PS3.15 A.5 audit
+//!   message from the same exchange, for an ITI-20 syslog sender.
 //!
 //! The crate depends on no interoperability component and on nothing of the
 //! system that builds the records, so the logging component stays independent
@@ -65,6 +67,8 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+#[cfg(feature = "atna")]
+pub mod atna;
 #[cfg(feature = "balp")]
 pub mod balp;
 pub mod category;

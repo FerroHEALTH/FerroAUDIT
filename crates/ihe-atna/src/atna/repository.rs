@@ -59,6 +59,7 @@
 //!         outcome: "0",
 //!         type_codes: vec![CodedValue::of(codes::TYPE_APPLICATION_START)],
 //!         outcome_description: None,
+//!         purposes_of_use: Vec::new(),
 //!     },
 //!     participants: vec![ActiveParticipant {
 //!         user_id: "gateway".to_owned(),

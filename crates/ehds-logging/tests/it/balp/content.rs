@@ -145,7 +145,10 @@ fn a_patient_namespace_that_is_no_uri_is_a_detail() {
 fn a_request_with_no_id_writes_no_transaction_entity() {
     let mut access = record(Action::Query, Outcome::Success);
     access.request.id = None;
-    access.request.correlation = Some("Qz7-correlation-83".to_owned());
+    access.request.correlation = Some(ehds_logging::record::Correlation {
+        value: "Qz7-correlation-83".to_owned(),
+        source: ehds_logging::record::CorrelationSource::Header,
+    });
     let written = written(&access);
     assert!(
         written["entity"]

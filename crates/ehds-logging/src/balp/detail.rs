@@ -79,11 +79,84 @@ pub const ENDPOINT: &str = "endpoint";
 pub const PATIENT_LOOKUP: &str = "patient-lookup";
 /// The identifier the client correlates the request by in its own log.
 pub const CORRELATION: &str = "correlation-id";
-/// The national contact point that asserted the relayed professional
-/// and provider, by the issuer of its token.
-pub const CONTACT_POINT: &str = "contact-point";
-/// That the relayed values are the contact point's assertion: `true`.
+/// Where the correlation id was read: `token-claim`,
+/// `authorization-details` or `header`.
+pub const CORRELATION_SOURCE: &str = "correlation-source";
+/// How the relayed accessor reached the recording system:
+/// `contact-point` or `federation`.
+pub const RELAYED_VIA: &str = "relayed-via";
+/// The issuer of the token that relayed the professional and the provider.
+pub const RELAYED_ISSUER: &str = "relayed-issuer";
+/// That the relayed values are the relaying issuer's assertion: `true`.
 pub const ASSERTED: &str = "asserted";
+/// Whether the relayed accessor names a professional: `true`, or `false`
+/// for an organisation without a named person.
+pub const PROFESSIONAL_NAMED: &str = "professional-named";
+/// The relayed professional's full name, the XSPA `subject-id`.
+pub const HP_NAME: &str = "hp-name";
+/// The relayed `healthcare_provider_identifier` of Annex Table 1.
+pub const HP_PROVIDER_IDENTIFIER: &str = "hp-provider-identifier";
+/// The identity assertion's `NameID` as `SPProvidedID<NameID@Issuer>`.
+pub const HP_NAME_ID: &str = "hp-name-id";
+/// The `AuthnContextClassRef` URI of the professional's authentication.
+pub const HP_AUTHENTICATION_METHOD: &str = "hp-authentication-method";
+/// `<system>|<code>` of the role the professional acts on behalf of.
+pub const HP_ON_BEHALF_OF: &str = "hp-on-behalf-of";
+/// An XSPA `hl7:permission` URI, once per permission.
+pub const HP_PERMISSION: &str = "hp-permission";
+/// `<system>|<code>` of the provider's eHDSI healthcare facility type.
+pub const PROVIDER_FACILITY_TYPE: &str = "provider-facility-type";
+/// The provider's XCA `homeCommunityId`.
+pub const PROVIDER_HOME_COMMUNITY_ID: &str = "provider-home-community-id";
+/// `<system>|<code>` of the provider's organisation type under a national
+/// profile.
+pub const PROVIDER_ORGANISATION_TYPE: &str = "provider-organisation-type";
+/// The point of care by name, the XSPA `locality`.
+pub const POINT_OF_CARE: &str = "point-of-care";
+/// The `@ID` of the professional's identity assertion.
+pub const IDENTITY_ASSERTION_ID: &str = "identity-assertion-id";
+/// The `@ID` of the treatment relationship confirmation assertion.
+pub const TRC_ASSERTION_ID: &str = "trc-assertion-id";
+/// The request message's UUID, the WS-Addressing `MessageID`.
+pub const REQUEST_MESSAGE_ID: &str = "request-message-id";
+/// The CN of the service consumer NCP's TLS certificate.
+pub const CONSUMER_NCP: &str = "consumer-ncp";
+/// The CN of the service provider NCP's TLS certificate.
+pub const PROVIDER_NCP: &str = "provider-ncp";
+/// The name of the agreement the access was made under.
+pub const AGREEMENT_NAME: &str = "agreement-name";
+/// The version of that agreement.
+pub const AGREEMENT_VERSION: &str = "agreement-version";
+/// `<system>|<code>`, or `<code>`, once per legal ground of the agreement.
+pub const AGREEMENT_LEGAL_GROUND: &str = "agreement-legal-ground";
+/// The reference of the consent decision taken for the patient.
+pub const AGREEMENT_CONSENT: &str = "agreement-consent";
+/// The access class of an organisation without a named person:
+/// `automated` or `chained`.
+pub const AGREEMENT_ACCESS_CLASS: &str = "agreement-access-class";
+/// The binding outcome, such as `bound` or `refused-unbound`.
+pub const BINDING: &str = "binding";
+/// That the bound person is a guest of the issuer: `true`.
+pub const GUEST: &str = "guest";
+/// That the outcome is a security event: `true`.
+pub const SECURITY_EVENT: &str = "security-event";
+/// The party the binding names, as `<namespace>|<type>|<id>`.
+pub const PARTY: &str = "party";
+/// A group the bound person belongs to, as `<namespace>|<type>|<id>`,
+/// once per group.
+pub const GROUP: &str = "group";
+/// The claim a `refused-key-claim-missing` token lacked.
+pub const BINDING_CLAIM: &str = "binding-claim";
+/// A field a `refused-external-incomplete` token lacked or garbled, once
+/// per field.
+pub const BINDING_FIELD: &str = "binding-field";
+/// One actor of the token's actor chain as `<issuer>|<subject>`, or
+/// `<subject>`, outermost first.
+pub const ACTOR: &str = "actor";
+/// Whom a representative acts for, as `<namespace>|<type>|<id>`.
+pub const REPRESENTS: &str = "represents";
+/// `<system>|<code>`, or `<code>`, of the ground of the representation.
+pub const REPRESENTS_GROUND: &str = "represents-ground";
 /// The relayed `country_code`.
 pub const COUNTRY_CODE: &str = "country-code";
 /// The relayed professional's `family_name`.

@@ -33,9 +33,14 @@ use url::Url;
 use super::support::{LAB_REPORT, map};
 
 #[cfg(test)]
+mod binding;
+#[cfg(test)]
 mod content;
 #[cfg(test)]
 mod data;
+#[cfg(test)]
+#[cfg(feature = "atna")]
+mod dicom;
 #[cfg(test)]
 mod emergency;
 #[cfg(test)]
@@ -102,6 +107,9 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             relayed: None,
             roles: Vec::new(),
             token_id: None,
+            binding: None,
+            actors: Vec::new(),
+            represents: None,
         },
         subject: DataSubject {
             patient: Some(PatientIdentifier {

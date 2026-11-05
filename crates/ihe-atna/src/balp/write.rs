@@ -41,6 +41,10 @@ const IDENTIFIER_TYPES: &str = "http://terminology.hl7.org/CodeSystem/v2-0203";
 /// The identifier type of a national provider identifier.
 const NATIONAL_PROVIDER_IDENTIFIER: &str = "NPI";
 
+/// The identifier type of a person's id in a person directory, which BALP
+/// 1.1.4 §3:5.7.5.4 slices `provider-id`.
+const PERSON_IDENTIFIER: &str = "PRN";
+
 impl Exchange {
     /// The `AuditEvent` of this exchange as `observer` records it.
     ///
@@ -49,7 +53,7 @@ impl Exchange {
     /// A [`RecordError`] when the resource cannot be written as JSON, which
     /// writing to memory does not do.
     pub fn audit_event(&self, observer: &Observer) -> Result<AuditRecord, RecordError> {
-        serde_json::to_vec(&self.resource(observer))
+        serde_json::to_vec(&self.escaped(observer)?)
             .map(|json| AuditRecord(SecretSlice::from(json)))
             .map_err(RecordError)
     }
@@ -62,9 +66,19 @@ impl Exchange {
     /// A [`RecordError`] when the resource cannot be written as JSON, which
     /// writing to memory does not do.
     pub fn audit_event_value(&self, observer: &Observer) -> Result<AuditEventValue, RecordError> {
-        serde_json::to_value(self.resource(observer))
-            .map(AuditEventValue)
-            .map_err(RecordError)
+        self.escaped(observer).map(AuditEventValue)
+    }
+
+    /// The resource as a JSON value whose every string went through
+    /// [`escape::untrusted`](crate::escape::untrusted).
+    #[expect(
+        clippy::disallowed_types,
+        reason = "the escape walks the written resource as a JSON value"
+    )]
+    fn escaped(&self, observer: &Observer) -> Result<serde_json::Value, RecordError> {
+        let mut value = serde_json::to_value(self.resource(observer)).map_err(RecordError)?;
+        escape_strings(&mut value);
+        Ok(value)
     }
 
     fn resource(&self, observer: &Observer) -> AuditEvent {
@@ -159,6 +173,25 @@ impl Exchange {
     }
 }
 
+/// Every string of `value`, member names left as they are, written through
+/// [`escape::untrusted`](crate::escape::untrusted).
+#[expect(
+    clippy::disallowed_types,
+    reason = "the escape walks the written resource as a JSON value"
+)]
+fn escape_strings(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) => {
+            if let std::borrow::Cow::Owned(escaped) = crate::escape::untrusted(text) {
+                *text = escaped;
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(escape_strings),
+        serde_json::Value::Object(members) => members.values_mut().for_each(escape_strings),
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
+    }
+}
+
 /// The purposes of use of every agent in `agents`, each once, in the order
 /// the agents and their purposes first name it, for `AuditEvent.purposeOfEvent`.
 ///
@@ -240,10 +273,11 @@ fn organisation_agent(user: &User) -> Option<AuditEventAgent> {
 }
 
 /// The extensions of `user`'s agent: the assurance level of their
-/// authentication (`ihe-assuranceLevel`) and their provider identifier
-/// (`ihe-otherId`, typed `NPI`), as BALP 1.1.4 §3:5.7.5.4 maps the IHE IUA
-/// `national_provider_identifier` and the `AuditEvent-ex-auditPoke-SAML-Comp`
-/// example writes both.
+/// authentication (`ihe-assuranceLevel`), their provider identifier
+/// (`ihe-otherId`, typed `NPI`) and their person id (`ihe-otherId`, typed
+/// `PRN`), as BALP 1.1.4 §3:5.7.5.4 maps the IHE IUA
+/// `national_provider_identifier` and `person_id` and the
+/// `AuditEvent-ex-auditPoke-SAML-Comp` example writes the first two.
 fn user_extensions(user: &User) -> Vec<Extension> {
     let assurance = user.assurance().map(|level| Extension {
         url: ASSURANCE_LEVEL_EXTENSION.to_owned(),
@@ -253,20 +287,39 @@ fn user_extensions(user: &User) -> Vec<Extension> {
     let provider = user.provider_identifier().map(|identifier| Extension {
         url: OTHER_ID_EXTENSION.to_owned(),
         value: Some(ExtensionValue::Identifier(Box::new(Identifier {
-            r#type: Some(CodeableConcept {
-                coding: vec![Coding {
-                    system: Some(primitives::Uri::from(IDENTIFIER_TYPES)),
-                    code: Some(primitives::Code::from(NATIONAL_PROVIDER_IDENTIFIER)),
-                    ..Coding::default()
-                }],
-                ..CodeableConcept::default()
-            }),
+            r#type: Some(identifier_type(NATIONAL_PROVIDER_IDENTIFIER)),
             value: Some(primitives::String::from(identifier)),
             ..Identifier::default()
         }))),
         ..Extension::default()
     });
-    assurance.into_iter().chain(provider).collect()
+    let person = user.person_id().map(|person| Extension {
+        url: OTHER_ID_EXTENSION.to_owned(),
+        value: Some(ExtensionValue::Identifier(Box::new(Identifier {
+            r#type: Some(identifier_type(PERSON_IDENTIFIER)),
+            system: person.system.as_deref().map(primitives::Uri::from),
+            value: Some(primitives::String::from(person.value.as_str())),
+            ..Identifier::default()
+        }))),
+        ..Extension::default()
+    });
+    assurance
+        .into_iter()
+        .chain(provider)
+        .chain(person)
+        .collect()
+}
+
+/// The `ihe-otherId` type `code` of HL7 v2 table 0203.
+fn identifier_type(code: &str) -> CodeableConcept {
+    CodeableConcept {
+        coding: vec![Coding {
+            system: Some(primitives::Uri::from(IDENTIFIER_TYPES)),
+            code: Some(primitives::Code::from(code)),
+            ..Coding::default()
+        }],
+        ..CodeableConcept::default()
+    }
 }
 
 /// A [`Code`] as a `CodeableConcept`.

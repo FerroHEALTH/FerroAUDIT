@@ -26,6 +26,10 @@ include = ["src/**", "README.md"]
 # audit types of ihe-atna, and the sink that hands it to an ihe-atna audit
 # recorder, such as one that spools it for an ATNA Audit Record Repository.
 balp = ["dep:ihe-atna", "dep:url"]
+# The record written as a DICOM PS3.15 A.5 audit message, the form an ITI-20
+# syslog message carries, from the same exchange as its BALP record by the
+# RESTful ATNA mapping, so it takes the balp feature with it.
+atna = ["balp", "ihe-atna/atna"]
 
 # docs.rs documents the BALP rendering too (no specification governs this:
 # our own design).
@@ -42,6 +46,10 @@ thiserror.workspace = true
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
+# The base64 detail values and the XML of the DICOM audit message the atna
+# feature writes, read back by the tests.
+base64.workspace = true
+quick-xml.workspace = true
 # The archetype-id parser of FerroEHR, against which the map's ARCHETYPE_ID
 # check is tested, so the family reads the grammar one way.
 openehr-base.workspace = true

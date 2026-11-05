@@ -113,6 +113,7 @@ ferrohealth-smart = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 jiff = { workspace = true }
+quick-xml = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
