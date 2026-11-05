@@ -72,6 +72,7 @@ struct Stated {
     roles: Vec<Code>,
     token_id: Option<String>,
     policies: Vec<String>,
+    person_id: Option<PersonId>,
 }
 
 impl User {
@@ -134,6 +135,21 @@ impl User {
     #[must_use]
     pub fn provider_identifier(&self) -> Option<&str> {
         self.stated.provider_identifier.as_deref()
+    }
+
+    /// Returns this user, known in a person directory by `person_id`, the IHE
+    /// IUA `person_id`, which BALP 1.1.4 §3:5.7.5.4 writes as
+    /// `agent[user].extension[otherId][provider-id]`, typed `PRN`.
+    #[must_use]
+    pub fn with_person_id(mut self, person_id: Option<PersonId>) -> Self {
+        self.stated.person_id = person_id;
+        self
+    }
+
+    /// Returns the user's id in a person directory, when one is known.
+    #[must_use]
+    pub fn person_id(&self) -> Option<&PersonId> {
+        self.stated.person_id.as_ref()
     }
 
     /// Returns this user, authenticated at the assurance level `assurance`
@@ -329,6 +345,28 @@ pub struct Code {
     pub system: Option<String>,
     /// The code.
     pub code: String,
+}
+
+/// A user's id in a person directory, such as the party a recording system
+/// bound the token to: the identifier and the namespace that issued it.
+///
+/// `Debug` shows that a system is named and no value.
+#[derive(Clone, PartialEq, Eq)]
+pub struct PersonId {
+    /// The issuing namespace as a URI (FHIR R4 `Identifier.system`), when
+    /// it is one.
+    pub system: Option<String>,
+    /// The identifier.
+    pub value: String,
+}
+
+impl fmt::Debug for PersonId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PersonId")
+            .field("system", &self.system.is_some())
+            .field("value", &REDACTED)
+            .finish()
+    }
 }
 
 /// One purpose of use: a code and the system that defines it, the HL7 v3

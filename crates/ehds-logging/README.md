@@ -45,6 +45,19 @@ what classifies it.
   through the audit types of `ihe-atna`, and a sink over an `ihe-atna` audit
   recorder, such as one that spools records for an ATNA Audit Record
   Repository.
+- `atna` (feature `atna`, which takes `balp`): the record written as a DICOM
+  PS3.15 A.5 audit message from the same exchange, by the `RESTful` ATNA
+  mapping, for an ITI-20 syslog sender, with the participants the eHDSI
+  Audit Trail Profile 10.1.0 names for a relayed access.
+
+The accessor carries how the recording system bound it to a party (the
+binding outcome, the party and its groups), the token's actor chain, the
+representation a representative acts under, and what a MyHealth@EU contact
+point or a domestic federation relays: the professional with the eHDSI
+SAML Profile 10.0.0 attributes, or an organisation without a named person,
+the provider, the agreement with its legal ground, and the assertion and
+message ids that join the record to the contact point's own audit entry.
+Every value is escaped by the renderings, and no `Debug` shows one.
 
 The crate ships no category map: the deployment authors it. It depends on no
 interoperability component and on no application.

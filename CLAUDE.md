@@ -67,7 +67,8 @@ the oracle, pinned in `docs/VERSIONS.md` and held to their provenance by
   feature boundaries; every patient identifier synthetic).
 - `crates/ehds-logging`: the EHDS logging component. `src/` (`record`,
   `category`, `map`, `classify`, `retention`, `label`, `emergency`,
-  `transformation`, `sink`, and `balp` behind its feature), `tests/it/`.
+  `transformation`, `sink`, `balp` behind its feature, and `atna`, the DICOM
+  rendering, behind its own), `tests/it/`.
 - `docs/`: `architecture.md`, `VERSIONS.md`, `specs/` (the vendored ITI-20
   page and RESTful ATNA supplement, the BALP package and pages, the EHDS
   Regulation with the acts and guidelines `ehds-logging` cites, the HL7

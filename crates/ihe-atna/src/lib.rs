@@ -14,7 +14,8 @@
 //! 2.0 access token names, a local user, or the system itself, and compiles
 //! with or without a feature. Module `redact` is the `Debug` rendering of a
 //! value that may name a patient or carry a credential, and `fhir_base` the
-//! URL of an interaction under a FHIR base.
+//! URL of an interaction under a FHIR base. Module `escape` (with `atna` or
+//! `balp`) is the escape every value of a written record goes through.
 //!
 //! The syslog sender is shown in the docs of `atna::repository` and a BALP
 //! record sent over the FHIR Feed in those of `atna::feed`, each a compiled
@@ -32,6 +33,8 @@ pub mod balp;
 #[cfg(all(feature = "recording", not(feature = "balp")))]
 #[path = "balp/recording_only.rs"]
 pub mod balp;
+#[cfg(any(feature = "atna", feature = "balp"))]
+pub mod escape;
 #[cfg(any(feature = "atna", feature = "balp", feature = "redact"))]
 pub mod fhir_base;
 pub mod redact;

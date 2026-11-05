@@ -97,7 +97,7 @@ const SHARED: &[&str] = &["ferrohealth-secret"];
 
 #[test]
 fn no_feature_depends_on_an_interoperability_component_or_a_product() {
-    for feature in ["", "balp"] {
+    for feature in ["", "balp", "atna"] {
         let closure = tree(feature, None);
         for name in INTEROPERABILITY {
             assert!(
@@ -138,7 +138,7 @@ fn a_shared_family_crate_brings_no_product_with_it() {
 }
 
 #[test]
-fn only_balp_adds_the_audit_transport() {
+fn only_balp_and_atna_add_the_audit_transport() {
     assert!(
         !tree("", None).contains("ihe-atna"),
         "no feature takes ihe-atna"
@@ -146,5 +146,9 @@ fn only_balp_adds_the_audit_transport() {
     assert!(
         tree("balp", Some("1")).contains("ihe-atna"),
         "balp names ihe-atna"
+    );
+    assert!(
+        tree("atna", Some("1")).contains("ihe-atna"),
+        "atna names ihe-atna"
     );
 }

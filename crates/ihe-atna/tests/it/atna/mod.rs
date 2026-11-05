@@ -8,6 +8,8 @@
 #[cfg(feature = "atna")]
 mod closing;
 #[cfg(feature = "atna")]
+mod escaping;
+#[cfg(feature = "atna")]
 mod forwarder;
 #[cfg(feature = "atna")]
 mod message;

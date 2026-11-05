@@ -1,94 +1,152 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! What a national contact point relayed (Implementing Regulation (EU)
-//! 2026/2099 Annex Tables 1 and 2), written in an entity of its own and
-//! marked asserted, and the correlation identifier the client sent.
+//! What a contact point or a federation relayed (Implementing Regulation
+//! (EU) 2026/2099 Annex Tables 1 and 2, the eHDSI SAML Profile 10.0.0 §2.3
+//! attributes), written in an entity of its own and marked asserted, with
+//! the agreement it was made under and the correlation identifier with its
+//! source. BALP 1.1.4 §3:5.7.5.4 maps none of these to an element of its own
+//! for a person the token does not name, so each is a `detail`.
 
 use ehds_logging::balp::exchange;
 use ehds_logging::record::{
-    AccessRecord, Action, Coded, Outcome, Relayed, RelayedProfessional, RelayedProvider,
+    AccessClass, AccessRecord, Action, Correlation, CorrelationSource, Outcome, Relayed,
 };
 
 use super::{details, entity, gateway, record, written};
+use crate::support::relayed::*;
+use crate::support::{contact_point, organisation};
 
-/// The synthetic values of a relayed professional and provider.
-const CONTACT_POINT: &str = "https://ncp.example.org";
-const FAMILY: &str = "Qz7-family-51";
-const GIVEN: &str = "Qz7-given-52";
-const HP_ID: &str = "Qz7-hp-53";
-const HP_AUTHORITY: &str = "Qz7-hp-authority-54";
-const ROLE: &str = "Qz7-role-55";
-const HCP_ID: &str = "Qz7-hcp-56";
-const HCP_AUTHORITY: &str = "Qz7-hcp-authority-57";
-const HCP_NAME: &str = "Qz7-hcp-name-58";
-const HCP_ADDRESS: &str = "Qz7-hcp-address-59";
 const CORRELATION: &str = "Qz7-correlation-60";
 
-/// A record of an access a national contact point relayed, with the
-/// correlation identifier it sent.
+/// A record of an access a contact point relayed, with the correlation
+/// identifier its token attested.
 fn relayed_record() -> AccessRecord {
     let mut record = record(Action::Query, Outcome::Success);
-    record.accessor.relayed = Some(Relayed {
-        contact_point: CONTACT_POINT.to_owned(),
-        country_code: "XA".to_owned(),
-        professional: RelayedProfessional {
-            family_name: FAMILY.to_owned(),
-            given_name: GIVEN.to_owned(),
-            identifier: HP_ID.to_owned(),
-            issuing_authority: HP_AUTHORITY.to_owned(),
-            roles: vec![Coded {
-                system: Some("urn:oid:2.999.9".to_owned()),
-                code: ROLE.to_owned(),
-            }],
-        },
-        provider: RelayedProvider {
-            identifier: HCP_ID.to_owned(),
-            issuing_authority: HCP_AUTHORITY.to_owned(),
-            name: HCP_NAME.to_owned(),
-            address: HCP_ADDRESS.to_owned(),
-        },
+    record.accessor.relayed = Some(Relayed::try_from(contact_point()).expect("a relayed access"));
+    record.request.correlation = Some(Correlation {
+        value: CORRELATION.to_owned(),
+        source: CorrelationSource::TokenClaim,
     });
-    record.request.correlation = Some(CORRELATION.to_owned());
     record
 }
 
-/// Implementing Regulation (EU) 2026/2099 Art 7, Annex Tables 1 and 2: every
-/// relayed attribute is written, beside the contact point that asserted it
-/// and the mark that it is asserted.
-#[test]
-fn a_relayed_professional_and_provider_ride_in_their_own_entity_marked_asserted() {
-    let written = written(&relayed_record());
+fn relayed_entity(record: &AccessRecord) -> serde_json::Value {
+    let written = written(record);
     let relayed = entity(&written, "ehds-relayed");
     let [relayed] = relayed.as_slice() else {
         panic!("one relayed entity, got {relayed:?}");
     };
+    (*relayed).clone()
+}
+
+/// Every relayed member is written, beside the issuer that asserted it, how
+/// it reached the recording system and the mark that it is asserted.
+#[test]
+fn every_relayed_member_rides_in_its_own_entity_marked_asserted() {
+    let relayed = relayed_entity(&relayed_record());
     assert_eq!(relayed["type"]["code"], "4");
+    let encoded = format!("{SP_PROVIDED_ID}<{NAME_ID}@{IDA_ISSUER}>");
     for (kind, value) in [
-        ("contact-point", CONTACT_POINT),
+        ("relayed-via", "contact-point"),
+        ("relayed-issuer", CONTACT_POINT),
         ("asserted", "true"),
         ("country-code", "XA"),
+        ("professional-named", "true"),
+        ("hp-name", NAME),
         ("hp-family-name", FAMILY),
         ("hp-given-name", GIVEN),
         ("hp-identifier", HP_ID),
         ("hp-issuing-authority", HP_AUTHORITY),
+        ("hp-provider-identifier", HP_PROVIDER),
+        ("hp-name-id", encoded.as_str()),
+        (
+            "hp-authentication-method",
+            "urn:oasis:names:tc:SAML:2.0:ac:classes:SmartcardPKI",
+        ),
+        ("hp-permission", PERMISSION),
         ("provider-identifier", HCP_ID),
         ("provider-issuing-authority", HCP_AUTHORITY),
         ("provider-name", HCP_NAME),
         ("provider-address", HCP_ADDRESS),
+        ("provider-home-community-id", HOME_COMMUNITY),
+        ("point-of-care", POINT_OF_CARE),
+        ("identity-assertion-id", IDA),
+        ("trc-assertion-id", TRC),
+        ("request-message-id", MESSAGE),
+        ("consumer-ncp", CONSUMER_NCP),
+        ("provider-ncp", PROVIDER_NCP),
     ] {
-        assert_eq!(details(relayed, kind), [value], "{kind}");
+        assert_eq!(details(&relayed, kind), [value], "{kind}");
     }
     assert_eq!(
-        details(relayed, "hp-professional-role"),
-        [format!("urn:oid:2.999.9|{ROLE}")]
+        details(&relayed, "hp-professional-role"),
+        [format!("{ISCO}|{ROLE}")]
     );
+    assert_eq!(
+        details(&relayed, "provider-facility-type"),
+        [format!("{FACILITY_SYSTEM}|{FACILITY}")]
+    );
+    for absent in [
+        "hp-on-behalf-of",
+        "provider-organisation-type",
+        "agreement-name",
+    ] {
+        assert_eq!(details(&relayed, absent), Vec::<&str>::new(), "{absent}");
+    }
 }
 
-/// The correlation identifier the client sent is a detail of the request
-/// id's entity, so the record joins the client's own log.
+/// eHDSI Section I Security Policies 10.0.0 SR 5: the record keeps the
+/// assertion and message ids, never a security header.
 #[test]
-fn the_correlation_identifier_rides_with_the_request_id() {
+fn the_record_carries_no_security_header() {
+    let written = written(&relayed_record()).to_string();
+    assert!(!written.contains("securityheader"), "{written}");
+    assert!(!written.contains("Assertion>"), "{written}");
+}
+
+/// An organisation without a named person is recorded as such, with the
+/// agreement, its legal ground, the consent decision and the access class.
+#[test]
+fn an_organisation_access_names_no_person_and_carries_its_agreement() {
+    let mut record = record(Action::Read, Outcome::Success);
+    record.accessor.relayed =
+        Some(Relayed::try_from(organisation(AccessClass::Chained)).expect("an organisation"));
+    record.request.correlation = Some(Correlation {
+        value: CORRELATION.to_owned(),
+        source: CorrelationSource::AuthorizationDetails,
+    });
+    let relayed = relayed_entity(&record);
+    for (kind, value) in [
+        ("relayed-via", "federation"),
+        ("relayed-issuer", FEDERATION),
+        ("professional-named", "false"),
+        ("agreement-name", AGREEMENT),
+        ("agreement-version", AGREEMENT_VERSION),
+        ("agreement-consent", CONSENT),
+        ("agreement-access-class", "chained"),
+    ] {
+        assert_eq!(details(&relayed, kind), [value], "{kind}");
+    }
+    assert_eq!(
+        details(&relayed, "agreement-legal-ground"),
+        ["https://example.org/gdpr|art-9-2-h", GROUND]
+    );
+    assert_eq!(
+        details(&relayed, "provider-organisation-type"),
+        [format!(
+            "https://example.org/organisation-type|{ORGANISATION_TYPE}"
+        )]
+    );
+    assert_eq!(details(&relayed, "hp-name"), Vec::<&str>::new());
+    assert_eq!(details(&relayed, "hp-identifier"), Vec::<&str>::new());
+}
+
+/// The correlation identifier is a detail of the request id's entity, with
+/// where the recording system read it, so the record joins the client's
+/// own log.
+#[test]
+fn the_correlation_identifier_rides_with_the_request_id_and_its_source() {
     let written = written(&relayed_record());
     let transaction = written["entity"]
         .as_array()
@@ -97,6 +155,7 @@ fn the_correlation_identifier_rides_with_the_request_id() {
         .find(|entity| entity["type"]["code"] == "XrequestId")
         .expect("entity:transaction");
     assert_eq!(details(transaction, "correlation-id"), [CORRELATION]);
+    assert_eq!(details(transaction, "correlation-source"), ["token-claim"]);
 }
 
 #[test]
@@ -114,15 +173,20 @@ fn no_debug_shows_a_relayed_value() {
     let record = relayed_record();
     let shown = format!("{record:?} {:?}", exchange(&record, &gateway()));
     for value in [
+        NAME,
         FAMILY,
         GIVEN,
         HP_ID,
         HP_AUTHORITY,
-        ROLE,
-        HCP_ID,
+        HP_PROVIDER,
+        NAME_ID,
         HCP_AUTHORITY,
         HCP_NAME,
         HCP_ADDRESS,
+        POINT_OF_CARE,
+        IDA,
+        TRC,
+        MESSAGE,
         CORRELATION,
     ] {
         assert!(!shown.contains(value), "{value} in {shown}");

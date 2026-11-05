@@ -11,6 +11,116 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-05
+
+The access record says how the recording system bound the accessor to a
+party, and records verified professionals and organisations of other
+parties, relayed by a MyHealth@EU contact point or a domestic federation,
+with the eHDSI fields that join it to the contact point's own audit entry.
+`ehds-logging` writes it as a DICOM PS3.15 audit message too (feature
+`atna`), and both crates escape every value they write. This release breaks
+the public API of both crates: each break below names the upgrade step.
+Products pin `=0.4.0`.
+
+### Added
+
+- `ehds_logging::record::Binding` and `Accessor::binding`: the binding
+  outcome, one of `bound` (with a `guest` mark), `provisional`, `external`,
+  `organisation`, `system`, `self`, `refused-unbound`, `refused-ambiguous`,
+  `refused-inactive`, `refused-abandoned`, `refused-key-claim-missing`
+  (with the claim), `refused-groups-unavailable`, `refused-guest`,
+  `refused-external-incomplete` (with the fields) and
+  `refused-trc-patient-mismatch` (a security event). The party, a
+  `PartyRef` triple, rides on `bound` and `provisional` with the groups
+  (`BoundParty`), and on `refused-inactive` and `refused-abandoned` alone,
+  so no other outcome can carry one; `Accessor::party` reads it (#140).
+- `Accessor::actors`, the token's actor chain outermost first (RFC 8693
+  §4.1), and `Accessor::represents`, whom a representative acts for and on
+  which ground (#140).
+- `Acting::Delegated`, `Acting::External` and `Acting::System`, beside
+  `Person` and `Client`, which stays readable in stored records (#140).
+- The eHDSI members of a relayed access (eHDSI SAML Profile 10.0.0 §2.1,
+  §2.3): `RelayedProfessional::name` (the `subject-id` full name),
+  `healthcare_provider_identifier` (2026/2099 Annex Table 1), `name_id`
+  (`NameId`, written `SPProvidedID<NameID@Issuer>` as the Audit Trail
+  Profile 10.1.0 §2.3.41 fixes), `authentication_method` (one of the seven
+  two-factor `AuthenticationMethod` classes, in place of an assurance
+  level), `on_behalf_of` and `permissions`; `RelayedProvider::facility_type`,
+  `home_community_id` and `organisation_type`; and on the relayed access the
+  point of care, the IdA and TRC ids, the request message UUID and the
+  contact points' certificate CNs (`Gateways`) (#140).
+- `Agreement`, with its name, version, coded `legal_ground`, consent
+  decision and `AccessClass` (`automated` or `chained`), on every
+  federation access (GDPR Art 5(2), Art 30(1)(b)) (#140).
+- `Correlation` and `CorrelationSource`: where the correlation id was read,
+  an attested token claim, an attested `authorization_details` member or a
+  request header. `AccessRecord::validate` refuses a `chained` organisation
+  access without an attested one, and `BalpSink` refuses such a record
+  before it reaches the recorder (#140).
+- The BALP record writes the new members in the `ehds-relayed` entity and a
+  new `ehds-accessor` entity, and the bound party as the `agent:user`
+  `otherId` typed `PRN` (BALP 1.1.4 §3:5.7.5.4, `ihe_iua:person_id`) (#140).
+- `ehds_logging::atna` (feature `atna`): the record as a DICOM PS3.15 A.5
+  audit message, written from the same exchange as its BALP record by the
+  `RESTful` ATNA Rev. 3.6 Table 3.20.4.2.2.1-1 mapping. A relayed access
+  names the requester by `SPProvidedID<NameID@Issuer>` with the `subject-id`
+  name and the role, and each contact point by its certificate CN (Audit
+  Trail Profile 10.1.0 §2.3.13 to §2.3.15); the patient is its HL7 v2 CX
+  identifier (§2.3.17). The message carries the assertion and message ids
+  and no security header (eHDSI Section I Security Policies 10.0.0 SR 5)
+  (#140).
+- `ihe_atna::escape::untrusted`, which writes each control, bidirectional
+  formatting and line separator character as its code point (`\u{202e}`);
+  `ihe_atna::user::PersonId` with `User::with_person_id`, written as
+  `otherId` typed `PRN`; `EventIdentification::purposes_of_use`, written as
+  `PurposeOfUse` (ITI TF-2 §3.20.7.1.2); and `ParticipantObject::name`,
+  written as `ParticipantObjectName` (#140).
+
+### Changed
+
+- Breaking: `Relayed` is built with `Relayed::try_from(RelayedParts { .. })`
+  and read with `Relayed::as_parts`; its fields are no longer public. It
+  refuses a contact point that names no professional, a federation access
+  with no agreement, an organisation whose agreement declares no access
+  class, a contact point provider named by no `urn:oid:` or `urn:hl7ii:`
+  identifier, and an ISCO `44` clerical worker without `on_behalf_of`
+  (`RelayedError`). Upgrade: build a `RelayedParts` and convert it, and
+  handle the error.
+- Breaking: `Relayed::contact_point` is replaced by `RelayedParts::via`.
+  Upgrade: `contact_point: issuer` becomes
+  `via: Via::ContactPoint { issuer }`, and a domestic federation issuer is
+  `Via::Federation { issuer }`.
+- Breaking: the relayed professional is optional
+  (`RelayedParts::professional: Option<RelayedProfessional>`). Upgrade:
+  wrap it in `Some`; `None` records an organisation without a named person,
+  admitted only under a federation agreement with an access class.
+- Breaking: `RelayedProfessional` has the full name `name`, and
+  `family_name` and `given_name` are optional; `RelayedProvider::name` and
+  `address` are optional. Upgrade: set `name` to the `subject-id`, wrap the
+  parts of the name in `Some`, and name the new members (`None` or empty
+  when the issuer does not state them).
+- Breaking: `Accessor` has the public fields `binding`, `actors` and
+  `represents`. Upgrade: a struct literal names them, `None`, `Vec::new()`
+  and `None` for an accessor that carries none.
+- Breaking: `Request::correlation` is an `Option<Correlation>`. Upgrade:
+  `Some(id)` becomes `Some(Correlation { value: id, source })` with the
+  source it was read from.
+- Breaking: the BALP detail `contact-point` is replaced by `relayed-via`
+  and `relayed-issuer`, and `balp::detail::CONTACT_POINT` by `RELAYED_VIA`
+  and `RELAYED_ISSUER`. Upgrade: a reader of stored records reads the new
+  names for a record written by this release.
+- Breaking: `ihe_atna::atna::message::EventIdentification` has the public
+  field `purposes_of_use` and `ParticipantObject` the public field `name`.
+  Upgrade: a struct literal names them, `Vec::new()` and `None` for a
+  message that carries neither.
+- Every string the BALP `AuditEvent` carries, and every attribute and text
+  value of the DICOM message, is written through `escape::untrusted`, so a
+  control, bidirectional formatting or line separator character in a value
+  is written as its code point. A detail value and a query of the DICOM
+  message stay base64 of the value as given (DICOM PS3.15 A.5.1.1). A
+  reader that compared a written value with one holding such a character
+  compares it with the escaped form (#140).
+
 ## [0.3.3] - 2026-10-31
 
 `ehds-logging` keeps access records about a resource held from the person

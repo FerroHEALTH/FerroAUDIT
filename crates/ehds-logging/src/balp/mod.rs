@@ -52,11 +52,25 @@
 //! and the record's retention, one per origin and one per `ehr_id`, each
 //! with its `detail` entries named as [`detail`] lists them (no
 //! specification governs the names: our own design). The professional and
-//! the provider a national contact point relays (Implementing Regulation
-//! (EU) 2026/2099 Annex Tables 1 and 2) ride the same way, in one entity
-//! `ehds-relayed` that names the contact point and marks them `asserted`,
-//! and a correlation identifier the client sent is a `detail` of the request
-//! id's entity.
+//! the provider a contact point or a federation relays (Implementing
+//! Regulation (EU) 2026/2099 Annex Tables 1 and 2, with the eHDSI SAML
+//! Profile 10.0.0 §2.3 attributes) ride the same way, in one entity
+//! `ehds-relayed` that names how they were relayed and by which issuer,
+//! marks them `asserted`, and carries the agreement with its legal ground,
+//! the point of care, the assertion and message ids and the contact points'
+//! certificate CNs. The binding outcome, the party and its groups, the
+//! actor chain and the representation ride in one entity `ehds-accessor`. A
+//! correlation identifier the client sent is a `detail` of the request id's
+//! entity, with where it was read.
+//!
+//! BALP 1.1.4 §3:5.7.5.4 has an element for one of the members this adds:
+//! the bound party is the person's `ihe_iua:person_id`, written as the
+//! `agent:user` `otherId` typed `PRN`, its namespace as the system when it
+//! is a URI. The new acting modes are `agent:user` `role` codes as the old
+//! ones are. For every other member it has none: the binding outcome, the
+//! groups, the actor chain, the representation, the correlation source and
+//! each relayed member are details only, since the `agent:user` slice is the
+//! token's person and a relayed professional is not who the token names.
 //!
 //! The record's security labels ([`crate::label`], Annex II 3.4) are each
 //! the `securityLabel` of the entity it belongs to: the categories' on the
@@ -159,6 +173,9 @@
 //!         purposes: Vec::new(),
 //!         policies: Vec::new(),
 //!         relayed: None,
+//!         binding: None,
+//!         actors: Vec::new(),
+//!         represents: None,
 //!     },
 //!     subject: DataSubject::default(),
 //!     retention: RetentionPolicy::default().retain(recorded, &categories, []),
@@ -200,7 +217,7 @@ use ihe_atna::balp::{
     OTHER, Peer, READ, REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT,
     SecurityLabel, UPDATE, What, is_literal_reference,
 };
-use ihe_atna::user::{Code, OnBehalfOf, PurposeOfUse, User};
+use ihe_atna::user::{Code, OnBehalfOf, PersonId, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
 
@@ -208,7 +225,8 @@ use crate::classify::{Basis, Classification};
 use crate::emergency::Emergency;
 use crate::label::Label;
 use crate::record::{
-    AccessRecord, Action, Origin, Outcome, PatientIdentifier, PatientLookup, Population, Relayed,
+    AccessRecord, Accessor, Action, Coded as RecordCoded, Origin, Outcome, PartyRef,
+    PatientIdentifier, PatientLookup, Population, Relayed, RelayedProfessional,
 };
 use crate::retention::Retention;
 use crate::sink::{AccessSink, Reservation, SinkError};
@@ -220,6 +238,15 @@ pub const EMERGENCY_ENTITY: &str = "ehds-emergency-access";
 pub const EMERGENCY_DESCRIPTION: &str = "Emergency access: the accessor declared that the access \
      was necessary to protect the vital interests of the data subject \
      (Regulation (EU) 2025/327 Art 11(5)).";
+
+/// The name of the entity that carries what a contact point or a federation
+/// relayed.
+pub const RELAYED_ENTITY: &str = "ehds-relayed";
+
+/// The name of the entity that carries how the accessor was bound to a
+/// party: the binding outcome, the party and its groups, the actor chain and
+/// the representation.
+pub const ACCESSOR_ENTITY: &str = "ehds-accessor";
 
 /// The name of the entity that marks a population access.
 pub const POPULATION_ENTITY: &str = "ehds-population";
@@ -298,6 +325,9 @@ impl BalpSink {
 #[async_trait::async_trait]
 impl AccessSink for BalpSink {
     async fn store(&self, record: AccessRecord) -> Result<(), SinkError> {
+        record
+            .validate()
+            .map_err(|error| SinkError(Box::new(error)))?;
         self.recorder
             .record(exchange_with(&record, &self.endpoint, &self.ids))
             .await
@@ -339,6 +369,9 @@ impl std::fmt::Debug for BalpReservation {
 #[async_trait::async_trait]
 impl Reservation for BalpReservation {
     async fn store(self: Box<Self>, record: AccessRecord) -> Result<(), SinkError> {
+        record
+            .validate()
+            .map_err(|error| SinkError(Box::new(error)))?;
         let exchange = exchange_with(&record, &self.endpoint, &self.ids);
         match self.place {
             Some(place) => place.record(exchange).await,
@@ -394,6 +427,9 @@ pub fn exchange_with(
         )
         .with_organisation(accessor.provider.clone())
         .with_alt_id(accessor.alt_id.clone())
+        // NOTE: BALP 1.1.4 §3:5.7.5.4 writes ihe_iua:person_id at agent[user].extension[otherId]
+        // [provider-id], which is what the bound party is: the person in the person directory.
+        .with_person_id(accessor.party().map(person_id))
         .with_name(accessor.professional.name.clone())
         .with_provider_identifier(accessor.professional.identifier.clone())
         // NOTE: no specification governs these codes: our own design; BALP 1.1.4 leaves the
@@ -429,6 +465,15 @@ pub fn exchange_with(
         // NOTE: RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps `entity.securityLabel`
         // and no `meta`, so every label rides on its entity alone (#108, #111).
         security: Vec::new(),
+    }
+}
+
+/// The person id `party` is written as: its id, in its namespace when the
+/// namespace is a URI (FHIR R4 `Identifier.system`).
+fn person_id(party: &PartyRef) -> PersonId {
+    PersonId {
+        system: Some(party.namespace.clone()).filter(|namespace| is_uri(namespace)),
+        value: party.id.clone(),
     }
 }
 
@@ -527,10 +572,12 @@ fn kind(record: &AccessRecord) -> EventKind {
 /// the patient, each `ehr_id`, the categories, and each origin.
 fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
     let request = &record.request;
-    let correlation = request
-        .correlation
-        .iter()
-        .map(|correlation| Detail::new(detail::CORRELATION, correlation.clone()));
+    let correlation = request.correlation.iter().flat_map(|correlation| {
+        [
+            Detail::new(detail::CORRELATION, correlation.value.clone()),
+            Detail::new(detail::CORRELATION_SOURCE, correlation.source.code()),
+        ]
+    });
     // NOTE: BALP 1.1.4 entity:transaction is 0..1 and needs what.identifier.value, so a request
     // with no id writes none, and its correlation id rides on the categories entity.
     let mut entities: Vec<Entity> = request
@@ -598,7 +645,11 @@ fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
         entities.push(origin_entity(origin, labels));
     }
     if let Some(relayed) = &record.accessor.relayed {
-        entities.push(other(None, "ehds-relayed", relayed_details(relayed), &[]));
+        entities.push(other(None, RELAYED_ENTITY, relayed_details(relayed), &[]));
+    }
+    let accessor = accessor_details(&record.accessor);
+    if !accessor.is_empty() {
+        entities.push(other(None, ACCESSOR_ENTITY, accessor, &[]));
     }
     entities.extend(record.subject.population.as_ref().map(population_entity));
     if let Some(emergency) = &record.emergency {
@@ -826,38 +877,212 @@ fn coded(system: Option<&str>, code: &str) -> String {
     }
 }
 
-/// The `detail` entries of what a national contact point relayed, marked
-/// as its assertion.
+/// `<system>|<code>` of a record's coded value, or `<code>`.
+fn record_coded(value: &RecordCoded) -> String {
+    coded(value.system.as_deref(), &value.code)
+}
+
+/// `<namespace>|<type>|<id>` of `party`.
+fn party_ref(party: &PartyRef) -> String {
+    format!("{}|{}|{}", party.namespace, party.kind, party.id)
+}
+
+/// The `detail` entries of what a contact point or a federation relayed,
+/// marked as its assertion.
 fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
-    let professional = &relayed.professional;
-    let provider = &relayed.provider;
+    let parts = relayed.as_parts();
     let mut details = vec![
-        Detail::new(detail::CONTACT_POINT, relayed.contact_point.clone()),
+        Detail::new(detail::RELAYED_VIA, parts.via.code()),
+        Detail::new(detail::RELAYED_ISSUER, parts.via.issuer()),
         Detail::new(detail::ASSERTED, "true"),
-        Detail::new(detail::COUNTRY_CODE, relayed.country_code.clone()),
-        Detail::new(detail::FAMILY_NAME, professional.family_name.clone()),
-        Detail::new(detail::GIVEN_NAME, professional.given_name.clone()),
-        Detail::new(detail::HP_IDENTIFIER, professional.identifier.clone()),
+        Detail::new(detail::COUNTRY_CODE, parts.country_code.clone()),
         Detail::new(
-            detail::HP_ISSUING_AUTHORITY,
-            professional.issuing_authority.clone(),
+            detail::PROFESSIONAL_NAMED,
+            if relayed.names_a_professional() {
+                "true"
+            } else {
+                "false"
+            },
         ),
     ];
-    details.extend(
-        professional
-            .roles
-            .iter()
-            .map(|role| Detail::new(detail::HP_ROLE, coded(role.system.as_deref(), &role.code))),
-    );
+    if let Some(professional) = &parts.professional {
+        details.extend(professional_details(professional));
+    }
+    let provider = &parts.provider;
     details.extend([
         Detail::new(detail::PROVIDER_IDENTIFIER, provider.identifier.clone()),
         Detail::new(
             detail::PROVIDER_ISSUING_AUTHORITY,
             provider.issuing_authority.clone(),
         ),
-        Detail::new(detail::PROVIDER_NAME, provider.name.clone()),
-        Detail::new(detail::PROVIDER_ADDRESS, provider.address.clone()),
     ]);
+    details.extend(optional(detail::PROVIDER_NAME, provider.name.as_ref()));
+    details.extend(optional(
+        detail::PROVIDER_ADDRESS,
+        provider.address.as_ref(),
+    ));
+    details.extend(
+        provider
+            .facility_type
+            .as_ref()
+            .map(|kind| Detail::new(detail::PROVIDER_FACILITY_TYPE, record_coded(kind))),
+    );
+    details.extend(optional(
+        detail::PROVIDER_HOME_COMMUNITY_ID,
+        provider.home_community_id.as_ref(),
+    ));
+    details.extend(
+        provider
+            .organisation_type
+            .as_ref()
+            .map(|kind| Detail::new(detail::PROVIDER_ORGANISATION_TYPE, record_coded(kind))),
+    );
+    for (name, value) in [
+        (detail::POINT_OF_CARE, &parts.point_of_care),
+        (detail::IDENTITY_ASSERTION_ID, &parts.identity_assertion_id),
+        (detail::TRC_ASSERTION_ID, &parts.trc_assertion_id),
+        (detail::REQUEST_MESSAGE_ID, &parts.message_id),
+        (detail::CONSUMER_NCP, &parts.gateways.consumer),
+        (detail::PROVIDER_NCP, &parts.gateways.provider),
+    ] {
+        details.extend(optional(name, value.as_ref()));
+    }
+    if let Some(agreement) = &parts.agreement {
+        details.extend([
+            Detail::new(detail::AGREEMENT_NAME, agreement.name.clone()),
+            Detail::new(detail::AGREEMENT_VERSION, agreement.version.clone()),
+        ]);
+        details.extend(
+            agreement
+                .legal_ground
+                .iter()
+                .map(|ground| Detail::new(detail::AGREEMENT_LEGAL_GROUND, record_coded(ground))),
+        );
+        details.extend(optional(
+            detail::AGREEMENT_CONSENT,
+            agreement.consent.as_ref(),
+        ));
+        details.extend(
+            agreement
+                .access_class
+                .map(|class| Detail::new(detail::AGREEMENT_ACCESS_CLASS, class.code())),
+        );
+    }
+    details
+}
+
+/// `value` as the detail `name`, when there is one.
+fn optional(name: &'static str, value: Option<&String>) -> Option<Detail> {
+    value.map(|value| Detail::new(name, value.clone()))
+}
+
+/// The `detail` entries of a relayed professional (2026/2099 Annex Table 1,
+/// eHDSI SAML Profile 10.0.0 §2.3).
+fn professional_details(professional: &RelayedProfessional) -> Vec<Detail> {
+    let mut details = Vec::new();
+    details.push(Detail::new(detail::HP_NAME, professional.name.clone()));
+    details.extend(optional(
+        detail::FAMILY_NAME,
+        professional.family_name.as_ref(),
+    ));
+    details.extend(optional(
+        detail::GIVEN_NAME,
+        professional.given_name.as_ref(),
+    ));
+    details.extend([
+        Detail::new(detail::HP_IDENTIFIER, professional.identifier.clone()),
+        Detail::new(
+            detail::HP_ISSUING_AUTHORITY,
+            professional.issuing_authority.clone(),
+        ),
+    ]);
+    details.extend(
+        professional
+            .roles
+            .iter()
+            .map(|role| Detail::new(detail::HP_ROLE, record_coded(role))),
+    );
+    details.extend(optional(
+        detail::HP_PROVIDER_IDENTIFIER,
+        professional.healthcare_provider_identifier.as_ref(),
+    ));
+    details.extend(
+        professional
+            .name_id
+            .as_ref()
+            .map(|name_id| Detail::new(detail::HP_NAME_ID, name_id.user_id())),
+    );
+    details.extend(
+        professional
+            .authentication_method
+            .map(|method| Detail::new(detail::HP_AUTHENTICATION_METHOD, method.uri())),
+    );
+    details.extend(
+        professional
+            .on_behalf_of
+            .as_ref()
+            .map(|role| Detail::new(detail::HP_ON_BEHALF_OF, record_coded(role))),
+    );
+    details.extend(
+        professional
+            .permissions
+            .iter()
+            .map(|permission| Detail::new(detail::HP_PERMISSION, permission.clone())),
+    );
+    details
+}
+
+/// The `detail` entries of how `accessor` was bound to a party: the binding
+/// outcome with what it names, the actor chain outermost first, and the
+/// representation; empty when the accessor carries none of them.
+fn accessor_details(accessor: &Accessor) -> Vec<Detail> {
+    let mut details = Vec::new();
+    if let Some(binding) = &accessor.binding {
+        details.push(Detail::new(detail::BINDING, binding.code()));
+        if binding.is_guest() {
+            details.push(Detail::new(detail::GUEST, "true"));
+        }
+        if binding.is_security_event() {
+            details.push(Detail::new(detail::SECURITY_EVENT, "true"));
+        }
+        details.extend(
+            binding
+                .party()
+                .map(|party| Detail::new(detail::PARTY, party_ref(party))),
+        );
+        details.extend(
+            binding
+                .groups()
+                .iter()
+                .map(|group| Detail::new(detail::GROUP, party_ref(group))),
+        );
+        match binding {
+            crate::record::Binding::RefusedKeyClaimMissing { claim } => {
+                details.push(Detail::new(detail::BINDING_CLAIM, claim.clone()));
+            }
+            crate::record::Binding::RefusedExternalIncomplete { fields } => details.extend(
+                fields
+                    .iter()
+                    .map(|field| Detail::new(detail::BINDING_FIELD, field.clone())),
+            ),
+            _ => {}
+        }
+    }
+    details.extend(accessor.actors.iter().map(|actor| {
+        Detail::new(
+            detail::ACTOR,
+            coded(actor.issuer.as_deref(), &actor.subject),
+        )
+    }));
+    if let Some(representation) = &accessor.represents {
+        details.extend([
+            Detail::new(detail::REPRESENTS, party_ref(&representation.represented)),
+            Detail::new(
+                detail::REPRESENTS_GROUND,
+                record_coded(&representation.ground),
+            ),
+        ]);
+    }
     details
 }
 

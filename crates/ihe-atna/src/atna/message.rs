@@ -18,6 +18,7 @@ use quick_xml::Writer;
 use quick_xml::events::{BytesDecl, BytesText, Event};
 use secrecy::{ExposeSecret, SecretSlice, SecretString};
 
+use crate::escape;
 use crate::redact::REDACTED;
 
 /// A coded value, written `EV(code, codeSystemName, originalText)` in the
@@ -67,6 +68,10 @@ pub struct EventIdentification {
     /// `EventOutcomeDescription`, free text on how the event ended, when
     /// the system gives one (DICOM PS3.15 A.5.1, optional).
     pub outcome_description: Option<String>,
+    /// `PurposeOfUse`, in order: the purposes of use the event was made
+    /// for, each a `CodedValueType` (ITI TF-2 §3.20.7.1.2), written after
+    /// the elements PS3.15 A.5.1 defines.
+    pub purposes_of_use: Vec<CodedValue>,
 }
 
 /// A `NetworkAccessPointID` with its `NetworkAccessPointTypeCode`.
@@ -172,7 +177,12 @@ pub struct ParticipantObject {
     pub data_life_cycle: Option<&'static str>,
     /// `ParticipantObjectIDTypeCode`.
     pub id_type_code: CodedValue,
-    /// `ParticipantObjectQuery`, written base64-encoded.
+    /// `ParticipantObjectName`, written when no query is given: DICOM
+    /// PS3.15 A.5.1 holds either a name or a query, and `RESTful` ATNA Rev.
+    /// 3.6 Table 3.20.4.2.2.1-1 maps it from `entity.name`.
+    pub name: Option<SecretString>,
+    /// `ParticipantObjectQuery`, written base64-encoded, in place of the
+    /// name.
     pub query: Option<SecretString>,
     /// `ParticipantObjectDetail` pairs: the type, and the value written
     /// base64-encoded.
@@ -187,6 +197,7 @@ impl fmt::Debug for ParticipantObject {
             .field("type_code_role", &self.type_code_role)
             .field("data_life_cycle", &self.data_life_cycle)
             .field("id_type_code", &self.id_type_code)
+            .field("name", &self.name.as_ref().map(|_| REDACTED))
             .field("query", &self.query.as_ref().map(|_| REDACTED))
             .field(
                 "details",
@@ -254,9 +265,12 @@ impl AuditMessage {
         writer
             .create_element("EventIdentification")
             .with_attributes([
-                ("EventActionCode", event.action),
+                ("EventActionCode", escape::untrusted(event.action).as_ref()),
                 ("EventDateTime", date_time.as_str()),
-                ("EventOutcomeIndicator", event.outcome),
+                (
+                    "EventOutcomeIndicator",
+                    escape::untrusted(event.outcome).as_ref(),
+                ),
             ])
             .write_inner_content(|writer| {
                 write_coded(writer, "EventID", &event.event_id)?;
@@ -267,7 +281,12 @@ impl AuditMessage {
                 if let Some(description) = &event.outcome_description {
                     writer
                         .create_element("EventOutcomeDescription")
-                        .write_text_content(BytesText::new(description))?;
+                        .write_text_content(BytesText::new(&escape::untrusted(description)))?;
+                }
+                // NOTE: ITI TF-2 §3.20.7.1.2 adds PurposeOfUse, which PS3.15 A.5.1 does not
+                // place, so it follows the elements the schema defines.
+                for purpose in &event.purposes_of_use {
+                    write_coded(writer, "PurposeOfUse", purpose)?;
                 }
                 Ok(())
             })?;
@@ -278,9 +297,13 @@ impl AuditMessage {
         let source = &self.source;
         let mut attributes = Vec::new();
         if let Some(site) = &source.enterprise_site {
-            attributes.push(("AuditEnterpriseSiteID", site.as_str()));
+            attributes.push(("AuditEnterpriseSiteID", escape::untrusted(site)));
         }
-        attributes.push(("AuditSourceID", source.id.as_str()));
+        attributes.push(("AuditSourceID", escape::untrusted(&source.id)));
+        let attributes: Vec<(&str, &str)> = attributes
+            .iter()
+            .map(|(name, value)| (*name, value.as_ref()))
+            .collect();
         let element = writer
             .create_element("AuditSourceIdentification")
             .with_attributes(attributes);
@@ -290,16 +313,20 @@ impl AuditMessage {
         }
         element.write_inner_content(|writer| {
             for kind in &source.type_codes {
-                let mut attributes = vec![("csd-code", kind.code.as_str())];
+                let mut attributes = vec![("csd-code", escape::untrusted(&kind.code))];
                 if let Some(system) = &kind.system_name {
-                    attributes.push(("codeSystemName", system.as_str()));
+                    attributes.push(("codeSystemName", escape::untrusted(system)));
                 }
                 if let Some(text) = &kind.original_text {
-                    attributes.push(("originalText", text.as_str()));
+                    attributes.push(("originalText", escape::untrusted(text)));
                 }
                 writer
                     .create_element("AuditSourceTypeCode")
-                    .with_attributes(attributes)
+                    .with_attributes(
+                        attributes
+                            .iter()
+                            .map(|(name, value)| (*name, value.as_ref())),
+                    )
                     .write_empty()?;
             }
             Ok(())
@@ -316,9 +343,15 @@ fn write_coded(
     writer
         .create_element(element)
         .with_attributes([
-            ("csd-code", code.code.as_str()),
-            ("codeSystemName", code.system_name.as_str()),
-            ("originalText", code.original_text.as_str()),
+            ("csd-code", escape::untrusted(&code.code).as_ref()),
+            (
+                "codeSystemName",
+                escape::untrusted(&code.system_name).as_ref(),
+            ),
+            (
+                "originalText",
+                escape::untrusted(&code.original_text).as_ref(),
+            ),
         ])
         .write_empty()?;
     Ok(())
@@ -328,28 +361,35 @@ fn write_participant(
     writer: &mut Writer<Vec<u8>>,
     participant: &ActiveParticipant,
 ) -> std::io::Result<()> {
-    let mut attributes = vec![("UserID", participant.user_id.as_str())];
+    let mut attributes = vec![("UserID", escape::untrusted(&participant.user_id))];
     if let Some(alternative) = &participant.alternative_user_id {
-        attributes.push(("AlternativeUserID", alternative.as_str()));
+        attributes.push(("AlternativeUserID", escape::untrusted(alternative)));
     }
     if let Some(name) = &participant.user_name {
-        attributes.push(("UserName", name.as_str()));
+        attributes.push(("UserName", escape::untrusted(name)));
     }
     attributes.push((
         "UserIsRequestor",
-        if participant.user_is_requestor {
+        std::borrow::Cow::Borrowed(if participant.user_is_requestor {
             "true"
         } else {
             "false"
-        },
+        }),
     ));
     if let Some(point) = &participant.access_point {
-        attributes.push(("NetworkAccessPointID", point.id.as_str()));
-        attributes.push(("NetworkAccessPointTypeCode", point.type_code));
+        attributes.push(("NetworkAccessPointID", escape::untrusted(&point.id)));
+        attributes.push((
+            "NetworkAccessPointTypeCode",
+            escape::untrusted(point.type_code),
+        ));
     }
     writer
         .create_element("ActiveParticipant")
-        .with_attributes(attributes)
+        .with_attributes(
+            attributes
+                .iter()
+                .map(|(name, value)| (*name, value.as_ref())),
+        )
         .write_inner_content(|writer| {
             for code in &participant.role_id_codes {
                 write_coded(writer, "RoleIDCode", code)?;
@@ -360,35 +400,53 @@ fn write_participant(
 }
 
 fn write_object(writer: &mut Writer<Vec<u8>>, object: &ParticipantObject) -> std::io::Result<()> {
-    let mut attributes = vec![("ParticipantObjectID", object.id.expose_secret())];
-    if let Some(code) = object.type_code {
-        attributes.push(("ParticipantObjectTypeCode", code));
+    let mut attributes = vec![(
+        "ParticipantObjectID",
+        escape::untrusted(object.id.expose_secret()),
+    )];
+    for (name, value) in [
+        ("ParticipantObjectTypeCode", object.type_code),
+        ("ParticipantObjectTypeCodeRole", object.type_code_role),
+        ("ParticipantObjectDataLifeCycle", object.data_life_cycle),
+    ] {
+        if let Some(value) = value {
+            attributes.push((name, escape::untrusted(value)));
+        }
     }
-    if let Some(role) = object.type_code_role {
-        attributes.push(("ParticipantObjectTypeCodeRole", role));
-    }
-    if let Some(stage) = object.data_life_cycle {
-        attributes.push(("ParticipantObjectDataLifeCycle", stage));
-    }
-    let details: Vec<(&str, String)> = object
+    let details: Vec<(std::borrow::Cow<'_, str>, String)> = object
         .details
         .iter()
-        .map(|(kind, value)| (kind.as_str(), STANDARD.encode(value.expose_secret())))
+        .map(|(kind, value)| {
+            (
+                escape::untrusted(kind),
+                STANDARD.encode(value.expose_secret()),
+            )
+        })
         .collect();
     writer
         .create_element("ParticipantObjectIdentification")
-        .with_attributes(attributes)
+        .with_attributes(
+            attributes
+                .iter()
+                .map(|(name, value)| (*name, value.as_ref())),
+        )
         .write_inner_content(|writer| {
             write_coded(writer, "ParticipantObjectIDTypeCode", &object.id_type_code)?;
+            // NOTE: DICOM PS3.15 A.5.1 holds a ParticipantObjectName or a ParticipantObjectQuery,
+            // and RESTful ATNA Rev. 3.6 Table 3.20.4.2.2.1-1 Note 2 uses one of the two.
             if let Some(query) = &object.query {
                 writer
                     .create_element("ParticipantObjectQuery")
                     .write_text_content(BytesText::new(&STANDARD.encode(query.expose_secret())))?;
+            } else if let Some(name) = &object.name {
+                writer
+                    .create_element("ParticipantObjectName")
+                    .write_text_content(BytesText::new(&escape::untrusted(name.expose_secret())))?;
             }
             for (kind, value) in &details {
                 writer
                     .create_element("ParticipantObjectDetail")
-                    .with_attributes([("type", *kind), ("value", value.as_str())])
+                    .with_attributes([("type", kind.as_ref()), ("value", value.as_str())])
                     .write_empty()?;
             }
             Ok(())
