@@ -22,7 +22,7 @@ records why the value is what it is.
 | RESTful ATNA | the IHE ITI supplement *Add RESTful ATNA (Query and Feed)*, Rev. 3.6 Trial Implementation | `docs/architecture.md` §2, `docs/specs/ihe-atna/PROVENANCE.md` |
 | BALP | the IHE Basic Audit Log Patterns 1.1.4, on FHIR R4 4.0.1 | `docs/architecture.md` §2, `docs/specs/ihe-balp/PROVENANCE.md`, `docs/specs/ihe-balp-pages/PROVENANCE.md` |
 | FHIR | R4 (4.0.1), through the `fhir-types` crate's `r4` module | `docs/architecture.md` §2, `Cargo.toml` |
-| EHDS Regulation | Regulation (EU) 2025/327 as published (OJ L, 2025/327, 5.3.2025), with Implementing Regulation (EU) 2026/2099 | `docs/architecture.md` §2, `docs/specs/eu-ehds/PROVENANCE.md` |
+| EHDS Regulation | Regulation (EU) 2025/327 as published (OJ L, 2025/327, 5.3.2025), with Implementing Regulations (EU) 2026/2083 (OJ L, 2026/2083, 21.9.2026) and 2026/2099 (OJ L, 2026/2099, 22.9.2026) | `docs/architecture.md` §2, `docs/specs/eu-ehds/PROVENANCE.md` |
 
 ## Corpora and machine-readable inputs
 

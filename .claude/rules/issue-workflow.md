@@ -38,14 +38,14 @@ that this repository has no roadmap board.
    that is then **linked** with `scripts/gh/rel.sh`, as a sub-issue of the
    issue it decomposes or a `blocked-by`/`blocking` dependency for real
    sequencing, never a prose "see also" deferral.
-3. **Do the work.** This repository has no roadmap board, so pickup moves
-   nothing (`project-board.md`). First read the governing
+3. **Do the work.** FerroAUDIT has no roadmap board, so no step of this
+   loop moves an issue on one, at pickup or at close (`project-board.md`).
+   First read the governing
    specification text (ITI-20, the RESTful ATNA supplement and BALP are the
    oracles, see `spec-adherence.md`). A research issue
    delivers cited evidence and a recommendation, and records the decision on
-   the issue thread.
-   (never a hand-edit of `// @generated`) and the engine is idiomatic Rust of
-   our own design, built as compiling, tested increments.
+   the issue thread. The code is idiomatic Rust of our own design, built as
+   compiling, tested increments.
 4. **Record progress on the issue.** Tick verified acceptance-criteria
    checkboxes (`gh issue edit <n>`), and post substantive status or decisions
    as comments (`gh issue comment <n>`); the issue thread is the durable

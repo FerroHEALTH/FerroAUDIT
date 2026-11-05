@@ -71,7 +71,7 @@ store (owner decision 2026-10-25); no separate product builds it.
 | RESTful ATNA | Rev. 3.6 Trial Implementation | the supplement that defines the ATX: FHIR Feed Option |
 | BALP | 1.1.4 | the version the PIXm, PDQm, mCSD and PMIR audit profiles build on |
 | FHIR | R4 (4.0.1) | BALP 1.1.4 declares FHIR 4.0.1 |
-| EHDS Regulation | Regulation (EU) 2025/327 as published, with Implementing Regulation (EU) 2026/2099 | the law `ehds-logging` implements; no consolidated text exists |
+| EHDS Regulation | Regulation (EU) 2025/327 as published, with Implementing Regulations (EU) 2026/2083 and 2026/2099 | the law `ehds-logging` implements, with the acts on MyHealth@EU (2026/2083) and on cross-border identification and authentication (2026/2099) it cites; no consolidated text exists |
 | Article 14(1) category codes | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the code system HL7 Europe publishes for the six priority categories |
 | DICOM PS3.15 | 2026c | the release current when the optional message elements and the code tables were added; pinned by sha256 and read locally, since NEMA grants no licence to redistribute it |
 | Syslog and audit RFCs | RFC 3881, 5424, 5425, 5426, 6750 | the RFCs ITI TF-2 §3.20.3 references, the RFC 3881 codes the IHE tables write, and the bearer token usage the Feed's credentials follow |
