@@ -98,7 +98,12 @@ fn participant<'a>(
     participants
         .iter()
         .find(|participant| participant["UserID"] == user_id)
-        .unwrap_or_else(|| panic!("no participant {user_id} in {participants:?}"))
+        .unwrap_or_else(|| {
+            panic!(
+                "no participant with the user id asked for among {}",
+                participants.len()
+            )
+        })
 }
 
 /// The role codes of the participant `user_id`, as `(csd-code,
