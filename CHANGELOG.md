@@ -11,7 +11,7 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-11-05
+## [0.4.0] - 2026-11-06
 
 The access record says how the recording system bound the accessor to a
 party, and records verified professionals and organisations of other
@@ -20,7 +20,9 @@ with the eHDSI fields that join it to the contact point's own audit entry.
 `ehds-logging` writes it as a DICOM PS3.15 audit message too (feature
 `atna`), and both crates escape every value they write. This release breaks
 the public API of both crates: each break below names the upgrade step.
-Products pin `=0.4.0`.
+`ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.9 line.
+Products pin `=0.4.0`, and a product that hands its token source to the
+FHIR Feed moves to `ferrohealth-smart` 0.9 with it.
 
 ### Added
 
@@ -78,6 +80,14 @@ Products pin `=0.4.0`.
 
 ### Changed
 
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.9 (caret `0.9.0`) in
+  place of 0.8, so the `smart` feature's `atna::bearer::Bearer` takes a
+  `TokenSource` of the 0.9 line; `ehds-logging` follows through `ihe-atna`.
+  The client credentials API `Bearer` uses (`TokenSource`,
+  `ClientCredentials`, `Endpoint`, `TokenError`) is unchanged in 0.9.
+  Upgrade: a product that hands its token source to the FHIR Feed moves to
+  `ferrohealth-smart` 0.9 with this release, following that crate's own
+  0.9.0 upgrade steps for its `[auth]` section (#141).
 - Breaking: `Relayed` is built with `Relayed::try_from(RelayedParts { .. })`
   and read with `Relayed::as_parts`; its fields are no longer public. It
   refuses a contact point that names no professional, a federation access
