@@ -11,6 +11,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
+The access record carries every binding field a recording system holds:
+the four refusal codes 0.4.0 left out, the relationship of a
+representation, the provider an accessor acts for with the facilities of a
+system commit, and a federation access that states only the fields its
+agreement requires. This release breaks the public API of `ehds-logging`:
+each break below names the upgrade step. Products pin `=0.5.0`.
+
 ### Added
 
 - `Binding::RefusedDeprovisioned`, `Binding::RefusedWrongMarker`,
