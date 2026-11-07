@@ -9,7 +9,7 @@
 
 use ehds_logging::record::{
     AccessClass, Acting, AuthenticationMethod, Binding, Coded, Correlation, CorrelationSource,
-    InvalidRecord, PartyRef, Relayed, RelayedError, RelayedParts, Via,
+    InvalidRecord, Relayed, RelayedError, RelayedParts, Via,
 };
 
 use super::support::{agreement, bound, contact_point, group, organisation, party, relayed};
@@ -105,13 +105,77 @@ fn a_federation_professional_under_an_agreement_constructs() {
     );
 }
 
+/// Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2 make these
+/// fields mandatory, so a contact point that relays none of one is refused.
+#[test]
+fn a_contact_point_missing_a_mandatory_field_is_refused() {
+    let without = |field: &str| {
+        let mut parts = contact_point();
+        let professional = parts.professional.as_mut().expect("a professional");
+        match field {
+            "country_code" => parts.country_code = None,
+            "hp_name" => professional.name = None,
+            "hp_identifier" => professional.identifier = None,
+            "hp_issuing_authority_name" => professional.issuing_authority = None,
+            "healthcare_provider_identifier" => parts.provider = None,
+            _ => {
+                parts
+                    .provider
+                    .as_mut()
+                    .expect("a provider")
+                    .issuing_authority = None;
+            }
+        }
+        parts
+    };
+    for field in [
+        "country_code",
+        "hp_name",
+        "hp_identifier",
+        "hp_issuing_authority_name",
+        "healthcare_provider_identifier",
+        "provider_issuing_authority_name",
+    ] {
+        assert_eq!(
+            Relayed::try_from(without(field)).err(),
+            Some(RelayedError::ContactPointFieldMissing { field }),
+            "{field}"
+        );
+    }
+}
+
+/// 2026/2099 binds a contact point and no federation, whose agreement
+/// declares the fields it requires, so a federation access constructs with
+/// none of the contact-point fields.
+#[test]
+fn a_federation_access_needs_no_contact_point_field() {
+    let mut parts = contact_point();
+    parts.via = Via::Federation {
+        issuer: relayed::FEDERATION.to_owned(),
+    };
+    parts.agreement = Some(agreement(None));
+    parts.country_code = None;
+    let professional = parts.professional.as_mut().expect("a professional");
+    professional.name = None;
+    professional.identifier = None;
+    professional.issuing_authority = None;
+    parts
+        .provider
+        .as_mut()
+        .expect("a provider")
+        .issuing_authority = None;
+    assert!(Relayed::try_from(parts.clone()).is_ok());
+    parts.provider = None;
+    assert!(Relayed::try_from(parts).is_ok());
+}
+
 /// eHDSI SAML Profile 10.0.0 §2.3: the `organization-id` "SHALL be an OID
 /// (urn:oid:1.2.3.4) or HL7II (urn:hl7ii:1.2.3.4:XYZ)".
 #[test]
 fn a_contact_point_provider_named_by_no_oid_or_hl7ii_is_refused() {
     for identifier in ["2.999.56", "https://example.org/hcp", ""] {
         let mut parts = contact_point();
-        parts.provider.identifier = identifier.to_owned();
+        parts.provider.as_mut().expect("a provider").identifier = identifier.to_owned();
         assert_eq!(
             Relayed::try_from(parts).err(),
             Some(RelayedError::ProviderIdentifierForm),
@@ -119,7 +183,7 @@ fn a_contact_point_provider_named_by_no_oid_or_hl7ii_is_refused() {
         );
     }
     let mut parts = contact_point();
-    parts.provider.identifier = "urn:hl7ii:2.999.56:Qz7".to_owned();
+    parts.provider.as_mut().expect("a provider").identifier = "urn:hl7ii:2.999.56:Qz7".to_owned();
     assert!(Relayed::try_from(parts).is_ok());
 }
 
@@ -277,6 +341,30 @@ fn each_binding_outcome_has_its_code_and_names_its_party_where_it_has_one() {
             false,
             true,
         ),
+        (
+            Binding::RefusedDeprovisioned,
+            "refused-deprovisioned",
+            false,
+            true,
+        ),
+        (
+            Binding::RefusedWrongMarker,
+            "refused-wrong-marker",
+            false,
+            true,
+        ),
+        (
+            Binding::RefusedRepresentationUnrecorded,
+            "refused-representation-unrecorded",
+            false,
+            true,
+        ),
+        (
+            Binding::RefusedTrcMissing,
+            "refused-trc-missing",
+            false,
+            true,
+        ),
     ];
     for (binding, code, has_party, refused) in cases {
         assert_eq!(binding.code(), code);
@@ -284,7 +372,7 @@ fn each_binding_outcome_has_its_code_and_names_its_party_where_it_has_one() {
         assert_eq!(binding.is_refusal(), refused, "{code}");
         assert_eq!(
             binding.is_security_event(),
-            code == "refused-trc-patient-mismatch",
+            code == "refused-trc-patient-mismatch" || code == "refused-trc-missing",
             "{code}"
         );
     }
@@ -378,14 +466,15 @@ fn no_debug_shows_a_relayed_or_bound_value() {
         subject: "Qz7-actor-71".to_owned(),
     }];
     record.accessor.represents = Some(ehds_logging::record::Representation {
-        represented: PartyRef {
-            id: "Qz7-represented-72".to_owned(),
-            ..party("")
-        },
-        ground: Coded {
+        represented: "Qz7-represented-72".to_owned(),
+        ground: Some(Coded {
             system: None,
             code: "Qz7-ground-73".to_owned(),
-        },
+        }),
+        relationship: Some(Coded {
+            system: None,
+            code: "Qz7-relationship-75".to_owned(),
+        }),
     });
     record.request.correlation = Some(Correlation {
         value: "Qz7-correlation-74".to_owned(),
@@ -412,6 +501,7 @@ fn no_debug_shows_a_relayed_or_bound_value() {
         "Qz7-group-67",
         "Qz7-actor-71",
         "Qz7-represented-72",
+        "Qz7-relationship-75",
         "Qz7-correlation-74",
     ] {
         assert!(!shown.contains(value), "{value} in {shown}");

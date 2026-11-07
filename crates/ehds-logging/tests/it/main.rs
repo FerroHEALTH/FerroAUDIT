@@ -70,6 +70,8 @@ mod balp_free {
                 binding: None,
                 actors: Vec::new(),
                 represents: None,
+                acts_for: None,
+                facilities: Vec::new(),
             },
             subject: DataSubject::default(),
             retention: RetentionPolicy::default().retain(
@@ -193,13 +195,13 @@ mod support {
             via: Via::ContactPoint {
                 issuer: CONTACT_POINT.to_owned(),
             },
-            country_code: "XA".to_owned(),
+            country_code: Some("XA".to_owned()),
             professional: Some(RelayedProfessional {
-                name: NAME.to_owned(),
+                name: Some(NAME.to_owned()),
                 family_name: Some(FAMILY.to_owned()),
                 given_name: Some(GIVEN.to_owned()),
-                identifier: HP_ID.to_owned(),
-                issuing_authority: HP_AUTHORITY.to_owned(),
+                identifier: Some(HP_ID.to_owned()),
+                issuing_authority: Some(HP_AUTHORITY.to_owned()),
                 roles: vec![Coded {
                     system: Some(ISCO.to_owned()),
                     code: ROLE.to_owned(),
@@ -214,9 +216,9 @@ mod support {
                 on_behalf_of: None,
                 permissions: vec![PERMISSION.to_owned()],
             }),
-            provider: RelayedProvider {
+            provider: Some(RelayedProvider {
                 identifier: HCP_ID.to_owned(),
-                issuing_authority: HCP_AUTHORITY.to_owned(),
+                issuing_authority: Some(HCP_AUTHORITY.to_owned()),
                 name: Some(HCP_NAME.to_owned()),
                 address: Some(HCP_ADDRESS.to_owned()),
                 facility_type: Some(Coded {
@@ -225,7 +227,7 @@ mod support {
                 }),
                 home_community_id: Some(HOME_COMMUNITY.to_owned()),
                 organisation_type: None,
-            },
+            }),
             agreement: None,
             point_of_care: Some(POINT_OF_CARE.to_owned()),
             identity_assertion_id: Some(IDA.to_owned()),
@@ -235,6 +237,7 @@ mod support {
                 consumer: Some(CONSUMER_NCP.to_owned()),
                 provider: Some(PROVIDER_NCP.to_owned()),
             },
+            asserted: BTreeMap::new(),
         }
     }
 
@@ -274,13 +277,13 @@ mod support {
             trc_assertion_id: None,
             message_id: None,
             gateways: Gateways::default(),
-            provider: RelayedProvider {
+            provider: contact_point().provider.map(|provider| RelayedProvider {
                 organisation_type: Some(Coded {
                     system: Some("https://example.org/organisation-type".to_owned()),
                     code: ORGANISATION_TYPE.to_owned(),
                 }),
-                ..contact_point().provider
-            },
+                ..provider
+            }),
             ..contact_point()
         }
     }

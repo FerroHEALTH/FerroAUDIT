@@ -52,7 +52,8 @@ what classifies it.
 
 The accessor carries how the recording system bound it to a party (the
 binding outcome, the party and its groups), the token's actor chain, the
-representation a representative acts under, and what a MyHealth@EU contact
+representation a representative acts under, the provider it acts for with
+the facilities a system client's commit names, and what a MyHealth@EU contact
 point or a domestic federation relays: the professional with the eHDSI
 SAML Profile 10.0.0 attributes, or an organisation without a named person,
 the provider, the agreement with its legal ground, and the assertion and

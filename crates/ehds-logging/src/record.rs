@@ -26,7 +26,7 @@
 //! `Debug` shows neither, nor any id the classification read: a record
 //! leaves through an [`AccessSink`](crate::sink::AccessSink) alone.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::net::IpAddr;
 
@@ -330,13 +330,15 @@ pub struct RelayedParts {
     pub via: Via,
     /// `country_code`: the ISO 3166-1 alpha-2 code of the Member State that
     /// issued the professional's identification data (2026/2099 Annex
-    /// Table 1).
-    pub country_code: String,
+    /// Table 1), which a contact point must state and a federation states
+    /// when its agreement asks for it.
+    pub country_code: Option<String>,
     /// The health professional (Annex Table 1), or `None` for an
     /// organisation a federation agreement admits without a named person.
     pub professional: Option<RelayedProfessional>,
-    /// The healthcare provider (Annex Table 2).
-    pub provider: RelayedProvider,
+    /// The healthcare provider (Annex Table 2), which a contact point must
+    /// state.
+    pub provider: Option<RelayedProvider>,
     /// The agreement the access is made under, which every federation
     /// access names (GDPR Art 5(2), Art 30(1)(b)).
     pub agreement: Option<Agreement>,
@@ -354,6 +356,10 @@ pub struct RelayedParts {
     /// The contact points the request passed, each by the CN of its TLS
     /// certificate (eHDSI Audit Trail Profile 10.1.0 §2.3.14, §2.3.15).
     pub gateways: Gateways,
+    /// Each further field the relaying issuer asserted that no member above
+    /// holds, such as a national professional number, by the name the
+    /// recording system gives it, with every value it carries.
+    pub asserted: BTreeMap<String, Vec<String>>,
 }
 
 /// The contact points a relayed request passed, each by the CN of its TLS
@@ -447,6 +453,13 @@ pub enum RelayedError {
     /// mandatory.
     #[error("a clerical support worker is relayed without on-behalf-of")]
     OnBehalfOfMissing,
+    /// A contact point relays no value for a field 2026/2099 Annex Table 1
+    /// or Table 2 makes mandatory.
+    #[error("a contact point relayed no {field}")]
+    ContactPointFieldMissing {
+        /// The field, such as `country_code`.
+        field: &'static str,
+    },
 }
 
 /// The ISCO code system the eHDSI roles are a subset of (eHDSI SAML Profile
@@ -490,7 +503,8 @@ impl TryFrom<RelayedParts> for Relayed {
                 return Err(RelayedError::ContactPointWithoutProfessional);
             }
             (Via::ContactPoint { .. }, Some(professional)) => {
-                let identifier = &parts.provider.identifier;
+                let provider = contact_point_fields(&parts, professional)?;
+                let identifier = &provider.identifier;
                 if !identifier.starts_with("urn:oid:") && !identifier.starts_with("urn:hl7ii:") {
                     return Err(RelayedError::ProviderIdentifierForm);
                 }
@@ -515,6 +529,35 @@ impl TryFrom<RelayedParts> for Relayed {
     }
 }
 
+/// The provider of a contact point's `parts`, once every field 2026/2099
+/// Annex Tables 1 and 2 make mandatory is there.
+fn contact_point_fields<'a>(
+    parts: &'a RelayedParts,
+    professional: &RelayedProfessional,
+) -> Result<&'a RelayedProvider, RelayedError> {
+    let missing = |field| RelayedError::ContactPointFieldMissing { field };
+    if parts.country_code.is_none() {
+        return Err(missing("country_code"));
+    }
+    for (field, value) in [
+        ("hp_name", &professional.name),
+        ("hp_identifier", &professional.identifier),
+        ("hp_issuing_authority_name", &professional.issuing_authority),
+    ] {
+        if value.is_none() {
+            return Err(missing(field));
+        }
+    }
+    let provider = parts
+        .provider
+        .as_ref()
+        .ok_or_else(|| missing("healthcare_provider_identifier"))?;
+    if provider.issuing_authority.is_none() {
+        return Err(missing("provider_issuing_authority_name"));
+    }
+    Ok(provider)
+}
+
 impl fmt::Debug for Relayed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Relayed")
@@ -532,6 +575,7 @@ impl fmt::Debug for RelayedParts {
         f.debug_struct("RelayedParts")
             .field("via", &self.via.code())
             .field("country_code", &self.country_code)
+            .field("asserted", &self.asserted.len())
             .finish_non_exhaustive()
     }
 }
@@ -541,17 +585,20 @@ impl fmt::Debug for RelayedParts {
 /// attributes).
 #[derive(Clone, PartialEq, Eq)]
 pub struct RelayedProfessional {
-    /// The full name, the XSPA `subject-id`.
-    pub name: String,
+    /// The full name, the XSPA `subject-id`, which a contact point must
+    /// state.
+    pub name: Option<String>,
     /// `family_name`, for an issuer that sends it apart.
     pub family_name: Option<String>,
     /// `given_name`, for an issuer that sends it apart.
     pub given_name: Option<String>,
     /// `hp_identifier`, unique among the identifiers the Member State where
-    /// the professional is registered issues.
-    pub identifier: String,
-    /// `issuing_authority_name`: the agency that issued `hp_identifier`.
-    pub issuing_authority: String,
+    /// the professional is registered issues, which a contact point must
+    /// state.
+    pub identifier: Option<String>,
+    /// `issuing_authority_name`: the agency that issued `hp_identifier`,
+    /// which a contact point must state.
+    pub issuing_authority: Option<String>,
     /// `hp_professional_role`, as the codes the relaying issuer states,
     /// such as the ISCO role of the XACML `role` attribute.
     pub roles: Vec<Coded>,
@@ -592,8 +639,9 @@ pub struct RelayedProvider {
     /// issued it; from a contact point the XSPA `organization-id`, a
     /// `urn:oid:` or `urn:hl7ii:` identifier.
     pub identifier: String,
-    /// `issuing_authority_name`: the agency that issued the identifier.
-    pub issuing_authority: String,
+    /// `issuing_authority_name`: the agency that issued the identifier,
+    /// which a contact point must state.
+    pub issuing_authority: Option<String>,
     /// `healthcare_provider_name`, or the XSPA `organization`, when named.
     pub name: Option<String>,
     /// `healthcare_provider_address`: the official registered full address,
@@ -712,6 +760,18 @@ pub enum Binding {
     /// `refused-trc-patient-mismatch`: the request's patient is not the
     /// treatment relationship confirmation's, recorded as a security event.
     RefusedTrcPatientMismatch,
+    /// `refused-deprovisioned`: the login's key belongs to a deleted party.
+    RefusedDeprovisioned,
+    /// `refused-wrong-marker`: the party's binding marker does not fit the
+    /// caller's kind.
+    RefusedWrongMarker,
+    /// `refused-representation-unrecorded`: no live representation
+    /// relationship to the requested subject is recorded.
+    RefusedRepresentationUnrecorded,
+    /// `refused-trc-missing`: a contact point's request for patient data
+    /// carries no treatment relationship confirmation, recorded as a
+    /// security event.
+    RefusedTrcMissing,
 }
 
 impl Binding {
@@ -734,6 +794,10 @@ impl Binding {
             Self::RefusedGuest => "refused-guest",
             Self::RefusedExternalIncomplete { .. } => "refused-external-incomplete",
             Self::RefusedTrcPatientMismatch => "refused-trc-patient-mismatch",
+            Self::RefusedDeprovisioned => "refused-deprovisioned",
+            Self::RefusedWrongMarker => "refused-wrong-marker",
+            Self::RefusedRepresentationUnrecorded => "refused-representation-unrecorded",
+            Self::RefusedTrcMissing => "refused-trc-missing",
         }
     }
 
@@ -776,13 +840,20 @@ impl Binding {
                 | Self::RefusedGuest
                 | Self::RefusedExternalIncomplete { .. }
                 | Self::RefusedTrcPatientMismatch
+                | Self::RefusedDeprovisioned
+                | Self::RefusedWrongMarker
+                | Self::RefusedRepresentationUnrecorded
+                | Self::RefusedTrcMissing
         )
     }
 
     /// Whether the outcome is recorded as a security event.
     #[must_use]
     pub const fn is_security_event(&self) -> bool {
-        matches!(self, Self::RefusedTrcPatientMismatch)
+        matches!(
+            self,
+            Self::RefusedTrcPatientMismatch | Self::RefusedTrcMissing
+        )
     }
 }
 
@@ -806,13 +877,47 @@ impl fmt::Debug for Actor {
     }
 }
 
-/// Whom a representative acts for, and on which ground.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Whom a representative acts for, on which ground, and by which recorded
+/// relationship.
+///
+/// `Debug` shows which members are present and none of their values.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Representation {
-    /// The person represented.
-    pub represented: PartyRef,
-    /// The ground of the representation.
-    pub ground: Coded,
+    /// The person represented, by the identifier the request asserted.
+    pub represented: String,
+    /// The ground of the representation, when the request states one.
+    pub ground: Option<Coded>,
+    /// The `relationship` code of the representative's openEHR
+    /// `PARTY_RELATED` committer, when the representation relationship
+    /// records one.
+    pub relationship: Option<Coded>,
+}
+
+impl fmt::Debug for Representation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Representation")
+            .field("ground", &self.ground.is_some())
+            .field("relationship", &self.relationship.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+/// An identifier under the issuer that issued it, such as a healthcare
+/// provider's or a facility's.
+///
+/// `Debug` shows neither value.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IssuedId {
+    /// The identifier's issuer, such as an OID.
+    pub issuer: String,
+    /// The identifier.
+    pub id: String,
+}
+
+impl fmt::Debug for IssuedId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IssuedId").finish_non_exhaustive()
+    }
 }
 
 /// Who accessed the data (Annex II 3.2(a), (b)).
@@ -879,6 +984,13 @@ pub struct Accessor {
     pub actors: Vec<Actor>,
     /// Whom the person acts for as a representative, and on which ground.
     pub represents: Option<Representation>,
+    /// The healthcare provider a bound person or a system client acts for,
+    /// by its identifier under its issuer (Annex II 3.2(a)), when the
+    /// recording system attributes the access to one.
+    pub acts_for: Option<IssuedId>,
+    /// The facilities the compositions a system client committed name, each
+    /// by its identifier under its issuer.
+    pub facilities: Vec<IssuedId>,
 }
 
 impl Accessor {
@@ -905,6 +1017,8 @@ impl fmt::Debug for Accessor {
             .field("binding", &self.binding)
             .field("actors", &self.actors)
             .field("represents", &self.represents)
+            .field("acts_for", &self.acts_for.is_some())
+            .field("facilities", &self.facilities.len())
             .finish_non_exhaustive()
     }
 }

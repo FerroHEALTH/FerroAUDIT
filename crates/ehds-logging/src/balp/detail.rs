@@ -157,6 +157,15 @@ pub const ACTOR: &str = "actor";
 pub const REPRESENTS: &str = "represents";
 /// `<system>|<code>`, or `<code>`, of the ground of the representation.
 pub const REPRESENTS_GROUND: &str = "represents-ground";
+/// `<system>|<code>`, or `<code>`, of the relationship the representative's
+/// `PARTY_RELATED` committer records.
+pub const REPRESENTS_RELATIONSHIP: &str = "represents-relationship";
+/// The healthcare provider the accessor acts for, as `<issuer>|<id>`.
+pub const ACTS_FOR: &str = "acts-for";
+/// A facility a system client's commit names, as `<issuer>|<id>`.
+pub const FACILITY: &str = "facility";
+/// A further field the relaying issuer asserted, as `<name>=<value>`.
+pub const ASSERTED_FIELD: &str = "asserted-field";
 /// The relayed `country_code`.
 pub const COUNTRY_CODE: &str = "country-code";
 /// The relayed professional's `family_name`.

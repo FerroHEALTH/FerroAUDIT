@@ -74,6 +74,8 @@ fn read_with(
             binding: None,
             actors: Vec::new(),
             represents: None,
+            acts_for: None,
+            facilities: Vec::new(),
         },
         subject: DataSubject::default(),
         categories,

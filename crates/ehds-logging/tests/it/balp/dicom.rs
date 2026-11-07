@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 use base64::Engine as _;
 use ehds_logging::atna::{AtnaError, audit_message};
 use ehds_logging::record::{
-    AccessClass, AccessRecord, Action, Correlation, CorrelationSource, Outcome, PatientIdentifier,
-    Relayed,
+    AccessClass, AccessRecord, Action, Binding, Coded, Correlation, CorrelationSource, IssuedId,
+    Outcome, PatientIdentifier, Relayed, Representation, Via,
 };
 use ihe_atna::atna::message::AuditSource;
 use ihe_atna::escape;
@@ -154,7 +154,7 @@ fn object_details(text: &str, name: &str) -> Vec<(String, String)> {
 fn relayed_record() -> AccessRecord {
     let mut record = record(Action::Query, Outcome::Success);
     record.accessor.relayed = Some(Relayed::try_from(contact_point()).expect("a relayed access"));
-    record.accessor.binding = Some(ehds_logging::record::Binding::External);
+    record.accessor.binding = Some(Binding::External);
     record
 }
 
@@ -343,6 +343,119 @@ fn the_binding_rides_as_a_participant_object() {
     );
 }
 
+/// The members PS3.15 A.5 has no element for ride as details of the accessor
+/// object: the added refusals, the representation's relationship, the
+/// provider acted for and each facility.
+#[test]
+fn the_added_binding_members_ride_as_details() {
+    let mut record = record(Action::Create, Outcome::MinorFailure);
+    record.accessor.binding = Some(Binding::RefusedTrcMissing);
+    record.accessor.represents = Some(Representation {
+        represented: "Qz7-represented-86".to_owned(),
+        ground: None,
+        relationship: Some(Coded {
+            system: None,
+            code: "10".to_owned(),
+        }),
+    });
+    record.accessor.acts_for = Some(IssuedId {
+        issuer: "urn:oid:2.999.7".to_owned(),
+        id: "Qz7-provider-87".to_owned(),
+    });
+    record.accessor.facilities = vec![IssuedId {
+        issuer: "urn:oid:2.999.8".to_owned(),
+        id: "Qz7-ward-88".to_owned(),
+    }];
+    let accessor = object_details(&xml(&record), "ehds-accessor");
+    for (kind, value) in [
+        ("binding", "refused-trc-missing"),
+        ("security-event", "true"),
+        ("represents", "Qz7-represented-86"),
+        ("represents-relationship", "10"),
+        ("acts-for", "urn:oid:2.999.7|Qz7-provider-87"),
+        ("facility", "urn:oid:2.999.8|Qz7-ward-88"),
+    ] {
+        assert!(
+            accessor.contains(&(kind.to_owned(), value.to_owned())),
+            "{kind} in {accessor:?}"
+        );
+    }
+}
+
+/// A federation professional named by no identifier is no participant,
+/// since PS3.15 A.5.1 requires a `UserID`, and the message is still written.
+#[test]
+fn a_federation_professional_with_no_identifier_is_no_participant() {
+    let mut parts = contact_point();
+    parts.via = Via::Federation {
+        issuer: FEDERATION.to_owned(),
+    };
+    parts.agreement = Some(crate::support::agreement(None));
+    let professional = parts.professional.as_mut().expect("a professional");
+    professional.identifier = None;
+    professional.name_id = None;
+    let mut record = record(Action::Read, Outcome::Success);
+    record.accessor.relayed = Some(Relayed::try_from(parts).expect("a relayed access"));
+    let text = xml(&record);
+    assert!(
+        participants(&text).iter().all(|participant| participant
+            .get("AlternativeUserID")
+            .map(String::as_str)
+            != Some(NAME)),
+        "no participant for the unidentified professional"
+    );
+    assert!(
+        object_details(&text, "ehds-relayed").contains(&("hp-name".to_owned(), NAME.to_owned()))
+    );
+}
+
+/// A hostile value in each member 0.5.0 adds leaves no raw character in the
+/// message, and is base64-encoded as given in its detail (DICOM PS3.15
+/// A.5.1.1 `ValuePair`).
+#[test]
+fn a_hostile_binding_value_is_written_escaped() {
+    let hostile = format!("Qz7\u{0}\u{1b}[2J\u{202e}{}", "x".repeat(10_000));
+    let mut record = record(Action::Read, Outcome::Success);
+    record.accessor.represents = Some(Representation {
+        represented: hostile.clone(),
+        ground: None,
+        relationship: Some(Coded {
+            system: None,
+            code: hostile.clone(),
+        }),
+    });
+    record.accessor.acts_for = Some(IssuedId {
+        issuer: hostile.clone(),
+        id: hostile.clone(),
+    });
+    record.accessor.facilities = vec![IssuedId {
+        issuer: hostile.clone(),
+        id: hostile.clone(),
+    }];
+    let mut parts = organisation(AccessClass::Automated);
+    parts.asserted = BTreeMap::from([(hostile.clone(), vec![hostile.clone()])]);
+    record.accessor.relayed = Some(Relayed::try_from(parts).expect("a relayed access"));
+    let text = xml(&record);
+    assert!(
+        text.chars()
+            .all(|c| escape::untrusted(&c.to_string()) == c.to_string()),
+        "a raw control character in the message"
+    );
+    let accessor = object_details(&text, "ehds-accessor");
+    for (kind, value) in [
+        ("represents", hostile.clone()),
+        ("represents-relationship", hostile.clone()),
+        ("acts-for", format!("{hostile}|{hostile}")),
+        ("facility", format!("{hostile}|{hostile}")),
+    ] {
+        assert!(accessor.contains(&(kind.to_owned(), value)), "{kind}");
+    }
+    assert!(
+        object_details(&text, "ehds-relayed")
+            .contains(&("asserted-field".to_owned(), format!("{hostile}={hostile}")))
+    );
+}
+
 /// An organisation admitted without a named person is the requestor, by its
 /// `organization-id` and name, and no person is named for it.
 #[test]
@@ -390,7 +503,7 @@ fn a_hostile_relayed_value_is_written_escaped() {
     let escaped = format!(r"Qz7\u{{0}}\u{{1b}}[2J\u{{202e}}{}", "x".repeat(10_000));
     let mut parts = contact_point();
     let professional = parts.professional.as_mut().expect("a professional");
-    professional.name = hostile.clone();
+    professional.name = Some(hostile.clone());
     professional.name_id.as_mut().expect("a name id").value = hostile.clone();
     let mut record = record(Action::Read, Outcome::Success);
     record.accessor.relayed = Some(Relayed::try_from(parts).expect("a relayed access"));
