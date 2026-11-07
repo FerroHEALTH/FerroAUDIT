@@ -13,7 +13,7 @@ use std::sync::Arc;
 use ehds_logging::balp::BalpSink;
 use ehds_logging::record::{
     AccessClass, AccessRecord, Acting, Action, Actor, Binding, Coded, Correlation,
-    CorrelationSource, Outcome, PartyRef, Relayed, Representation,
+    CorrelationSource, IssuedId, Outcome, PartyRef, Relayed, Representation,
 };
 use ehds_logging::sink::AccessSink;
 use ihe_atna::balp::{AuditRecorder, Observer};
@@ -46,11 +46,15 @@ fn bound_record() -> AccessRecord {
         },
     ];
     record.accessor.represents = Some(Representation {
-        represented: party("Qz7-represented-78"),
-        ground: Coded {
+        represented: "Qz7-represented-78".to_owned(),
+        ground: Some(Coded {
             system: Some("https://example.org/representation".to_owned()),
             code: "guardian".to_owned(),
-        },
+        }),
+        relationship: Some(Coded {
+            system: Some("openehr".to_owned()),
+            code: "10".to_owned(),
+        }),
     });
     record
 }
@@ -92,14 +96,124 @@ fn the_actor_chain_is_written_outermost_first() {
 #[test]
 fn a_representation_names_whom_and_on_which_ground() {
     let accessor = accessor_entity(&bound_record());
-    assert_eq!(
-        details(&accessor, "represents"),
-        ["demographic|PERSON|Qz7-represented-78"]
-    );
+    assert_eq!(details(&accessor, "represents"), ["Qz7-represented-78"]);
     assert_eq!(
         details(&accessor, "represents-ground"),
         ["https://example.org/representation|guardian"]
     );
+    assert_eq!(
+        details(&accessor, "represents-relationship"),
+        ["openehr|10"]
+    );
+}
+
+/// A representative's token may state no ground, and the relationship may
+/// be unrecorded: the record writes what it has and nothing in their place.
+#[test]
+fn a_representation_without_a_ground_or_relationship_writes_neither() {
+    let mut record = bound_record();
+    record.accessor.represents = Some(Representation {
+        represented: "Qz7-represented-81".to_owned(),
+        ground: None,
+        relationship: None,
+    });
+    let accessor = accessor_entity(&record);
+    assert_eq!(details(&accessor, "represents"), ["Qz7-represented-81"]);
+    assert_eq!(details(&accessor, "represents-ground"), Vec::<&str>::new());
+    assert_eq!(
+        details(&accessor, "represents-relationship"),
+        Vec::<&str>::new()
+    );
+}
+
+/// The four refusals 0.4.0 lacked are written with their codes, and a
+/// request with no treatment relationship confirmation as a security event.
+#[test]
+fn the_added_refusals_are_written_with_their_codes() {
+    for (binding, code, security) in [
+        (
+            Binding::RefusedDeprovisioned,
+            "refused-deprovisioned",
+            false,
+        ),
+        (Binding::RefusedWrongMarker, "refused-wrong-marker", false),
+        (
+            Binding::RefusedRepresentationUnrecorded,
+            "refused-representation-unrecorded",
+            false,
+        ),
+        (Binding::RefusedTrcMissing, "refused-trc-missing", true),
+    ] {
+        let mut record = record(Action::Read, Outcome::MinorFailure);
+        record.accessor.binding = Some(binding);
+        let accessor = accessor_entity(&record);
+        assert_eq!(details(&accessor, "binding"), [code]);
+        assert_eq!(
+            details(&accessor, "security-event"),
+            if security { vec!["true"] } else { Vec::new() },
+            "{code}"
+        );
+    }
+}
+
+/// Annex II 3.2(a): the provider a bound person or a system client acts
+/// for, and each facility a system client's commit names, have no BALP
+/// 1.1.4 element and ride in the accessor entity.
+#[test]
+fn the_provider_acted_for_and_each_facility_ride_in_the_accessor_entity() {
+    let mut record = record(Action::Create, Outcome::Success);
+    record.accessor.binding = Some(Binding::System);
+    record.accessor.acts_for = Some(IssuedId {
+        issuer: "urn:oid:2.999.7".to_owned(),
+        id: "Qz7-provider-82".to_owned(),
+    });
+    record.accessor.facilities = vec![
+        IssuedId {
+            issuer: "urn:oid:2.999.8".to_owned(),
+            id: "Qz7-ward-83".to_owned(),
+        },
+        IssuedId {
+            issuer: "urn:oid:2.999.8".to_owned(),
+            id: "Qz7-ward-84".to_owned(),
+        },
+    ];
+    let accessor = accessor_entity(&record);
+    assert_eq!(
+        details(&accessor, "acts-for"),
+        ["urn:oid:2.999.7|Qz7-provider-82"]
+    );
+    assert_eq!(
+        details(&accessor, "facility"),
+        ["urn:oid:2.999.8|Qz7-ward-83", "urn:oid:2.999.8|Qz7-ward-84"]
+    );
+}
+
+/// A federation that asserts none of the contact-point fields writes none
+/// of them, and each further field it asserted as its own detail.
+#[test]
+fn a_federation_access_writes_what_it_asserted_and_nothing_in_place_of_the_rest() {
+    let mut parts = organisation(AccessClass::Automated);
+    parts.country_code = None;
+    parts
+        .provider
+        .as_mut()
+        .expect("a provider")
+        .issuing_authority = None;
+    parts.asserted =
+        std::collections::BTreeMap::from([("nl.ura".to_owned(), vec!["Qz7-ura-85".to_owned()])]);
+    let mut record = record(Action::Read, Outcome::Success);
+    record.accessor.relayed = Some(Relayed::try_from(parts).expect("a relayed access"));
+    let written = written(&record);
+    let relayed = entity(&written, "ehds-relayed");
+    let [relayed] = relayed.as_slice() else {
+        panic!("one relayed entity");
+    };
+    assert_eq!(details(relayed, "country-code"), Vec::<&str>::new());
+    assert_eq!(
+        details(relayed, "provider-issuing-authority"),
+        Vec::<&str>::new()
+    );
+    assert_eq!(details(relayed, "asserted-field"), ["nl.ura=Qz7-ura-85"]);
 }
 
 #[test]
@@ -306,7 +420,7 @@ async fn the_sink_refuses_a_chained_access_with_no_attested_correlation() {
 fn a_hostile_relayed_value_is_written_escaped() {
     let hostile = format!("Qz7\u{0}\u{1b}[2J\u{202e}{}", "x".repeat(10_000));
     let mut parts = contact_point();
-    parts.professional.as_mut().expect("a professional").name = hostile.clone();
+    parts.professional.as_mut().expect("a professional").name = Some(hostile.clone());
     let mut record = record(Action::Read, Outcome::Success);
     record.accessor.relayed = Some(Relayed::try_from(parts).expect("a relayed access"));
     let written = written(&record);

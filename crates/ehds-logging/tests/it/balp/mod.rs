@@ -110,6 +110,8 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             binding: None,
             actors: Vec::new(),
             represents: None,
+            acts_for: None,
+            facilities: Vec::new(),
         },
         subject: DataSubject {
             patient: Some(PatientIdentifier {

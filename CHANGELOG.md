@@ -11,6 +11,54 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
+The access record carries every binding field a recording system holds:
+the four refusal codes 0.4.0 left out, the relationship of a
+representation, the provider an accessor acts for with the facilities of a
+system commit, and a federation access that states only the fields its
+agreement requires. This release breaks the public API of `ehds-logging`:
+each break below names the upgrade step. Products pin `=0.5.0`.
+
+### Added
+
+- `Binding::RefusedDeprovisioned`, `Binding::RefusedWrongMarker`,
+  `Binding::RefusedRepresentationUnrecorded` and `Binding::RefusedTrcMissing`,
+  the codes `refused-deprovisioned`, `refused-wrong-marker`,
+  `refused-representation-unrecorded` and `refused-trc-missing`; the last
+  is a security event (#158).
+- `Accessor::acts_for` and `Accessor::facilities`, each an `IssuedId`: the
+  healthcare provider a bound person or a system client acts for, and the
+  facilities a system client's commit names (Annex II 3.2(a)), written as
+  the `acts-for` and `facility` details of the `ehds-accessor` entity in
+  the BALP record and the DICOM message (#158).
+- `Representation::relationship`, the relationship code of the
+  representative's openEHR `PARTY_RELATED` committer, written as the
+  `represents-relationship` detail (#158).
+- `RelayedParts::asserted`, each further field a relaying issuer asserted
+  by name, written as an `asserted-field` detail `<name>=<value>` (#158).
+
+### Changed
+
+- Breaking: `Representation::represented` is the subject's identifier as
+  the request asserted it, a `String` in place of a `PartyRef`, and
+  `Representation::ground` is optional. Upgrade: pass the asserted
+  identifier, wrap the ground in `Some`, and set `relationship` (#158).
+- Breaking: `Accessor` has two more public fields. Upgrade: add
+  `acts_for: None` and `facilities: Vec::new()`, or the values the
+  recording system holds, to every struct literal (#158).
+- Breaking: for a federation access the 2026/2099 Annex fields are
+  optional, since the regulation binds a contact point and the agreement
+  declares what a federation must state. `RelayedParts::country_code` and
+  `RelayedParts::provider`, `RelayedProfessional::name`, `identifier` and
+  `issuing_authority`, and `RelayedProvider::issuing_authority` are
+  `Option`s, and `RelayedParts` has the field `asserted`. A contact point
+  still states each, refused with `RelayedError::ContactPointFieldMissing`
+  naming the field. A federation professional named by no identifier is no
+  DICOM `ActiveParticipant`, which PS3.15 A.5.1 gives a mandatory `UserID`.
+  Upgrade: wrap the values in `Some` and add `asserted: BTreeMap::new()`
+  (#158).
+
 ## [0.4.0] - 2026-11-06
 
 The access record says how the recording system bound the accessor to a

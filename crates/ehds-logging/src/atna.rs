@@ -41,7 +41,8 @@
 //!
 //! Where DICOM PS3.15 A.5 has no element for a member, the member rides as a
 //! detail of its entity, as in the BALP record: the binding outcome, the
-//! party and its groups, the actor chain, the representation, the agreement
+//! party and its groups, the actor chain, the representation, the provider
+//! the accessor acts for and each facility, the agreement
 //! with its legal ground, the correlation id with its source, the point of
 //! care, the facility type, the home community id, the permissions, the
 //! authentication method and `on-behalf-of`. The person id BALP writes as
@@ -186,26 +187,30 @@ fn participants(record: &AccessRecord, exchange: &Exchange) -> Vec<ActivePartici
     let mut participants = Vec::new();
     if let Some(relayed) = &accessor.relayed {
         let parts = relayed.as_parts();
-        participants.push(match &parts.professional {
-            Some(professional) => ActiveParticipant {
-                user_id: professional
-                    .name_id
-                    .as_ref()
-                    .map_or_else(|| professional.identifier.clone(), NameId::user_id),
-                alternative_user_id: Some(professional.name.clone()),
-                user_name: None,
-                user_is_requestor: true,
-                role_id_codes: professional.roles.iter().map(record_coded).collect(),
-                access_point: None,
-            },
-            None => ActiveParticipant {
-                user_id: parts.provider.identifier.clone(),
+        // NOTE: PS3.15 A.5.1 requires a UserID, so a federation requestor named by no identifier
+        // is no participant; the relayed entity's details carry what the issuer asserted.
+        participants.extend(match &parts.professional {
+            Some(professional) => professional
+                .name_id
+                .as_ref()
+                .map(NameId::user_id)
+                .or_else(|| professional.identifier.clone())
+                .map(|user_id| ActiveParticipant {
+                    user_id,
+                    alternative_user_id: professional.name.clone(),
+                    user_name: None,
+                    user_is_requestor: true,
+                    role_id_codes: professional.roles.iter().map(record_coded).collect(),
+                    access_point: None,
+                }),
+            None => parts.provider.as_ref().map(|provider| ActiveParticipant {
+                user_id: provider.identifier.clone(),
                 alternative_user_id: None,
-                user_name: parts.provider.name.clone(),
+                user_name: provider.name.clone(),
                 user_is_requestor: true,
                 role_id_codes: Vec::new(),
                 access_point: None,
-            },
+            }),
         });
         for (gateway, requestor, role) in [
             (&parts.gateways.consumer, true, SERVICE_CONSUMER),

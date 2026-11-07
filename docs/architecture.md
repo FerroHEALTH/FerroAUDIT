@@ -405,16 +405,22 @@ The accessor carries the binding outcome, one of a fixed code set, with the
 party (an openEHR `PARTY_REF` triple) and its groups on `bound` and
 `provisional` and the party alone on `refused-inactive` and
 `refused-abandoned`, so the type admits no other combination; the token's
-actor chain, outermost first (RFC 8693 §4.1); and the representation a
-representative acts under. A relayed accessor arrives through a MyHealth@EU
+actor chain, outermost first (RFC 8693 §4.1); the representation a
+representative acts under, with the relationship the representative's
+openEHR `PARTY_RELATED` committer records; and the healthcare provider a
+bound person or a system client acts for, with the facilities a system
+client's commit names (Annex II 3.2(a)). A relayed accessor arrives through a MyHealth@EU
 contact point (Implementing Regulation (EU) 2026/2099) or a domestic
 federation, which one field (`Via`) tells apart because the two fall under
 different law, and is built through `Relayed::try_from`, which refuses a
-contact point that names no professional, a federation access with no
+contact point that names no professional or leaves out a field 2026/2099
+Annex Tables 1 and 2 make mandatory, a federation access with no
 agreement, an organisation whose agreement declares no access class, a
 contact point provider named by no `urn:oid:` or `urn:hl7ii:` identifier and
 a clerical support worker relayed without `on-behalf-of` (eHDSI SAML
-Profile 10.0.0 §2.3). The record keeps the assertion and message ids and
+Profile 10.0.0 §2.3). A federation, which 2026/2099 does not bind, states
+the Annex fields its agreement requires and any further field by name. The
+record keeps the assertion and message ids and
 never a security header (eHDSI Section I Security Policies 10.0.0 SR 5).
 `AccessRecord::validate` holds a `chained` organisation access to an
 attested correlation id; both sinks and the DICOM rendering refuse a record
