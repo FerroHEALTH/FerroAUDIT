@@ -11,6 +11,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `ihe-atna` requires `ferrohealth-smart` 0.10 (caret `0.10.1`) in place of
+  0.9, so the `smart` feature's `atna::bearer::Bearer` takes a
+  `TokenSource` of the 0.10 line. A product that hands its token source to
+  the FHIR Feed moves to `ferrohealth-smart` 0.10 with this release, which
+  adds the onward `cache` setting and the TRC patient type and reads a
+  Keycloak 26.8 impersonation as issued (#170).
+
 ## [0.5.2] - 2026-11-08
 
 The access record carries the two Wabvpz Art. 15f refusals FerroEHR
