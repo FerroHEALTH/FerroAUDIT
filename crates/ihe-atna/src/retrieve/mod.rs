@@ -44,6 +44,8 @@ use std::borrow::Cow;
 use fhir_types::r4::search_parameters::SEARCH_PARAMETERS;
 
 use date::{DateError, DateParam};
+use fhir_search::escape::{split, unescape};
+use fhir_search::token::{Token, TokenError};
 use fhir_types::search::{SearchParamType, SearchParameter};
 
 /// The resource type ITI-81 searches.
@@ -108,34 +110,14 @@ pub enum Value {
     /// A string parameter (FHIR R4 Search, §3.1.1.4.8); `address` matches it
     /// as a substring (§3.81.4.1.2.2).
     String(String),
-    /// A token parameter (FHIR R4 Search, §3.1.1.4.10).
+    /// A token parameter (FHIR R4 Search, §3.1.1.4.10), read by the family's
+    /// search grammar, whose `Debug` never shows the code.
     Token(Token),
     /// A reference parameter (FHIR R4 Search, §3.1.1.4.12): an id, a
     /// `[type]/[id]` or an absolute URL, as written.
     Reference(String),
     /// A uri parameter (FHIR R4 Search, §3.1.1.4.9).
     Uri(String),
-}
-
-/// A token value (FHIR R4 Search, §3.1.1.4.10).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Token {
-    /// Which system the value names.
-    pub system: TokenSystem,
-    /// The code or identifier value; `None` for `[system]|`, any code of the
-    /// system.
-    pub code: Option<String>,
-}
-
-/// The system part of a [`Token`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenSystem {
-    /// `[code]`: any system, or none.
-    Any,
-    /// `|[code]`: the coding or identifier has no system.
-    Absent,
-    /// `[system]|[code]` or `[system]|`.
-    Named(String),
 }
 
 /// Why a query string is refused.
@@ -235,13 +217,23 @@ impl Query {
             return Ok(());
         };
         refuse_modifier(code, modifier)?;
-        let values = split_values(code, value)?;
+        let values = split(value, ',');
+        if values.iter().any(String::is_empty) {
+            return Err(QueryError::Empty {
+                parameter: code.to_owned(),
+            });
+        }
         if let Parameter::Fhir(definition) = parameter
             && definition.r#type == SearchParamType::Date
         {
             for value in values {
                 self.dates
-                    .push(DateParam::parse(&value).map_err(QueryError::Date)?);
+                    .push(DateParam::parse(&value).map_err(|error| match error {
+                        DateError::Escape => QueryError::Escape {
+                            parameter: code.to_owned(),
+                        },
+                        other => QueryError::Date(other),
+                    })?);
             }
             return Ok(());
         }
@@ -376,113 +368,31 @@ fn decode(text: &str) -> Result<Cow<'_, str>, QueryError> {
         .map_err(|_not_utf8| QueryError::Encoding)
 }
 
-/// Splits a value on its unescaped commas and removes the `\` escapes (FHIR
-/// R4 Search, §3.1.1.4.19).
-fn split_values(code: &str, value: &str) -> Result<Vec<String>, QueryError> {
-    let mut values = Vec::new();
-    let mut current = String::new();
-    let mut chars = value.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' => match chars.next() {
-                Some(escaped @ ('\\' | ',' | '$' | '|')) => {
-                    current.push('\\');
-                    current.push(escaped);
-                }
-                _ => {
-                    return Err(QueryError::Escape {
-                        parameter: code.to_owned(),
-                    });
-                }
-            },
-            ',' => values.push(std::mem::take(&mut current)),
-            other => current.push(other),
-        }
-    }
-    values.push(current);
-    if values.iter().any(String::is_empty) {
-        return Err(QueryError::Empty {
-            parameter: code.to_owned(),
-        });
-    }
-    Ok(values)
-}
-
-/// Removes the escapes `split_values` kept, for a value whose `|` is not a
-/// separator.
-fn unescape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(escaped) = chars.next() {
-                out.push(escaped);
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-/// Types one value of `parameter`.
+/// Types one value of `parameter`, as [`split`] gave it.
 fn typed(parameter: Parameter, code: &str, text: &str) -> Result<Value, QueryError> {
     let kind = match parameter {
         Parameter::Fhir(definition) => definition.r#type,
         Parameter::Ihe { .. } => SearchParamType::Token,
     };
-    match kind {
-        SearchParamType::Token => token(code, text).map(Value::Token),
-        SearchParamType::Reference => Ok(Value::Reference(unescape(text))),
-        SearchParamType::Uri => Ok(Value::Uri(unescape(text))),
-        _ => Ok(Value::String(unescape(text))),
-    }
-}
-
-/// Reads a token value: `[code]`, `[system]|[code]`, `|[code]` or
-/// `[system]|` (FHIR R4 Search, §3.1.1.4.10).
-fn token(code: &str, text: &str) -> Result<Token, QueryError> {
-    let mut separator = None;
-    let mut chars = text.char_indices();
-    while let Some((at, c)) = chars.next() {
-        match c {
-            '\\' => {
-                chars.next();
-            }
-            '|' if separator.is_none() => separator = Some(at),
-            '|' => {
-                return Err(QueryError::Escape {
-                    parameter: code.to_owned(),
-                });
-            }
-            _ => {}
-        }
-    }
-    let Some(at) = separator else {
-        return Ok(Token {
-            system: TokenSystem::Any,
-            code: Some(unescape(text)),
-        });
+    let escape = || QueryError::Escape {
+        parameter: code.to_owned(),
     };
-    let (system, rest) = text.split_at(at);
-    let value = rest.strip_prefix('|').unwrap_or(rest);
-    match (system.is_empty(), value.is_empty()) {
-        (true, true) => Err(QueryError::Empty {
-            parameter: code.to_owned(),
-        }),
-        (true, false) => Ok(Token {
-            system: TokenSystem::Absent,
-            code: Some(unescape(value)),
-        }),
-        (false, true) => Ok(Token {
-            system: TokenSystem::Named(unescape(system)),
-            code: None,
-        }),
-        (false, false) => Ok(Token {
-            system: TokenSystem::Named(unescape(system)),
-            code: Some(unescape(value)),
-        }),
+    if kind == SearchParamType::Token {
+        return Token::parse(text)
+            .map(Value::Token)
+            .map_err(|error| match error {
+                TokenError::Empty => QueryError::Empty {
+                    parameter: code.to_owned(),
+                },
+                _ => escape(),
+            });
     }
+    let plain = unescape(text).map_err(|_illegal| escape())?;
+    Ok(match kind {
+        SearchParamType::Reference => Value::Reference(plain),
+        SearchParamType::Uri => Value::Uri(plain),
+        _ => Value::String(plain),
+    })
 }
 
 #[cfg(test)]
@@ -523,22 +433,13 @@ mod tests {
         assert_eq!(
             values,
             [
-                Value::Token(Token {
-                    system: TokenSystem::Named("a".into()),
-                    code: Some("b".into())
+                Value::Token(Token::SystemCode {
+                    system: "a".into(),
+                    code: "b".into()
                 }),
-                Value::Token(Token {
-                    system: TokenSystem::Absent,
-                    code: Some("c".into())
-                }),
-                Value::Token(Token {
-                    system: TokenSystem::Named("d".into()),
-                    code: None
-                }),
-                Value::Token(Token {
-                    system: TokenSystem::Any,
-                    code: Some("e".into())
-                }),
+                Value::Token(Token::NoSystem("c".into())),
+                Value::Token(Token::System("d".into())),
+                Value::Token(Token::Code("e".into())),
             ]
         );
     }
@@ -554,14 +455,8 @@ mod tests {
         assert_eq!(
             values,
             [
-                Value::Token(Token {
-                    system: TokenSystem::Any,
-                    code: Some("a,b|c".into())
-                }),
-                Value::Token(Token {
-                    system: TokenSystem::Any,
-                    code: Some(r"d\e".into())
-                }),
+                Value::Token(Token::Code("a,b|c".into())),
+                Value::Token(Token::Code(r"d\e".into())),
             ]
         );
         assert!(matches!(
@@ -581,7 +476,8 @@ mod tests {
             query
                 .dates()
                 .first()
-                .and_then(|d| d.value().value.as_deref()),
+                .map(|d| d.date().to_string())
+                .as_deref(),
             Some("2013-01-05T10:00:00+01:00")
         );
         assert_eq!(

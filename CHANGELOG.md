@@ -13,8 +13,9 @@ and this project adheres to
 
 ## [0.6.0] - 2026-11-08
 
-`ihe-atna` takes the syslog sender's TLS configuration from its caller and
-its `smart` feature follows `ferrohealth-smart` to the 0.10 line. Both break
+`ihe-atna` takes the syslog sender's TLS configuration from its caller,
+reads ITI-81 search values through the family's FHIR search grammar, and its
+`smart` feature follows `ferrohealth-smart` to the 0.10 line. All three break
 the public API. Products pin `=0.6.0`: a product builds the rustls
 `ClientConfig` for `Repository::tls` with `ferrohealth-server`'s
 `TlsClient` from its family TLS keys, and a product that hands its token
@@ -31,7 +32,18 @@ source to the FHIR Feed moves to `ferrohealth-smart` 0.10.
   A rustls configuration speaks TLS 1.2 or 1.3 alone, so the ITI TF-2
   §3.20.4.1.2.1.1 floor holds by the type. To upgrade, build the
   configuration with `TlsClient` and pass it in `Arc` (#173).
-
+- `retrieve` reads the ITI-81 search values through the family's FHIR
+  search grammar, `fhir-search` (exact `=0.1.128`), the one copy FerroBRIDGE's
+  facade and `ihe-iti` read theirs with. `Value::Token` carries
+  `fhir_search::token::Token`, whose `Debug` never shows the code;
+  `DateParam::date` (a `SearchDate`, written back as read) replaces
+  `DateParam::value`, `DateParam::prefix` returns `fhir_search::prefix::Prefix`,
+  and `Bound::Empty` is what `gt` or `sa` matches on a range that runs past
+  the last instant. Two readings move to FHIR R4 search §3.1.1.4.7: a time
+  without an offset is read in the repository zone instead of refused, and
+  a time without seconds spans its minute instead of its first second. To
+  upgrade, match `Value::Token` on the `fhir_search` token forms and read a
+  date with `DateParam::date` (#174).
 - `ihe-atna` requires `ferrohealth-smart` 0.10 (caret `0.10.1`) in place of
   0.9, so the `smart` feature's `atna::bearer::Bearer` takes a
   `TokenSource` of the 0.10 line. A product that hands its token source to
@@ -44,6 +56,8 @@ source to the FHIR Feed moves to `ferrohealth-smart` 0.10.
 - `atna::repository::TlsSettings`, the PEM parsing behind it and the
   `RepositoryError` variants `Roots`, `Identity`, `NoCertificate` and
   `Tls`; `ihe-atna` no longer depends on `rustls-platform-verifier` (#173).
+- `retrieve::Token`, `retrieve::TokenSystem` and `retrieve::date::Prefix`,
+  replaced by the `fhir-search` types (#174).
 
 ## [0.5.2] - 2026-11-08
 

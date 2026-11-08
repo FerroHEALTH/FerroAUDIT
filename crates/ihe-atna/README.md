@@ -118,6 +118,9 @@ search on `AuditEvent`:
   is refused.
 - `date::DateParam::bounds`: the interval of `recorded` instants a `date`
   value matches, from its prefix and the range its precision implies.
+  Every value, its escapes, tokens and dates, is read by the family's FHIR
+  search grammar, `fhir-search`, so a query reads the same here as in the
+  other FerroHEALTH FHIR servers.
 - `bundle::searchset` and `bundle::refusal`: the answer as `fhir_types::r4`
   resources.
 
