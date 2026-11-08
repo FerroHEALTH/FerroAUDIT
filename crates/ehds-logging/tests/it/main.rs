@@ -17,6 +17,8 @@ mod category;
 #[cfg(test)]
 mod classify;
 #[cfg(test)]
+mod detail;
+#[cfg(test)]
 mod emergency;
 #[cfg(test)]
 mod features;

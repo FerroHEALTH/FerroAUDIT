@@ -772,6 +772,18 @@ pub enum Binding {
     /// carries no treatment relationship confirmation, recorded as a
     /// security event.
     RefusedTrcMissing,
+    /// `refused-system-personal-scope`: a system client holds a `user/` or
+    /// `patient/` scope, which names a person it does not act for.
+    RefusedSystemPersonalScope,
+    /// `refused-no-agreement`: no agreement of the federation issuer admits
+    /// the accessor's kind.
+    RefusedNoAgreement,
+    /// `refused-scope-beyond-agreement`: an external accessor holds a scope
+    /// its agreement does not admit.
+    RefusedScopeBeyondAgreement,
+    /// `refused-correlation-missing`: a `chained` organisation's request
+    /// carries no attested correlation id.
+    RefusedCorrelationMissing,
 }
 
 impl Binding {
@@ -798,6 +810,10 @@ impl Binding {
             Self::RefusedWrongMarker => "refused-wrong-marker",
             Self::RefusedRepresentationUnrecorded => "refused-representation-unrecorded",
             Self::RefusedTrcMissing => "refused-trc-missing",
+            Self::RefusedSystemPersonalScope => "refused-system-personal-scope",
+            Self::RefusedNoAgreement => "refused-no-agreement",
+            Self::RefusedScopeBeyondAgreement => "refused-scope-beyond-agreement",
+            Self::RefusedCorrelationMissing => "refused-correlation-missing",
         }
     }
 
@@ -844,6 +860,10 @@ impl Binding {
                 | Self::RefusedWrongMarker
                 | Self::RefusedRepresentationUnrecorded
                 | Self::RefusedTrcMissing
+                | Self::RefusedSystemPersonalScope
+                | Self::RefusedNoAgreement
+                | Self::RefusedScopeBeyondAgreement
+                | Self::RefusedCorrelationMissing
         )
     }
 

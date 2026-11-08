@@ -11,6 +11,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ehds_logging::detail`, which needs no feature: the names of the
+  `ehds-accessor` and `ehds-relayed` entities and of every `detail` entry
+  the BALP record and the DICOM message write. A recording system that
+  writes its own DICOM message names the binding and relayed members by
+  them without the `balp` feature. `balp::detail`, `balp::ACCESSOR_ENTITY`
+  and `balp::RELAYED_ENTITY` keep their names and take each value from it
+  (#161).
+- `Binding::RefusedSystemPersonalScope`, `Binding::RefusedNoAgreement`,
+  `Binding::RefusedScopeBeyondAgreement` and
+  `Binding::RefusedCorrelationMissing`, the codes
+  `refused-system-personal-scope`, `refused-no-agreement`,
+  `refused-scope-beyond-agreement` and `refused-correlation-missing`; each
+  is a refusal and none a security event (#162).
+
 ## [0.5.0] - 2026-11-08
 
 The access record carries every binding field a recording system holds:

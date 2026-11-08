@@ -13,7 +13,7 @@
 
 use ihe_atna::balp::{Described, Detail, Entity, OTHER};
 
-use super::detail;
+use crate::detail;
 use crate::transformation::{Elements, Transformation};
 
 /// The name of the entity that records a semantic transformation.
