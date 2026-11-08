@@ -31,7 +31,7 @@ source to the FHIR Feed moves to `ferrohealth-smart` 0.10.
   whose `platform_config` keeps the platform's roots beside the extra ones.
   A rustls configuration speaks TLS 1.2 or 1.3 alone, so the ITI TF-2
   §3.20.4.1.2.1.1 floor holds by the type. To upgrade, build the
-  configuration with `TlsClient` and pass it in `Arc` (#173).
+  configuration with `TlsClient` and pass it in `Arc` (#173, #177).
 - `retrieve` reads the ITI-81 search values through the family's FHIR
   search grammar, `fhir-search` (exact `=0.1.128`), the one copy FerroBRIDGE's
   facade and `ihe-iti` read theirs with. `Value::Token` carries
