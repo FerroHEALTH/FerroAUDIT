@@ -13,6 +13,8 @@ mod escaping;
 mod forwarder;
 #[cfg(feature = "atna")]
 mod message;
+#[cfg(feature = "atna")]
+mod mutual;
 mod outbox;
 #[cfg(feature = "atna")]
 mod probe;
