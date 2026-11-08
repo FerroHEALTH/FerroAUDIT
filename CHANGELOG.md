@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
+A recording system that writes its own DICOM audit message names and
+formats the binding and relayed members of an access record as both
+renderings of `ehds-logging` do, with no feature, and the record carries
+the four caller-kind refusals FerroEHR records. Every change is additive.
+Products pin `=0.5.1`.
+
 ### Added
 
 - `ehds_logging::detail`, which needs no feature: the names of the
@@ -719,7 +727,12 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.3...v0.4.0
+[0.3.3]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.15...v0.3.0
 [0.2.15]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.2.14...v0.2.15
