@@ -156,6 +156,42 @@ fn the_added_refusals_are_written_with_their_codes() {
     }
 }
 
+/// The four refusals 0.5.0 lacked, which FerroEHR records for a caller its
+/// kind or its agreement does not admit, are refusals written with their
+/// codes, and none is a security event.
+#[test]
+fn the_caller_kind_refusals_are_written_with_their_codes() {
+    for (binding, code) in [
+        (
+            Binding::RefusedSystemPersonalScope,
+            "refused-system-personal-scope",
+        ),
+        (Binding::RefusedNoAgreement, "refused-no-agreement"),
+        (
+            Binding::RefusedScopeBeyondAgreement,
+            "refused-scope-beyond-agreement",
+        ),
+        (
+            Binding::RefusedCorrelationMissing,
+            "refused-correlation-missing",
+        ),
+    ] {
+        assert_eq!(binding.code(), code);
+        assert!(binding.is_refusal(), "{code}");
+        assert!(!binding.is_security_event(), "{code}");
+        assert!(binding.party().is_none(), "{code}");
+        let mut record = record(Action::Read, Outcome::MinorFailure);
+        record.accessor.binding = Some(binding);
+        let accessor = accessor_entity(&record);
+        assert_eq!(details(&accessor, "binding"), [code]);
+        assert_eq!(
+            details(&accessor, "security-event"),
+            Vec::<&str>::new(),
+            "{code}"
+        );
+    }
+}
+
 /// Annex II 3.2(a): the provider a bound person or a system client acts
 /// for, and each facility a system client's commit names, have no BALP
 /// 1.1.4 element and ride in the accessor entity.

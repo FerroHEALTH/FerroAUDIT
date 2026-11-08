@@ -343,6 +343,31 @@ fn the_binding_rides_as_a_participant_object() {
     );
 }
 
+/// Each caller-kind refusal rides as the `binding` detail of the accessor
+/// object, with no `security-event` detail.
+#[test]
+fn the_caller_kind_refusals_ride_as_details() {
+    for binding in [
+        Binding::RefusedSystemPersonalScope,
+        Binding::RefusedNoAgreement,
+        Binding::RefusedScopeBeyondAgreement,
+        Binding::RefusedCorrelationMissing,
+    ] {
+        let code = binding.code();
+        let mut record = record(Action::Read, Outcome::MinorFailure);
+        record.accessor.binding = Some(binding);
+        let accessor = object_details(&xml(&record), "ehds-accessor");
+        assert!(
+            accessor.contains(&("binding".to_owned(), code.to_owned())),
+            "{code} in {accessor:?}"
+        );
+        assert!(
+            !accessor.iter().any(|(kind, _)| kind == "security-event"),
+            "{code} in {accessor:?}"
+        );
+    }
+}
+
 /// The members PS3.15 A.5 has no element for ride as details of the accessor
 /// object: the added refusals, the representation's relationship, the
 /// provider acted for and each facility.

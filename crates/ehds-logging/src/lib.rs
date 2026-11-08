@@ -28,6 +28,8 @@
 //! - [`transformation`]: the record of a semantic transformation an access
 //!   applied, which rides on its access record (eHealth Network General
 //!   Guidelines Release 3.1 Art 6(3));
+//! - [`detail`]: the names of the entities and `detail` entries both
+//!   renderings write, for a system that writes its own DICOM message;
 //! - [`sink`]: where records go, and why one could not be stored;
 //! - [`withheld`]: the holds a product keeps on resources it delays the
 //!   person's access to (Art 3(3)), and the person's own access trail (Art 9)
@@ -73,6 +75,7 @@ pub mod atna;
 pub mod balp;
 pub mod category;
 pub mod classify;
+pub mod detail;
 pub mod emergency;
 pub mod label;
 pub mod map;

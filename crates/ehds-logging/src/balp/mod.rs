@@ -246,14 +246,11 @@ pub const EMERGENCY_DESCRIPTION: &str = "Emergency access: the accessor declared
      was necessary to protect the vital interests of the data subject \
      (Regulation (EU) 2025/327 Art 11(5)).";
 
-/// The name of the entity that carries what a contact point or a federation
-/// relayed.
-pub const RELAYED_ENTITY: &str = "ehds-relayed";
+/// [`crate::detail::RELAYED_ENTITY`].
+pub const RELAYED_ENTITY: &str = crate::detail::RELAYED_ENTITY;
 
-/// The name of the entity that carries how the accessor was bound to a
-/// party: the binding outcome, the party and its groups, the actor chain and
-/// the representation.
-pub const ACCESSOR_ENTITY: &str = "ehds-accessor";
+/// [`crate::detail::ACCESSOR_ENTITY`].
+pub const ACCESSOR_ENTITY: &str = crate::detail::ACCESSOR_ENTITY;
 
 /// The name of the entity that marks a population access.
 pub const POPULATION_ENTITY: &str = "ehds-population";
@@ -581,8 +578,8 @@ fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
     let request = &record.request;
     let correlation = request.correlation.iter().flat_map(|correlation| {
         [
-            Detail::new(detail::CORRELATION, correlation.value.clone()),
-            Detail::new(detail::CORRELATION_SOURCE, correlation.source.code()),
+            Detail::new(crate::detail::CORRELATION, correlation.value.clone()),
+            Detail::new(crate::detail::CORRELATION_SOURCE, correlation.source.code()),
         ]
     });
     // NOTE: BALP 1.1.4 entity:transaction is 0..1 and needs what.identifier.value, so a request
@@ -627,16 +624,16 @@ fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
     entities.extend(subject_entities(record));
     let mut details = categories(&record.categories);
     if let Some(delivered) = record.delivered {
-        details.push(Detail::new(detail::DELIVERED, delivered.to_string()));
+        details.push(Detail::new(crate::detail::DELIVERED, delivered.to_string()));
     }
     if let Some(name) = &request.stored_query {
-        details.push(Detail::new(detail::STORED_QUERY, name.clone()));
+        details.push(Detail::new(crate::detail::STORED_QUERY, name.clone()));
     }
     if request.id.is_none() {
         details.extend(correlation);
     }
     if let Some(count) = record.origin_count {
-        details.push(Detail::new(detail::ORIGIN_COUNT, count.to_string()));
+        details.push(Detail::new(crate::detail::ORIGIN_COUNT, count.to_string()));
     }
     details.extend(retention_details(&record.retention));
     entities.push(other(
@@ -652,11 +649,16 @@ fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
         entities.push(origin_entity(origin, labels));
     }
     if let Some(relayed) = &record.accessor.relayed {
-        entities.push(other(None, RELAYED_ENTITY, relayed_details(relayed), &[]));
+        entities.push(other(
+            None,
+            crate::detail::RELAYED_ENTITY,
+            relayed_details(relayed),
+            &[],
+        ));
     }
     let accessor = accessor_details(&record.accessor);
     if !accessor.is_empty() {
-        entities.push(other(None, ACCESSOR_ENTITY, accessor, &[]));
+        entities.push(other(None, crate::detail::ACCESSOR_ENTITY, accessor, &[]));
     }
     entities.extend(record.subject.population.as_ref().map(population_entity));
     if let Some(emergency) = &record.emergency {
@@ -702,18 +704,18 @@ fn retention_details(retention: &Retention) -> Vec<Detail> {
     let period = retention.period();
     let mut details: Vec<Detail> = period
         .years()
-        .map(|years| Detail::new(detail::RETENTION_YEARS, years.get().to_string()))
+        .map(|years| Detail::new(crate::detail::RETENTION_YEARS, years.get().to_string()))
         .into_iter()
         .collect();
-    details.push(Detail::new(detail::RETENTION_PERIOD, period.code()));
+    details.push(Detail::new(crate::detail::RETENTION_PERIOD, period.code()));
     details.extend(
         retention
             .ends()
-            .map(|ends| Detail::new(detail::RETENTION_ENDS, ends.to_string())),
+            .map(|ends| Detail::new(crate::detail::RETENTION_ENDS, ends.to_string())),
     );
     details.extend([
-        Detail::new(detail::RETENTION_GROUND, retention.ground().code()),
-        Detail::new(detail::RETENTION_FLOOR, retention.floor().code()),
+        Detail::new(crate::detail::RETENTION_GROUND, retention.ground().code()),
+        Detail::new(crate::detail::RETENTION_FLOOR, retention.floor().code()),
     ]);
     details
 }
@@ -741,8 +743,8 @@ fn subject_entities(record: &AccessRecord) -> Vec<Entity> {
             Some(ehr.ehr_id.clone()),
             "ehr",
             vec![
-                Detail::new(detail::ENDPOINT, ehr.endpoint.clone()),
-                Detail::new(detail::PATIENT_LOOKUP, ehr.patient.code()),
+                Detail::new(crate::detail::ENDPOINT, ehr.endpoint.clone()),
+                Detail::new(crate::detail::PATIENT_LOOKUP, ehr.patient.code()),
             ],
             &[],
         )
@@ -757,47 +759,47 @@ fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
     let mut details: Vec<Detail> = origin
         .status
         .iter()
-        .map(|status| Detail::new(detail::STATUS, status.clone()))
+        .map(|status| Detail::new(crate::detail::STATUS, status.clone()))
         .collect();
     details.extend(
         origin
             .node
             .iter()
-            .map(|node| Detail::new(detail::NODE, node.clone())),
+            .map(|node| Detail::new(crate::detail::NODE, node.clone())),
     );
     details.extend(
         origin
             .system_id
             .iter()
-            .map(|system_id| Detail::new(detail::SYSTEM_ID, system_id.clone())),
+            .map(|system_id| Detail::new(crate::detail::SYSTEM_ID, system_id.clone())),
     );
     details.extend(
         origin
             .rows
-            .map(|rows| Detail::new(detail::ROWS, rows.to_string())),
+            .map(|rows| Detail::new(crate::detail::ROWS, rows.to_string())),
     );
     if let Some(version) = &origin.version {
         details.extend(
             version
                 .named()
-                .map(|named| Detail::new(detail::WRITTEN_VERSION, named)),
+                .map(|named| Detail::new(crate::detail::WRITTEN_VERSION, named)),
         );
         details.extend(
             version
                 .unread()
-                .map(|why| Detail::new(detail::WRITTEN_VERSION_UNREAD, why)),
+                .map(|why| Detail::new(crate::detail::WRITTEN_VERSION_UNREAD, why)),
         );
     }
     if let Some(created) = &origin.created_ehr {
         details.extend(
             created
                 .named()
-                .map(|ehr_id| Detail::new(detail::CREATED_EHR, ehr_id)),
+                .map(|ehr_id| Detail::new(crate::detail::CREATED_EHR, ehr_id)),
         );
         details.extend(
             created
                 .unread()
-                .map(|why| Detail::new(detail::CREATED_EHR_UNREAD, why)),
+                .map(|why| Detail::new(crate::detail::CREATED_EHR_UNREAD, why)),
         );
     }
     details.extend(origin.categories.iter().flat_map(categories));
@@ -807,10 +809,10 @@ fn origin_entity(origin: &Origin, labels: &[Label]) -> Entity {
 /// The entity that marks an emergency access, naming the purposes that
 /// marked it and each member whose consent pre-filter denial was set aside.
 fn emergency_entity(emergency: &Emergency) -> Entity {
-    let mut details = vec![Detail::new(detail::EMERGENCY_ACCESS, "true")];
+    let mut details = vec![Detail::new(crate::detail::EMERGENCY_ACCESS, "true")];
     details.extend(emergency.purposes().iter().map(|purpose| {
         Detail::new(
-            detail::EMERGENCY_PURPOSE,
+            crate::detail::EMERGENCY_PURPOSE,
             coded(purpose.system.as_deref(), &purpose.code),
         )
     }));
@@ -818,7 +820,7 @@ fn emergency_entity(emergency: &Emergency) -> Entity {
         emergency
             .consent_set_aside()
             .iter()
-            .map(|member| Detail::new(detail::CONSENT_SET_ASIDE, member.clone())),
+            .map(|member| Detail::new(crate::detail::CONSENT_SET_ASIDE, member.clone())),
     );
     Entity::Described(Described {
         what: None,
@@ -847,21 +849,21 @@ fn security(labels: &[Label]) -> Vec<SecurityLabel> {
 /// `ehr_id` and the template and archetype ids the query read.
 fn population_entity(population: &Population) -> Entity {
     let mut details = vec![
-        Detail::new(detail::POPULATION, "true"),
-        Detail::new(detail::POPULATION_REASON, population.reason.code()),
+        Detail::new(crate::detail::POPULATION, "true"),
+        Detail::new(crate::detail::POPULATION_REASON, population.reason.code()),
     ];
     details.extend(
         population
             .ehrs
-            .map(|ehrs| Detail::new(detail::POPULATION_EHRS, ehrs.to_string())),
+            .map(|ehrs| Detail::new(crate::detail::POPULATION_EHRS, ehrs.to_string())),
     );
     details.push(Detail::new(
-        detail::POPULATION_LIMIT,
+        crate::detail::POPULATION_LIMIT,
         population.limit.to_string(),
     ));
     for (name, ids) in [
-        (detail::TEMPLATE_ID, &population.templates),
-        (detail::ARCHETYPE_ID, &population.archetypes),
+        (crate::detail::TEMPLATE_ID, &population.templates),
+        (crate::detail::ARCHETYPE_ID, &population.archetypes),
     ] {
         details.extend(ids.iter().map(|id| Detail::new(name, id.clone())));
     }
@@ -899,13 +901,16 @@ fn party_ref(party: &PartyRef) -> String {
 fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
     let parts = relayed.as_parts();
     let mut details = vec![
-        Detail::new(detail::RELAYED_VIA, parts.via.code()),
-        Detail::new(detail::RELAYED_ISSUER, parts.via.issuer()),
-        Detail::new(detail::ASSERTED, "true"),
+        Detail::new(crate::detail::RELAYED_VIA, parts.via.code()),
+        Detail::new(crate::detail::RELAYED_ISSUER, parts.via.issuer()),
+        Detail::new(crate::detail::ASSERTED, "true"),
     ];
-    details.extend(optional(detail::COUNTRY_CODE, parts.country_code.as_ref()));
+    details.extend(optional(
+        crate::detail::COUNTRY_CODE,
+        parts.country_code.as_ref(),
+    ));
     details.push(Detail::new(
-        detail::PROFESSIONAL_NAMED,
+        crate::detail::PROFESSIONAL_NAMED,
         if relayed.names_a_professional() {
             "true"
         } else {
@@ -919,12 +924,15 @@ fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
         details.extend(provider_details(provider));
     }
     for (name, value) in [
-        (detail::POINT_OF_CARE, &parts.point_of_care),
-        (detail::IDENTITY_ASSERTION_ID, &parts.identity_assertion_id),
-        (detail::TRC_ASSERTION_ID, &parts.trc_assertion_id),
-        (detail::REQUEST_MESSAGE_ID, &parts.message_id),
-        (detail::CONSUMER_NCP, &parts.gateways.consumer),
-        (detail::PROVIDER_NCP, &parts.gateways.provider),
+        (crate::detail::POINT_OF_CARE, &parts.point_of_care),
+        (
+            crate::detail::IDENTITY_ASSERTION_ID,
+            &parts.identity_assertion_id,
+        ),
+        (crate::detail::TRC_ASSERTION_ID, &parts.trc_assertion_id),
+        (crate::detail::REQUEST_MESSAGE_ID, &parts.message_id),
+        (crate::detail::CONSUMER_NCP, &parts.gateways.consumer),
+        (crate::detail::PROVIDER_NCP, &parts.gateways.provider),
     ] {
         details.extend(optional(name, value.as_ref()));
     }
@@ -934,7 +942,7 @@ fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
     details.extend(parts.asserted.iter().flat_map(|(name, values)| {
         values
             .iter()
-            .map(move |value| Detail::new(detail::ASSERTED_FIELD, format!("{name}={value}")))
+            .map(move |value| Detail::new(crate::detail::ASSERTED_FIELD, format!("{name}={value}")))
     }));
     details
 }
@@ -943,57 +951,60 @@ fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
 /// SAML Profile 10.0.0 §2.3).
 fn provider_details(provider: &RelayedProvider) -> Vec<Detail> {
     let mut details = vec![Detail::new(
-        detail::PROVIDER_IDENTIFIER,
+        crate::detail::PROVIDER_IDENTIFIER,
         provider.identifier.clone(),
     )];
     details.extend(optional(
-        detail::PROVIDER_ISSUING_AUTHORITY,
+        crate::detail::PROVIDER_ISSUING_AUTHORITY,
         provider.issuing_authority.as_ref(),
     ));
-    details.extend(optional(detail::PROVIDER_NAME, provider.name.as_ref()));
     details.extend(optional(
-        detail::PROVIDER_ADDRESS,
+        crate::detail::PROVIDER_NAME,
+        provider.name.as_ref(),
+    ));
+    details.extend(optional(
+        crate::detail::PROVIDER_ADDRESS,
         provider.address.as_ref(),
     ));
     details.extend(
         provider
             .facility_type
             .as_ref()
-            .map(|kind| Detail::new(detail::PROVIDER_FACILITY_TYPE, record_coded(kind))),
+            .map(|kind| Detail::new(crate::detail::PROVIDER_FACILITY_TYPE, record_coded(kind))),
     );
     details.extend(optional(
-        detail::PROVIDER_HOME_COMMUNITY_ID,
+        crate::detail::PROVIDER_HOME_COMMUNITY_ID,
         provider.home_community_id.as_ref(),
     ));
-    details.extend(
-        provider
-            .organisation_type
-            .as_ref()
-            .map(|kind| Detail::new(detail::PROVIDER_ORGANISATION_TYPE, record_coded(kind))),
-    );
+    details.extend(provider.organisation_type.as_ref().map(|kind| {
+        Detail::new(
+            crate::detail::PROVIDER_ORGANISATION_TYPE,
+            record_coded(kind),
+        )
+    }));
     details
 }
 
 /// The `detail` entries of the agreement a relayed access is made under.
 fn agreement_details(agreement: &Agreement) -> Vec<Detail> {
     let mut details = vec![
-        Detail::new(detail::AGREEMENT_NAME, agreement.name.clone()),
-        Detail::new(detail::AGREEMENT_VERSION, agreement.version.clone()),
+        Detail::new(crate::detail::AGREEMENT_NAME, agreement.name.clone()),
+        Detail::new(crate::detail::AGREEMENT_VERSION, agreement.version.clone()),
     ];
     details.extend(
         agreement
             .legal_ground
             .iter()
-            .map(|ground| Detail::new(detail::AGREEMENT_LEGAL_GROUND, record_coded(ground))),
+            .map(|ground| Detail::new(crate::detail::AGREEMENT_LEGAL_GROUND, record_coded(ground))),
     );
     details.extend(optional(
-        detail::AGREEMENT_CONSENT,
+        crate::detail::AGREEMENT_CONSENT,
         agreement.consent.as_ref(),
     ));
     details.extend(
         agreement
             .access_class
-            .map(|class| Detail::new(detail::AGREEMENT_ACCESS_CLASS, class.code())),
+            .map(|class| Detail::new(crate::detail::AGREEMENT_ACCESS_CLASS, class.code())),
     );
     details
 }
@@ -1007,55 +1018,55 @@ fn optional(name: &'static str, value: Option<&String>) -> Option<Detail> {
 /// eHDSI SAML Profile 10.0.0 §2.3).
 fn professional_details(professional: &RelayedProfessional) -> Vec<Detail> {
     let mut details = Vec::new();
-    details.extend(optional(detail::HP_NAME, professional.name.as_ref()));
+    details.extend(optional(crate::detail::HP_NAME, professional.name.as_ref()));
     details.extend(optional(
-        detail::FAMILY_NAME,
+        crate::detail::FAMILY_NAME,
         professional.family_name.as_ref(),
     ));
     details.extend(optional(
-        detail::GIVEN_NAME,
+        crate::detail::GIVEN_NAME,
         professional.given_name.as_ref(),
     ));
     details.extend(optional(
-        detail::HP_IDENTIFIER,
+        crate::detail::HP_IDENTIFIER,
         professional.identifier.as_ref(),
     ));
     details.extend(optional(
-        detail::HP_ISSUING_AUTHORITY,
+        crate::detail::HP_ISSUING_AUTHORITY,
         professional.issuing_authority.as_ref(),
     ));
     details.extend(
         professional
             .roles
             .iter()
-            .map(|role| Detail::new(detail::HP_ROLE, record_coded(role))),
+            .map(|role| Detail::new(crate::detail::HP_ROLE, record_coded(role))),
     );
     details.extend(optional(
-        detail::HP_PROVIDER_IDENTIFIER,
+        crate::detail::HP_PROVIDER_IDENTIFIER,
         professional.healthcare_provider_identifier.as_ref(),
     ));
     details.extend(
         professional
             .name_id
             .as_ref()
-            .map(|name_id| Detail::new(detail::HP_NAME_ID, name_id.user_id())),
+            .map(|name_id| Detail::new(crate::detail::HP_NAME_ID, name_id.user_id())),
     );
     details.extend(
         professional
             .authentication_method
-            .map(|method| Detail::new(detail::HP_AUTHENTICATION_METHOD, method.uri())),
+            .map(|method| Detail::new(crate::detail::HP_AUTHENTICATION_METHOD, method.uri())),
     );
     details.extend(
         professional
             .on_behalf_of
             .as_ref()
-            .map(|role| Detail::new(detail::HP_ON_BEHALF_OF, record_coded(role))),
+            .map(|role| Detail::new(crate::detail::HP_ON_BEHALF_OF, record_coded(role))),
     );
     details.extend(
         professional
             .permissions
             .iter()
-            .map(|permission| Detail::new(detail::HP_PERMISSION, permission.clone())),
+            .map(|permission| Detail::new(crate::detail::HP_PERMISSION, permission.clone())),
     );
     details
 }
@@ -1066,68 +1077,71 @@ fn professional_details(professional: &RelayedProfessional) -> Vec<Detail> {
 fn accessor_details(accessor: &Accessor) -> Vec<Detail> {
     let mut details = Vec::new();
     if let Some(binding) = &accessor.binding {
-        details.push(Detail::new(detail::BINDING, binding.code()));
+        details.push(Detail::new(crate::detail::BINDING, binding.code()));
         if binding.is_guest() {
-            details.push(Detail::new(detail::GUEST, "true"));
+            details.push(Detail::new(crate::detail::GUEST, "true"));
         }
         if binding.is_security_event() {
-            details.push(Detail::new(detail::SECURITY_EVENT, "true"));
+            details.push(Detail::new(crate::detail::SECURITY_EVENT, "true"));
         }
         details.extend(
             binding
                 .party()
-                .map(|party| Detail::new(detail::PARTY, party_ref(party))),
+                .map(|party| Detail::new(crate::detail::PARTY, party_ref(party))),
         );
         details.extend(
             binding
                 .groups()
                 .iter()
-                .map(|group| Detail::new(detail::GROUP, party_ref(group))),
+                .map(|group| Detail::new(crate::detail::GROUP, party_ref(group))),
         );
         match binding {
             crate::record::Binding::RefusedKeyClaimMissing { claim } => {
-                details.push(Detail::new(detail::BINDING_CLAIM, claim.clone()));
+                details.push(Detail::new(crate::detail::BINDING_CLAIM, claim.clone()));
             }
             crate::record::Binding::RefusedExternalIncomplete { fields } => details.extend(
                 fields
                     .iter()
-                    .map(|field| Detail::new(detail::BINDING_FIELD, field.clone())),
+                    .map(|field| Detail::new(crate::detail::BINDING_FIELD, field.clone())),
             ),
             _ => {}
         }
     }
     details.extend(accessor.actors.iter().map(|actor| {
         Detail::new(
-            detail::ACTOR,
+            crate::detail::ACTOR,
             coded(actor.issuer.as_deref(), &actor.subject),
         )
     }));
     if let Some(representation) = &accessor.represents {
         details.push(Detail::new(
-            detail::REPRESENTS,
+            crate::detail::REPRESENTS,
             representation.represented.clone(),
         ));
         details.extend(
             representation
                 .ground
                 .as_ref()
-                .map(|ground| Detail::new(detail::REPRESENTS_GROUND, record_coded(ground))),
+                .map(|ground| Detail::new(crate::detail::REPRESENTS_GROUND, record_coded(ground))),
         );
         details.extend(representation.relationship.as_ref().map(|relationship| {
-            Detail::new(detail::REPRESENTS_RELATIONSHIP, record_coded(relationship))
+            Detail::new(
+                crate::detail::REPRESENTS_RELATIONSHIP,
+                record_coded(relationship),
+            )
         }));
     }
     details.extend(
         accessor
             .acts_for
             .iter()
-            .map(|provider| Detail::new(detail::ACTS_FOR, issued(provider))),
+            .map(|provider| Detail::new(crate::detail::ACTS_FOR, issued(provider))),
     );
     details.extend(
         accessor
             .facilities
             .iter()
-            .map(|facility| Detail::new(detail::FACILITY, issued(facility))),
+            .map(|facility| Detail::new(crate::detail::FACILITY, issued(facility))),
     );
     details
 }
@@ -1190,10 +1204,10 @@ fn categories(classified: &Classification) -> Vec<Detail> {
     let mut details = Vec::new();
     let mut versions = BTreeSet::new();
     for (category, bases) in classified.categories() {
-        details.push(Detail::new(detail::CATEGORY, category.token()));
+        details.push(Detail::new(crate::detail::CATEGORY, category.token()));
         for basis in bases {
             details.push(Detail::new(
-                detail::BASIS,
+                crate::detail::BASIS,
                 format!("{}:{}", category.token(), basis.code()),
             ));
         }
@@ -1204,49 +1218,52 @@ fn categories(classified: &Classification) -> Vec<Detail> {
     details.extend(
         versions
             .into_iter()
-            .map(|version| Detail::new(detail::CATEGORY_VERSION, version)),
+            .map(|version| Detail::new(crate::detail::CATEGORY_VERSION, version)),
     );
     if classified.is_no_category() {
-        details.push(Detail::new(detail::NO_CATEGORY, "true"));
+        details.push(Detail::new(crate::detail::NO_CATEGORY, "true"));
     }
     let kinds = classified.no_category_kinds();
     details.extend(
         kinds
             .iter()
-            .map(|kind| Detail::new(detail::NO_CATEGORY_KIND, kind.code())),
+            .map(|kind| Detail::new(crate::detail::NO_CATEGORY_KIND, kind.code())),
     );
     if !kinds.is_empty() {
         details.push(Detail::new(
-            detail::NO_CATEGORY_BASIS,
+            crate::detail::NO_CATEGORY_BASIS,
             Basis::ResourceKind.code(),
         ));
     }
     if let Some(unclassified) = classified.unclassified() {
-        details.push(Detail::new(detail::UNCLASSIFIED, unclassified.code()));
+        details.push(Detail::new(
+            crate::detail::UNCLASSIFIED,
+            unclassified.code(),
+        ));
     }
     let counts = classified.evidence_counts();
     for (name, count_name, ids, count) in [
         (
-            detail::TEMPLATE_ID,
-            detail::TEMPLATE_ID_COUNT,
+            crate::detail::TEMPLATE_ID,
+            crate::detail::TEMPLATE_ID_COUNT,
             classified.templates(),
             counts.templates,
         ),
         (
-            detail::ARCHETYPE_ID,
-            detail::ARCHETYPE_ID_COUNT,
+            crate::detail::ARCHETYPE_ID,
+            crate::detail::ARCHETYPE_ID_COUNT,
             classified.archetypes(),
             counts.archetypes,
         ),
         (
-            detail::VERSION_UID,
-            detail::VERSION_UID_COUNT,
+            crate::detail::VERSION_UID,
+            crate::detail::VERSION_UID_COUNT,
             classified.versions(),
             counts.versions,
         ),
         (
-            detail::UNMAPPED_ID,
-            detail::UNMAPPED_ID_COUNT,
+            crate::detail::UNMAPPED_ID,
+            crate::detail::UNMAPPED_ID_COUNT,
             classified.unmapped(),
             counts.unmapped,
         ),
@@ -1257,7 +1274,7 @@ fn categories(classified: &Classification) -> Vec<Detail> {
         }
     }
     if let Some(digest) = classified.digest() {
-        details.push(Detail::new(detail::MAP_DIGEST, digest));
+        details.push(Detail::new(crate::detail::MAP_DIGEST, digest));
     }
     details
 }
