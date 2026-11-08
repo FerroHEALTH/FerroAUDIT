@@ -231,9 +231,7 @@ use crate::classify::{Basis, Classification};
 use crate::emergency::Emergency;
 use crate::label::Label;
 use crate::record::{
-    AccessRecord, Accessor, Action, Agreement, Coded as RecordCoded, IssuedId, Origin, Outcome,
-    PartyRef, PatientIdentifier, PatientLookup, Population, Relayed, RelayedProfessional,
-    RelayedProvider,
+    AccessRecord, Action, Origin, Outcome, PartyRef, PatientIdentifier, PatientLookup, Population,
 };
 use crate::retention::Retention;
 use crate::sink::{AccessSink, Reservation, SinkError};
@@ -652,11 +650,11 @@ fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
         entities.push(other(
             None,
             crate::detail::RELAYED_ENTITY,
-            relayed_details(relayed),
+            entries(crate::detail::relayed(relayed)),
             &[],
         ));
     }
-    let accessor = accessor_details(&record.accessor);
+    let accessor = entries(crate::detail::accessor(&record.accessor));
     if !accessor.is_empty() {
         entities.push(other(None, crate::detail::ACCESSOR_ENTITY, accessor, &[]));
     }
@@ -813,7 +811,7 @@ fn emergency_entity(emergency: &Emergency) -> Entity {
     details.extend(emergency.purposes().iter().map(|purpose| {
         Detail::new(
             crate::detail::EMERGENCY_PURPOSE,
-            coded(purpose.system.as_deref(), &purpose.code),
+            crate::detail::coded(purpose.system.as_deref(), &purpose.code),
         )
     }));
     details.extend(
@@ -878,277 +876,12 @@ fn population_entity(population: &Population) -> Entity {
     })
 }
 
-/// `<system>|<code>`, or `<code>` when no system is named.
-fn coded(system: Option<&str>, code: &str) -> String {
-    match system {
-        Some(system) => format!("{system}|{code}"),
-        None => code.to_owned(),
-    }
-}
-
-/// `<system>|<code>` of a record's coded value, or `<code>`.
-fn record_coded(value: &RecordCoded) -> String {
-    coded(value.system.as_deref(), &value.code)
-}
-
-/// `<namespace>|<type>|<id>` of `party`.
-fn party_ref(party: &PartyRef) -> String {
-    format!("{}|{}|{}", party.namespace, party.kind, party.id)
-}
-
-/// The `detail` entries of what a contact point or a federation relayed,
-/// marked as its assertion.
-fn relayed_details(relayed: &Relayed) -> Vec<Detail> {
-    let parts = relayed.as_parts();
-    let mut details = vec![
-        Detail::new(crate::detail::RELAYED_VIA, parts.via.code()),
-        Detail::new(crate::detail::RELAYED_ISSUER, parts.via.issuer()),
-        Detail::new(crate::detail::ASSERTED, "true"),
-    ];
-    details.extend(optional(
-        crate::detail::COUNTRY_CODE,
-        parts.country_code.as_ref(),
-    ));
-    details.push(Detail::new(
-        crate::detail::PROFESSIONAL_NAMED,
-        if relayed.names_a_professional() {
-            "true"
-        } else {
-            "false"
-        },
-    ));
-    if let Some(professional) = &parts.professional {
-        details.extend(professional_details(professional));
-    }
-    if let Some(provider) = &parts.provider {
-        details.extend(provider_details(provider));
-    }
-    for (name, value) in [
-        (crate::detail::POINT_OF_CARE, &parts.point_of_care),
-        (
-            crate::detail::IDENTITY_ASSERTION_ID,
-            &parts.identity_assertion_id,
-        ),
-        (crate::detail::TRC_ASSERTION_ID, &parts.trc_assertion_id),
-        (crate::detail::REQUEST_MESSAGE_ID, &parts.message_id),
-        (crate::detail::CONSUMER_NCP, &parts.gateways.consumer),
-        (crate::detail::PROVIDER_NCP, &parts.gateways.provider),
-    ] {
-        details.extend(optional(name, value.as_ref()));
-    }
-    if let Some(agreement) = &parts.agreement {
-        details.extend(agreement_details(agreement));
-    }
-    details.extend(parts.asserted.iter().flat_map(|(name, values)| {
-        values
-            .iter()
-            .map(move |value| Detail::new(crate::detail::ASSERTED_FIELD, format!("{name}={value}")))
-    }));
-    details
-}
-
-/// The `detail` entries of a relayed provider (2026/2099 Annex Table 2, eHDSI
-/// SAML Profile 10.0.0 §2.3).
-fn provider_details(provider: &RelayedProvider) -> Vec<Detail> {
-    let mut details = vec![Detail::new(
-        crate::detail::PROVIDER_IDENTIFIER,
-        provider.identifier.clone(),
-    )];
-    details.extend(optional(
-        crate::detail::PROVIDER_ISSUING_AUTHORITY,
-        provider.issuing_authority.as_ref(),
-    ));
-    details.extend(optional(
-        crate::detail::PROVIDER_NAME,
-        provider.name.as_ref(),
-    ));
-    details.extend(optional(
-        crate::detail::PROVIDER_ADDRESS,
-        provider.address.as_ref(),
-    ));
-    details.extend(
-        provider
-            .facility_type
-            .as_ref()
-            .map(|kind| Detail::new(crate::detail::PROVIDER_FACILITY_TYPE, record_coded(kind))),
-    );
-    details.extend(optional(
-        crate::detail::PROVIDER_HOME_COMMUNITY_ID,
-        provider.home_community_id.as_ref(),
-    ));
-    details.extend(provider.organisation_type.as_ref().map(|kind| {
-        Detail::new(
-            crate::detail::PROVIDER_ORGANISATION_TYPE,
-            record_coded(kind),
-        )
-    }));
-    details
-}
-
-/// The `detail` entries of the agreement a relayed access is made under.
-fn agreement_details(agreement: &Agreement) -> Vec<Detail> {
-    let mut details = vec![
-        Detail::new(crate::detail::AGREEMENT_NAME, agreement.name.clone()),
-        Detail::new(crate::detail::AGREEMENT_VERSION, agreement.version.clone()),
-    ];
-    details.extend(
-        agreement
-            .legal_ground
-            .iter()
-            .map(|ground| Detail::new(crate::detail::AGREEMENT_LEGAL_GROUND, record_coded(ground))),
-    );
-    details.extend(optional(
-        crate::detail::AGREEMENT_CONSENT,
-        agreement.consent.as_ref(),
-    ));
-    details.extend(
-        agreement
-            .access_class
-            .map(|class| Detail::new(crate::detail::AGREEMENT_ACCESS_CLASS, class.code())),
-    );
-    details
-}
-
-/// `value` as the detail `name`, when there is one.
-fn optional(name: &'static str, value: Option<&String>) -> Option<Detail> {
-    value.map(|value| Detail::new(name, value.clone()))
-}
-
-/// The `detail` entries of a relayed professional (2026/2099 Annex Table 1,
-/// eHDSI SAML Profile 10.0.0 §2.3).
-fn professional_details(professional: &RelayedProfessional) -> Vec<Detail> {
-    let mut details = Vec::new();
-    details.extend(optional(crate::detail::HP_NAME, professional.name.as_ref()));
-    details.extend(optional(
-        crate::detail::FAMILY_NAME,
-        professional.family_name.as_ref(),
-    ));
-    details.extend(optional(
-        crate::detail::GIVEN_NAME,
-        professional.given_name.as_ref(),
-    ));
-    details.extend(optional(
-        crate::detail::HP_IDENTIFIER,
-        professional.identifier.as_ref(),
-    ));
-    details.extend(optional(
-        crate::detail::HP_ISSUING_AUTHORITY,
-        professional.issuing_authority.as_ref(),
-    ));
-    details.extend(
-        professional
-            .roles
-            .iter()
-            .map(|role| Detail::new(crate::detail::HP_ROLE, record_coded(role))),
-    );
-    details.extend(optional(
-        crate::detail::HP_PROVIDER_IDENTIFIER,
-        professional.healthcare_provider_identifier.as_ref(),
-    ));
-    details.extend(
-        professional
-            .name_id
-            .as_ref()
-            .map(|name_id| Detail::new(crate::detail::HP_NAME_ID, name_id.user_id())),
-    );
-    details.extend(
-        professional
-            .authentication_method
-            .map(|method| Detail::new(crate::detail::HP_AUTHENTICATION_METHOD, method.uri())),
-    );
-    details.extend(
-        professional
-            .on_behalf_of
-            .as_ref()
-            .map(|role| Detail::new(crate::detail::HP_ON_BEHALF_OF, record_coded(role))),
-    );
-    details.extend(
-        professional
-            .permissions
-            .iter()
-            .map(|permission| Detail::new(crate::detail::HP_PERMISSION, permission.clone())),
-    );
-    details
-}
-
-/// The `detail` entries of how `accessor` was bound to a party: the binding
-/// outcome with what it names, the actor chain outermost first, and the
-/// representation; empty when the accessor carries none of them.
-fn accessor_details(accessor: &Accessor) -> Vec<Detail> {
-    let mut details = Vec::new();
-    if let Some(binding) = &accessor.binding {
-        details.push(Detail::new(crate::detail::BINDING, binding.code()));
-        if binding.is_guest() {
-            details.push(Detail::new(crate::detail::GUEST, "true"));
-        }
-        if binding.is_security_event() {
-            details.push(Detail::new(crate::detail::SECURITY_EVENT, "true"));
-        }
-        details.extend(
-            binding
-                .party()
-                .map(|party| Detail::new(crate::detail::PARTY, party_ref(party))),
-        );
-        details.extend(
-            binding
-                .groups()
-                .iter()
-                .map(|group| Detail::new(crate::detail::GROUP, party_ref(group))),
-        );
-        match binding {
-            crate::record::Binding::RefusedKeyClaimMissing { claim } => {
-                details.push(Detail::new(crate::detail::BINDING_CLAIM, claim.clone()));
-            }
-            crate::record::Binding::RefusedExternalIncomplete { fields } => details.extend(
-                fields
-                    .iter()
-                    .map(|field| Detail::new(crate::detail::BINDING_FIELD, field.clone())),
-            ),
-            _ => {}
-        }
-    }
-    details.extend(accessor.actors.iter().map(|actor| {
-        Detail::new(
-            crate::detail::ACTOR,
-            coded(actor.issuer.as_deref(), &actor.subject),
-        )
-    }));
-    if let Some(representation) = &accessor.represents {
-        details.push(Detail::new(
-            crate::detail::REPRESENTS,
-            representation.represented.clone(),
-        ));
-        details.extend(
-            representation
-                .ground
-                .as_ref()
-                .map(|ground| Detail::new(crate::detail::REPRESENTS_GROUND, record_coded(ground))),
-        );
-        details.extend(representation.relationship.as_ref().map(|relationship| {
-            Detail::new(
-                crate::detail::REPRESENTS_RELATIONSHIP,
-                record_coded(relationship),
-            )
-        }));
-    }
-    details.extend(
-        accessor
-            .acts_for
-            .iter()
-            .map(|provider| Detail::new(crate::detail::ACTS_FOR, issued(provider))),
-    );
-    details.extend(
-        accessor
-            .facilities
-            .iter()
-            .map(|facility| Detail::new(crate::detail::FACILITY, issued(facility))),
-    );
-    details
-}
-
-/// `id` as `<issuer>|<id>`.
-fn issued(id: &IssuedId) -> String {
-    format!("{}|{}", id.issuer, id.id)
+/// `entries` as the `detail` entries of a BALP entity.
+fn entries(entries: Vec<crate::detail::Entry>) -> Vec<Detail> {
+    entries
+        .into_iter()
+        .map(|entry| Detail::new(entry.name, entry.value))
+        .collect()
 }
 
 /// Every patient `record` names, each once: the one the request named, and

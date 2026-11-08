@@ -29,7 +29,8 @@
 //!   applied, which rides on its access record (eHealth Network General
 //!   Guidelines Release 3.1 Art 6(3));
 //! - [`detail`]: the names of the entities and `detail` entries both
-//!   renderings write, for a system that writes its own DICOM message;
+//!   renderings write, and the entries of the accessor and relayed entities,
+//!   for a system that writes its own DICOM message;
 //! - [`sink`]: where records go, and why one could not be stored;
 //! - [`withheld`]: the holds a product keeps on resources it delays the
 //!   person's access to (Art 3(3)), and the person's own access trail (Art 9)

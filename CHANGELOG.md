@@ -20,6 +20,12 @@ and this project adheres to
   them without the `balp` feature. `balp::detail`, `balp::ACCESSOR_ENTITY`
   and `balp::RELAYED_ENTITY` keep their names and take each value from it
   (#161).
+- `ehds_logging::detail::accessor` and `ehds_logging::detail::relayed`,
+  which need no feature: the entries of the `ehds-accessor` and
+  `ehds-relayed` entities, each an `Entry` of a name and its value in the
+  form both renderings write, in the order the BALP record writes them.
+  The `balp` rendering writes both entities from them. An `Entry`'s `Debug`
+  shows its name and no value (#164).
 - `Binding::RefusedSystemPersonalScope`, `Binding::RefusedNoAgreement`,
   `Binding::RefusedScopeBeyondAgreement` and
   `Binding::RefusedCorrelationMissing`, the codes

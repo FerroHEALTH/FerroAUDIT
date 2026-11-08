@@ -473,3 +473,44 @@ fn a_hostile_relayed_value_is_written_escaped() {
     );
     assert!(!written.to_string().contains('\u{202e}'));
 }
+
+/// The BALP accessor and relayed entities carry the entries
+/// `ehds_logging::detail` gives, in its order, one definition of each form.
+#[test]
+fn the_balp_entities_carry_the_detail_entries() {
+    let mut record = bound_record();
+    record.accessor.relayed =
+        Some(Relayed::try_from(organisation(AccessClass::Automated)).expect("a relayed access"));
+    let written = written(&record);
+    for (name, entries) in [
+        (
+            "ehds-accessor",
+            ehds_logging::detail::accessor(&record.accessor),
+        ),
+        (
+            "ehds-relayed",
+            ehds_logging::detail::relayed(record.accessor.relayed.as_ref().expect("relayed")),
+        ),
+    ] {
+        let [entity] = entity(&written, name)[..] else {
+            panic!("one {name} entity");
+        };
+        let carried: Vec<(&str, &str)> = entity["detail"]
+            .as_array()
+            .expect("details")
+            .iter()
+            .map(|detail| {
+                (
+                    detail["type"].as_str().expect("a type"),
+                    detail["valueString"].as_str().expect("a value"),
+                )
+            })
+            .collect();
+        let given: Vec<(&str, &str)> = entries
+            .iter()
+            .map(|entry| (entry.name, entry.value.as_str()))
+            .collect();
+        assert!(!given.is_empty(), "{name}");
+        assert_eq!(carried, given, "{name}");
+    }
+}
