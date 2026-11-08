@@ -11,6 +11,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-08
+
+The access record carries the two Wabvpz Art. 15f refusals FerroEHR
+records for a caller under a Dutch agreement. The change is additive.
+Products pin `=0.5.2`.
+
 ### Added
 
 - `Binding::RefusedWabvpzRole` and `Binding::RefusedWabvpzOrganisationType`,
@@ -735,7 +741,8 @@ FerroFED with its tests, and the repository setup. A product that used
   specification guard, CodeQL, Scorecard, Dependabot, and the release lane
   with crates.io Trusted Publishing.
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/FerroHEALTH/FerroAUDIT/compare/v0.3.3...v0.4.0
