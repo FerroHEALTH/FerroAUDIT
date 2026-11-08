@@ -74,6 +74,7 @@ balp = [
 # searchset Bundle and refusal OperationOutcome a repository answers with,
 # as fhir-types resources. The repository keeps its store and its query.
 retrieve = [
+  "dep:fhir-search",
   "dep:fhir-types",
   "fhir-types/r4",
   "fhir-types/resources",
@@ -91,6 +92,7 @@ async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 ferrohealth-secret = { workspace = true }
 ferrohealth-smart = { workspace = true, optional = true }
+fhir-search = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }

@@ -5,45 +5,22 @@
 //! a prefix and a FHIR date value, and the interval of `recorded` instants it
 //! matches.
 //!
-//! The value is any of the FHIR `date`, `dateTime` and `instant` forms, to
-//! any precision from the year, and the time may leave out its seconds (FHIR
-//! R4 Search, §3.1.1.4.7). It is held as a `fhir_types::r4` `dateTime`,
-//! checked against that type's lexical form. `recorded` is an instant, a
-//! point in time (§3.1.1.4.7), so each prefix of §3.1.1.4.5 becomes an
-//! interval around the range the value's precision implies.
+//! The value is read by the family's FHIR search grammar, `fhir-search`: any
+//! of the FHIR `date`, `dateTime` and `instant` forms, to any precision from
+//! the year, the time with or without its seconds and offset (FHIR R4
+//! Search, §3.1.1.4.7). `recorded` is an instant, a point in time
+//! (§3.1.1.4.7), so each prefix of §3.1.1.4.5 becomes an interval around the
+//! range the value's precision implies.
 
-use fhir_types::r4::primitives::DateTime;
-use jiff::civil::Date;
+use fhir_search::date::{DateError as GrammarError, DateValue, SearchDate};
+use fhir_search::prefix::Prefix;
+use jiff::Timestamp;
 use jiff::tz::TimeZone;
-use jiff::{Span, Timestamp, ToSpan};
-
-/// A comparison prefix (FHIR R4 Search, §3.1.1.4.5); `eq` when none is
-/// written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Prefix {
-    /// `eq`: within the range of the value.
-    Eq,
-    /// `ne`: outside the range of the value.
-    Ne,
-    /// `gt`: after the range of the value.
-    Gt,
-    /// `lt`: before the range of the value.
-    Lt,
-    /// `ge`: within the range of the value or after it.
-    Ge,
-    /// `le`: within the range of the value or before it.
-    Le,
-    /// `sa`: starts after the range of the value.
-    Sa,
-    /// `eb`: ends before the range of the value.
-    Eb,
-}
 
 /// One `date` parameter value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DateParam {
-    prefix: Prefix,
-    value: DateTime,
+    value: DateValue,
 }
 
 /// The `recorded` instants a [`DateParam`] matches.
@@ -66,13 +43,20 @@ pub enum Bound {
         /// The first instant after `from` that matches again.
         until: Timestamp,
     },
+    /// No instant: the value's range runs past the last instant, and the
+    /// prefix asks for what lies after it.
+    Empty,
 }
 
 /// Why a `date` value is refused.
 ///
 /// No variant carries the value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum DateError {
+    /// The value breaks the `\` escaping of FHIR R4 Search §3.1.1.4.19.
+    #[error("the date value breaks the escaping rules of FHIR search")]
+    Escape,
     /// The value starts with letters that are no prefix of §3.1.1.4.5.
     #[error("the date value starts with an unknown prefix")]
     Prefix,
@@ -89,178 +73,83 @@ pub enum DateError {
     Unrepresentable,
 }
 
+impl From<GrammarError> for DateError {
+    fn from(error: GrammarError) -> Self {
+        match error {
+            GrammarError::Escape(_) => Self::Escape,
+            GrammarError::Prefix(_) => Self::Prefix,
+            GrammarError::LeapSecond | GrammarError::Unrepresentable => Self::Unrepresentable,
+            _ => Self::Form,
+        }
+    }
+}
+
 impl DateParam {
-    /// Reads one decoded `date` value, its prefix included.
+    /// Reads one percent-decoded `date` value, its prefix included, with its
+    /// `\` escapes in place.
     ///
     /// # Errors
     ///
-    /// A [`DateError`] for an unknown or `ap` prefix, or a value outside the
-    /// FHIR date forms.
+    /// A [`DateError`] for an illegal escape, an unknown or `ap` prefix, or a
+    /// value outside the FHIR date forms.
     pub fn parse(text: &str) -> Result<Self, DateError> {
-        let (prefix, rest) = prefix(text)?;
-        let value = complete_seconds(rest);
-        DateTime::check(&value).map_err(|_outside| DateError::Form)?;
-        Ok(Self {
-            prefix,
-            value: DateTime::from(value),
-        })
+        let value = DateValue::parse(text)?;
+        if value.prefix() == Prefix::Ap {
+            return Err(DateError::Approximate);
+        }
+        Ok(Self { value })
     }
 
-    /// The prefix.
+    /// The prefix, never `ap`.
     #[must_use]
     pub fn prefix(&self) -> Prefix {
-        self.prefix
+        self.value.prefix()
     }
 
-    /// The value, as a FHIR R4 `dateTime`, with zero seconds written where
-    /// the query left them out.
+    /// The date, written back as the query wrote it.
     #[must_use]
-    pub fn value(&self) -> &DateTime {
-        &self.value
+    pub fn date(&self) -> &SearchDate {
+        self.value.date()
     }
 
     /// The `recorded` instants this parameter matches.
     ///
-    /// A value without a time is read in `zone`, the repository's local time
-    /// zone, which FHIR R4 Search §3.1.1.4.7 has a server assume where the
-    /// value carries none. The range of the value is the year, month, day or
-    /// second it names, narrowed by each fractional digit.
+    /// A value without an offset is read in `zone`, the repository's local
+    /// time zone, which FHIR R4 Search §3.1.1.4.7 has a server assume where
+    /// the value carries none. The range of the value is the year, month,
+    /// day, minute or second it names, narrowed by each fractional digit.
     ///
     /// # Errors
     ///
-    /// [`DateError::Unrepresentable`] when the value or the end of its range
-    /// is no instant the library can represent.
+    /// [`DateError::Unrepresentable`] when the value starts outside the
+    /// instants the library can represent.
     pub fn bounds(&self, zone: &TimeZone) -> Result<Bound, DateError> {
-        let text = self.value.value.as_deref().ok_or(DateError::Form)?;
-        let (from, until) = range(text, zone)?;
-        Ok(match self.prefix {
-            Prefix::Eq => Bound::Within {
+        let instants = self.value.date().instants(zone)?;
+        let from = instants.from();
+        Ok(match (self.value.prefix(), instants.until()) {
+            // NOTE: FHIR R4 Search §3.1.1.4.5 leaves `ap` to the server, and `parse`
+            // refuses it, so no parameter holds it.
+            (Prefix::Eq | Prefix::Ap, until) => Bound::Within {
                 from: Some(from),
-                until: Some(until),
+                until,
             },
-            Prefix::Ne => Bound::Outside { from, until },
-            Prefix::Gt | Prefix::Sa => Bound::Within {
-                from: Some(until),
-                until: None,
-            },
-            Prefix::Lt | Prefix::Eb => Bound::Within {
+            (Prefix::Ne, Some(until)) => Bound::Outside { from, until },
+            (Prefix::Ne | Prefix::Lt | Prefix::Eb, _) => Bound::Within {
                 from: None,
                 until: Some(from),
             },
-            Prefix::Ge => Bound::Within {
+            (Prefix::Gt | Prefix::Sa, Some(until)) => Bound::Within {
+                from: Some(until),
+                until: None,
+            },
+            (Prefix::Gt | Prefix::Sa, None) => Bound::Empty,
+            (Prefix::Ge, _) => Bound::Within {
                 from: Some(from),
                 until: None,
             },
-            Prefix::Le => Bound::Within {
-                from: None,
-                until: Some(until),
-            },
+            (Prefix::Le, until) => Bound::Within { from: None, until },
         })
     }
-}
-
-/// Splits the prefix off `text`.
-fn prefix(text: &str) -> Result<(Prefix, &str), DateError> {
-    let letters = text.chars().take_while(char::is_ascii_alphabetic).count();
-    if letters == 0 {
-        return Ok((Prefix::Eq, text));
-    }
-    let (word, rest) = text.split_at_checked(letters).ok_or(DateError::Prefix)?;
-    let prefix = match word {
-        "eq" => Prefix::Eq,
-        "ne" => Prefix::Ne,
-        "gt" => Prefix::Gt,
-        "lt" => Prefix::Lt,
-        "ge" => Prefix::Ge,
-        "le" => Prefix::Le,
-        "sa" => Prefix::Sa,
-        "eb" => Prefix::Eb,
-        "ap" => return Err(DateError::Approximate),
-        _ => return Err(DateError::Prefix),
-    };
-    Ok((prefix, rest))
-}
-
-/// Writes `:00` seconds into a time of hours and minutes, which a search
-/// value may carry and the `dateTime` form does not (FHIR R4 Search,
-/// §3.1.1.4.7).
-fn complete_seconds(text: &str) -> String {
-    let Some((date, time)) = text.split_once('T') else {
-        return text.to_owned();
-    };
-    let zone_at = time.find(['Z', '+', '-']).unwrap_or(time.len());
-    let (clock, zone) = time.split_at(zone_at);
-    if clock.len() == 5 && clock.as_bytes().get(2) == Some(&b':') {
-        format!("{date}T{clock}:00{zone}")
-    } else {
-        text.to_owned()
-    }
-}
-
-/// The range `[from, until)` the precision of `text`, a checked `dateTime`,
-/// implies.
-fn range(text: &str, zone: &TimeZone) -> Result<(Timestamp, Timestamp), DateError> {
-    if text.contains('T') {
-        let from: Timestamp = text.parse().map_err(|_leap| DateError::Unrepresentable)?;
-        let width = fraction_width(text);
-        let until = from
-            .checked_add(width)
-            .map_err(|_overflow| DateError::Unrepresentable)?;
-        return Ok((from, until));
-    }
-    let mut parts = text.split('-');
-    let year = number(parts.next())?;
-    let (start, step): (Date, Span) = match (parts.next(), parts.next()) {
-        (None, _) => (civil(year, 1, 1)?, 1.year()),
-        (Some(month), None) => (civil(year, number(Some(month))?, 1)?, 1.month()),
-        (Some(month), Some(day)) => (
-            civil(year, number(Some(month))?, number(Some(day))?)?,
-            1.day(),
-        ),
-    };
-    let end = start
-        .checked_add(step)
-        .map_err(|_overflow| DateError::Unrepresentable)?;
-    Ok((instant(start, zone)?, instant(end, zone)?))
-}
-
-/// The width of the range of a time with `text`'s fractional digits: one
-/// second without any, a tenth for one, down to the nanosecond.
-fn fraction_width(text: &str) -> Span {
-    let digits = text.split_once('.').map_or(0, |(_, rest)| {
-        rest.chars().take_while(char::is_ascii_digit).count()
-    });
-    let nanos: i64 = match digits {
-        0 => return 1.second(),
-        1 => 100_000_000,
-        2 => 10_000_000,
-        3 => 1_000_000,
-        4 => 100_000,
-        5 => 10_000,
-        6 => 1_000,
-        7 => 100,
-        8 => 10,
-        _ => 1,
-    };
-    nanos.nanoseconds()
-}
-
-/// Reads one numeric part of a checked date.
-fn number<T: std::str::FromStr>(part: Option<&str>) -> Result<T, DateError> {
-    part.and_then(|text| text.parse().ok())
-        .ok_or(DateError::Form)
-}
-
-/// The civil date `year-month-day`.
-fn civil(year: i16, month: i8, day: i8) -> Result<Date, DateError> {
-    Date::new(year, month, day).map_err(|_invalid| DateError::Form)
-}
-
-/// The first instant of `date` in `zone`.
-fn instant(date: Date, zone: &TimeZone) -> Result<Timestamp, DateError> {
-    date.to_zoned(zone.clone())
-        .map(|zoned| zoned.timestamp())
-        .map_err(|_outside| DateError::Unrepresentable)
 }
 
 #[cfg(test)]
@@ -330,14 +219,15 @@ mod tests {
             bounds("ne2013-01-14T10:00:00Z"),
             Bound::Outside { from, until }
         );
+        let minute_end = at("2013-01-14T10:01:00Z");
         for text in ["gt2013-01-14T10:00Z", "sa2013-01-14T10:00Z"] {
             assert_eq!(
                 bounds(text),
                 Bound::Within {
-                    from: Some(until),
+                    from: Some(minute_end),
                     until: None
                 },
-                "{text}"
+                "{text}: a minute's range ends with the minute (§3.1.1.4.5)"
             );
         }
         for text in ["lt2013-01-14T10:00Z", "eb2013-01-14T10:00Z"] {
@@ -353,11 +243,15 @@ mod tests {
     }
 
     #[test]
-    fn a_time_without_seconds_reads_as_zero_seconds() {
+    fn a_time_without_seconds_spans_its_minute() {
         let param = DateParam::parse("ge2013-01-05T10:00+01:00").expect("hours and minutes");
+        assert_eq!(param.date().to_string(), "2013-01-05T10:00+01:00");
         assert_eq!(
-            param.value().value.as_deref(),
-            Some("2013-01-05T10:00:00+01:00")
+            bounds("2013-01-05T10:00+01:00"),
+            Bound::Within {
+                from: Some(at("2013-01-05T09:00:00Z")),
+                until: Some(at("2013-01-05T09:01:00Z"))
+            }
         );
         assert_eq!(
             param.bounds(&TimeZone::UTC),
@@ -399,11 +293,51 @@ mod tests {
             ("xx2013", DateError::Prefix),
             ("2013-13", DateError::Form),
             ("2013-01-05T10", DateError::Form),
-            ("2013-01-05T10:00:00", DateError::Form),
+            ("2013-01-05T10:00:00\\x", DateError::Escape),
+            ("2016-12-31T23:59:60Z", DateError::Unrepresentable),
             ("13-01-05", DateError::Form),
             ("", DateError::Form),
         ] {
             assert_eq!(DateParam::parse(text), Err(error), "{text:?}");
         }
+    }
+
+    #[test]
+    fn a_time_without_an_offset_reads_in_the_repository_zone() {
+        let zone = TimeZone::fixed(Offset::constant(2));
+        let param = DateParam::parse("2013-01-05T10:00:00").expect("a zoneless time");
+        assert_eq!(
+            param.bounds(&zone),
+            Ok(Bound::Within {
+                from: Some(at("2013-01-05T08:00:00Z")),
+                until: Some(at("2013-01-05T08:00:01Z"))
+            })
+        );
+    }
+
+    #[test]
+    fn a_range_open_past_the_last_instant_matches_nothing_after_it() {
+        assert_eq!(
+            bounds("9999"),
+            Bound::Within {
+                from: Some(at("9999-01-01T00:00:00Z")),
+                until: None
+            }
+        );
+        assert_eq!(bounds("gt9999"), Bound::Empty);
+        assert_eq!(
+            bounds("ne9999"),
+            Bound::Within {
+                from: None,
+                until: Some(at("9999-01-01T00:00:00Z"))
+            }
+        );
+        assert_eq!(
+            bounds("le9999"),
+            Bound::Within {
+                from: None,
+                until: None
+            }
+        );
     }
 }

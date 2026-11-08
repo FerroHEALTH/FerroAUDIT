@@ -275,17 +275,19 @@ records stay the repository's (§3.81.4.1.3, ITI TF-1 §9.4).
   leaves the paging link to the server. A modifier on a supported parameter
   is refused, as FHIR R4 Search §3.1.1.4.4 has a server do.
 - **The values.** The query string is percent-decoded as RFC 3986 §2.1
-  says (§3.81.4.1.2.2), so `+` stays a plus; `\` escapes follow FHIR R4
-  Search §3.1.1.4.19, tokens the four forms of §3.1.1.4.10. A date is held
-  as an R4 `dateTime` and checked against its lexical form, after `:00` is
-  written into a time of hours and minutes, which §3.1.1.4.7 allows in a
-  search.
+  says (§3.81.4.1.2.2), so `+` stays a plus. Every value is then read by
+  the family's FHIR search grammar, FerroBRIDGE's `fhir-search` crate, the
+  one copy the FerroHEALTH FHIR servers share (#174): `\` escapes follow
+  FHIR R4 Search §3.1.1.4.19, tokens the four forms of §3.1.1.4.10, and a
+  date any precision of §3.1.1.4.7, a time with or without its seconds and
+  offset.
 - **The dates.** `recorded` is an instant, a point (§3.1.1.4.7), so each
   prefix of §3.1.1.4.5 becomes an interval around the range the value's
   precision implies: `eq` within it, `ne` outside it, `ge` from its start,
   `le` until its end, `gt` and `sa` from its end, `lt` and `eb` until its
-  start. A value without a time is read in the time zone the repository
-  names, as §3.1.1.4.7 has a server assume its local zone. `ap` is refused:
+  start. A value without an offset, a date or a time, is read in the time
+  zone the repository names, as §3.1.1.4.7 has a server assume its local
+  zone. A range that runs past the last instant matches nothing after it. `ap` is refused:
   FHIR leaves its approximation to the server, and the crate chooses none.
 - **The answer.** `bundle::searchset` writes the `searchset` Bundle of
   §3.81.4.2.2.2 with `total`, the `self` link and an optional `next` link,
@@ -293,7 +295,8 @@ records stay the repository's (§3.81.4.1.3, ITI TF-1 §9.4).
   `OperationOutcome` with the human-readable description §3.81.4.2.2 asks
   for. Both are `fhir_types::r4` resources, never hand-built JSON. The
   retrieval needs no transport of its own: the feature takes `fhir-types`,
-  `jiff` and `percent-encoding`, and neither an HTTP client nor a runtime.
+  `fhir-search`, `jiff` and `percent-encoding`, and neither an HTTP client
+  nor a runtime.
 
 ## 5. Whom an exchange is made for
 
@@ -324,7 +327,7 @@ uses the same rule. No specification governs this: our own design.
 | `recording` | `balp::recording` alone | tokio, thiserror |
 | `redact` | `redact::RedactedUrl`, `fhir_base` | url |
 | `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (R4 `resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
-| `retrieve` | `retrieve` | `fhir-types` (R4 `resources`), timestamps, percent-encoding |
+| `retrieve` | `retrieve` | `fhir-types` (R4 `resources`), `fhir-search`, timestamps, percent-encoding |
 | `smart` | `balp` and `bearer` | `ferrohealth-smart` (`fetch`) |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
