@@ -355,10 +355,11 @@ natural person, the categories of the data, when, and where it came from
 - `sink`: where records go; `balp` (feature `balp`): the record written as a
   BALP `AuditEvent` through `ihe-atna`'s `balp` feature, and the sink over an
   `ihe-atna` `AuditRecorder`. `detail`, with no feature: the names of the
-  entities and `detail` entries both renderings write, which `balp` takes
-  its names from, so a product that writes its own DICOM message names the
-  binding and relayed members without the `balp` feature (no specification
-  governs where the names live: our own design).
+  entities and `detail` entries both renderings write, and the entries of
+  the accessor and relayed entities with each value's form, which `balp`
+  writes from, so a product that writes its own DICOM message names and
+  formats the binding and relayed members without the `balp` feature (no
+  specification governs where the names live: our own design).
 - `withheld`: the person's own access trail under a hold. Article 3(3) lets
   a Member State delay a person's access to their data until a health
   professional can explain it, and Article 9 gives the person the record of

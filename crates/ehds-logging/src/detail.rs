@@ -5,9 +5,18 @@
 //! and the `detail` entries they carry, which the DICOM message writes as
 //! participant objects and their `ParticipantObjectDetail`s.
 //!
+//! [`accessor`] and [`relayed`] give the entries of the `ehds-accessor` and
+//! `ehds-relayed` entities, each value in the form both renderings write it.
 //! The module needs no feature, so a recording system that writes its own
-//! DICOM message names the binding and the relayed members as both
-//! renderings of this crate do.
+//! DICOM message names and formats the binding and the relayed members as
+//! this crate does.
+
+use std::fmt;
+
+use crate::record::{
+    Accessor, Agreement, Binding, Coded, IssuedId, PartyRef, Relayed, RelayedProfessional,
+    RelayedProvider,
+};
 
 /// The name of the entity that carries how the accessor was bound to a
 /// party: the binding outcome, the party and its groups, the actor chain,
@@ -262,3 +271,282 @@ pub const UNTRANSCODED_PATH: &str = "ehds-untranscoded-path";
 pub const DROPPED: &str = "ehds-dropped";
 /// `<path>=<count>`, once per path of a dropped element that names one.
 pub const DROPPED_PATH: &str = "ehds-dropped-path";
+
+/// One `detail` entry of an entity: its name and its value.
+///
+/// `Debug` shows the name and no value.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Entry {
+    /// The name, one of this module's constants.
+    pub name: &'static str,
+    /// The value.
+    pub value: String,
+}
+
+impl Entry {
+    /// The entry `name` with the value `value`.
+    #[must_use]
+    pub fn new(name: &'static str, value: impl Into<String>) -> Self {
+        Self {
+            name,
+            value: value.into(),
+        }
+    }
+}
+
+impl fmt::Debug for Entry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Entry")
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
+/// `<system>|<code>`, or `<code>` when no system is named.
+pub(crate) fn coded(system: Option<&str>, code: &str) -> String {
+    match system {
+        Some(system) => format!("{system}|{code}"),
+        None => code.to_owned(),
+    }
+}
+
+/// `<system>|<code>` of a record's coded value, or `<code>`.
+fn record_coded(value: &Coded) -> String {
+    coded(value.system.as_deref(), &value.code)
+}
+
+/// `<namespace>|<type>|<id>` of `party`.
+fn party_ref(party: &PartyRef) -> String {
+    format!("{}|{}|{}", party.namespace, party.kind, party.id)
+}
+
+/// The entries of the relayed entity ([`RELAYED_ENTITY`]) of `relayed`.
+///
+/// They are marked as the relaying issuer's assertion, in the order the BALP
+/// record writes them.
+#[must_use]
+pub fn relayed(relayed: &Relayed) -> Vec<Entry> {
+    let parts = relayed.as_parts();
+    let mut details = vec![
+        Entry::new(RELAYED_VIA, parts.via.code()),
+        Entry::new(RELAYED_ISSUER, parts.via.issuer()),
+        Entry::new(ASSERTED, "true"),
+    ];
+    details.extend(optional(COUNTRY_CODE, parts.country_code.as_ref()));
+    details.push(Entry::new(
+        PROFESSIONAL_NAMED,
+        if relayed.names_a_professional() {
+            "true"
+        } else {
+            "false"
+        },
+    ));
+    if let Some(professional) = &parts.professional {
+        details.extend(professional_details(professional));
+    }
+    if let Some(provider) = &parts.provider {
+        details.extend(provider_details(provider));
+    }
+    for (name, value) in [
+        (POINT_OF_CARE, &parts.point_of_care),
+        (IDENTITY_ASSERTION_ID, &parts.identity_assertion_id),
+        (TRC_ASSERTION_ID, &parts.trc_assertion_id),
+        (REQUEST_MESSAGE_ID, &parts.message_id),
+        (CONSUMER_NCP, &parts.gateways.consumer),
+        (PROVIDER_NCP, &parts.gateways.provider),
+    ] {
+        details.extend(optional(name, value.as_ref()));
+    }
+    if let Some(agreement) = &parts.agreement {
+        details.extend(agreement_details(agreement));
+    }
+    details.extend(parts.asserted.iter().flat_map(|(name, values)| {
+        values
+            .iter()
+            .map(move |value| Entry::new(ASSERTED_FIELD, format!("{name}={value}")))
+    }));
+    details
+}
+
+/// The `detail` entries of a relayed provider (2026/2099 Annex Table 2, eHDSI
+/// SAML Profile 10.0.0 §2.3).
+fn provider_details(provider: &RelayedProvider) -> Vec<Entry> {
+    let mut details = vec![Entry::new(PROVIDER_IDENTIFIER, provider.identifier.clone())];
+    details.extend(optional(
+        PROVIDER_ISSUING_AUTHORITY,
+        provider.issuing_authority.as_ref(),
+    ));
+    details.extend(optional(PROVIDER_NAME, provider.name.as_ref()));
+    details.extend(optional(PROVIDER_ADDRESS, provider.address.as_ref()));
+    details.extend(
+        provider
+            .facility_type
+            .as_ref()
+            .map(|kind| Entry::new(PROVIDER_FACILITY_TYPE, record_coded(kind))),
+    );
+    details.extend(optional(
+        PROVIDER_HOME_COMMUNITY_ID,
+        provider.home_community_id.as_ref(),
+    ));
+    details.extend(
+        provider
+            .organisation_type
+            .as_ref()
+            .map(|kind| Entry::new(PROVIDER_ORGANISATION_TYPE, record_coded(kind))),
+    );
+    details
+}
+
+/// The `detail` entries of the agreement a relayed access is made under.
+fn agreement_details(agreement: &Agreement) -> Vec<Entry> {
+    let mut details = vec![
+        Entry::new(AGREEMENT_NAME, agreement.name.clone()),
+        Entry::new(AGREEMENT_VERSION, agreement.version.clone()),
+    ];
+    details.extend(
+        agreement
+            .legal_ground
+            .iter()
+            .map(|ground| Entry::new(AGREEMENT_LEGAL_GROUND, record_coded(ground))),
+    );
+    details.extend(optional(AGREEMENT_CONSENT, agreement.consent.as_ref()));
+    details.extend(
+        agreement
+            .access_class
+            .map(|class| Entry::new(AGREEMENT_ACCESS_CLASS, class.code())),
+    );
+    details
+}
+
+/// `value` as the detail `name`, when there is one.
+fn optional(name: &'static str, value: Option<&String>) -> Option<Entry> {
+    value.map(|value| Entry::new(name, value.clone()))
+}
+
+/// The `detail` entries of a relayed professional (2026/2099 Annex Table 1,
+/// eHDSI SAML Profile 10.0.0 §2.3).
+fn professional_details(professional: &RelayedProfessional) -> Vec<Entry> {
+    let mut details = Vec::new();
+    details.extend(optional(HP_NAME, professional.name.as_ref()));
+    details.extend(optional(FAMILY_NAME, professional.family_name.as_ref()));
+    details.extend(optional(GIVEN_NAME, professional.given_name.as_ref()));
+    details.extend(optional(HP_IDENTIFIER, professional.identifier.as_ref()));
+    details.extend(optional(
+        HP_ISSUING_AUTHORITY,
+        professional.issuing_authority.as_ref(),
+    ));
+    details.extend(
+        professional
+            .roles
+            .iter()
+            .map(|role| Entry::new(HP_ROLE, record_coded(role))),
+    );
+    details.extend(optional(
+        HP_PROVIDER_IDENTIFIER,
+        professional.healthcare_provider_identifier.as_ref(),
+    ));
+    details.extend(
+        professional
+            .name_id
+            .as_ref()
+            .map(|name_id| Entry::new(HP_NAME_ID, name_id.user_id())),
+    );
+    details.extend(
+        professional
+            .authentication_method
+            .map(|method| Entry::new(HP_AUTHENTICATION_METHOD, method.uri())),
+    );
+    details.extend(
+        professional
+            .on_behalf_of
+            .as_ref()
+            .map(|role| Entry::new(HP_ON_BEHALF_OF, record_coded(role))),
+    );
+    details.extend(
+        professional
+            .permissions
+            .iter()
+            .map(|permission| Entry::new(HP_PERMISSION, permission.clone())),
+    );
+    details
+}
+
+/// The entries of the accessor entity ([`ACCESSOR_ENTITY`]) of `accessor`.
+///
+/// They are the binding outcome with what it names, the actor chain
+/// outermost first, the representation, the provider acted for and each
+/// facility, in the order the BALP record writes them; empty when the
+/// accessor carries none of them.
+#[must_use]
+pub fn accessor(accessor: &Accessor) -> Vec<Entry> {
+    let mut details = Vec::new();
+    if let Some(binding) = &accessor.binding {
+        details.push(Entry::new(BINDING, binding.code()));
+        if binding.is_guest() {
+            details.push(Entry::new(GUEST, "true"));
+        }
+        if binding.is_security_event() {
+            details.push(Entry::new(SECURITY_EVENT, "true"));
+        }
+        details.extend(
+            binding
+                .party()
+                .map(|party| Entry::new(PARTY, party_ref(party))),
+        );
+        details.extend(
+            binding
+                .groups()
+                .iter()
+                .map(|group| Entry::new(GROUP, party_ref(group))),
+        );
+        match binding {
+            Binding::RefusedKeyClaimMissing { claim } => {
+                details.push(Entry::new(BINDING_CLAIM, claim.clone()));
+            }
+            Binding::RefusedExternalIncomplete { fields } => details.extend(
+                fields
+                    .iter()
+                    .map(|field| Entry::new(BINDING_FIELD, field.clone())),
+            ),
+            _ => {}
+        }
+    }
+    details.extend(
+        accessor
+            .actors
+            .iter()
+            .map(|actor| Entry::new(ACTOR, coded(actor.issuer.as_deref(), &actor.subject))),
+    );
+    if let Some(representation) = &accessor.represents {
+        details.push(Entry::new(REPRESENTS, representation.represented.clone()));
+        details.extend(
+            representation
+                .ground
+                .as_ref()
+                .map(|ground| Entry::new(REPRESENTS_GROUND, record_coded(ground))),
+        );
+        details.extend(
+            representation.relationship.as_ref().map(|relationship| {
+                Entry::new(REPRESENTS_RELATIONSHIP, record_coded(relationship))
+            }),
+        );
+    }
+    details.extend(
+        accessor
+            .acts_for
+            .iter()
+            .map(|provider| Entry::new(ACTS_FOR, issued(provider))),
+    );
+    details.extend(
+        accessor
+            .facilities
+            .iter()
+            .map(|facility| Entry::new(FACILITY, issued(facility))),
+    );
+    details
+}
+
+/// `id` as `<issuer>|<id>`.
+fn issued(id: &IssuedId) -> String {
+    format!("{}|{}", id.issuer, id.id)
+}

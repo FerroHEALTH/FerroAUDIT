@@ -1,11 +1,18 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The names both renderings write, reached with no feature on: a recording
-//! system that writes its own DICOM message names the binding and the
-//! relayed members as the crate does (FerroHEALTH/FerroAUDIT#161).
+//! The names and entries both renderings write, reached with no feature on:
+//! a recording system that writes its own DICOM message names and formats
+//! the binding and the relayed members as the crate does
+//! (FerroHEALTH/FerroAUDIT#161, FerroHEALTH/FerroAUDIT#164).
 
-use ehds_logging::detail;
+use ehds_logging::detail::{self, Entry};
+use ehds_logging::record::{
+    AccessClass, Accessor, Actor, Binding, Coded, IssuedId, Relayed, Representation,
+};
+
+use crate::support::relayed::*;
+use crate::support::{bound, organisation};
 
 /// Every name the module defines, with its spelling on the wire.
 const NAMES: [(&str, &str); 107] = [
@@ -415,4 +422,150 @@ fn the_balp_names_are_the_modules() {
     for (balp, shared) in BALP_NAMES {
         assert_eq!(balp, shared);
     }
+}
+
+/// An accessor with no binding member, from the record of a local read.
+fn accessor() -> Accessor {
+    crate::balp_free::record().accessor
+}
+
+/// `entries` as name and value pairs.
+fn pairs(entries: &[Entry]) -> Vec<(&str, &str)> {
+    entries
+        .iter()
+        .map(|entry| (entry.name, entry.value.as_str()))
+        .collect()
+}
+
+/// A bound guest names the party, each group and each actor, outermost
+/// first.
+#[test]
+fn a_bound_accessor_yields_its_party_groups_and_actors() {
+    let mut accessor = accessor();
+    accessor.binding = Some(bound(true));
+    accessor.actors = vec![
+        Actor {
+            issuer: Some(FEDERATION.to_owned()),
+            subject: "Qz7-actor-90".to_owned(),
+        },
+        Actor {
+            issuer: None,
+            subject: "Qz7-actor-91".to_owned(),
+        },
+    ];
+    assert_eq!(
+        pairs(&detail::accessor(&accessor)),
+        [
+            ("binding", "bound"),
+            ("guest", "true"),
+            ("party", "demographic|PERSON|Qz7-party-66"),
+            ("group", "demographic|GROUP|Qz7-group-67"),
+            ("group", "demographic|GROUP|Qz7-group-68"),
+            ("actor", "https://federation.example.org|Qz7-actor-90"),
+            ("actor", "Qz7-actor-91"),
+        ]
+    );
+}
+
+/// A representative names whom they act for, the ground with its system and
+/// the relationship without one.
+#[test]
+fn a_representative_yields_the_represented_the_ground_and_the_relationship() {
+    let mut accessor = accessor();
+    accessor.represents = Some(Representation {
+        represented: "Qz7-represented-92".to_owned(),
+        ground: Some(Coded {
+            system: Some("https://example.org/ground".to_owned()),
+            code: "guardian".to_owned(),
+        }),
+        relationship: Some(Coded {
+            system: None,
+            code: "10".to_owned(),
+        }),
+    });
+    assert_eq!(
+        pairs(&detail::accessor(&accessor)),
+        [
+            ("represents", "Qz7-represented-92"),
+            ("represents-ground", "https://example.org/ground|guardian"),
+            ("represents-relationship", "10"),
+        ]
+    );
+}
+
+/// A system client names the provider it acts for and each facility its
+/// commit names; a refusal names its claim; no member yields nothing.
+#[test]
+fn a_system_client_yields_its_provider_and_facilities() {
+    let mut accessor = accessor();
+    assert_eq!(pairs(&detail::accessor(&accessor)), []);
+    accessor.binding = Some(Binding::System);
+    accessor.acts_for = Some(IssuedId {
+        issuer: "urn:oid:2.999.7".to_owned(),
+        id: "Qz7-provider-93".to_owned(),
+    });
+    accessor.facilities = vec![IssuedId {
+        issuer: "urn:oid:2.999.8".to_owned(),
+        id: "Qz7-ward-94".to_owned(),
+    }];
+    assert_eq!(
+        pairs(&detail::accessor(&accessor)),
+        [
+            ("binding", "system"),
+            ("acts-for", "urn:oid:2.999.7|Qz7-provider-93"),
+            ("facility", "urn:oid:2.999.8|Qz7-ward-94"),
+        ]
+    );
+    let mut refused = crate::balp_free::record().accessor;
+    refused.binding = Some(Binding::RefusedKeyClaimMissing {
+        claim: "oid".to_owned(),
+    });
+    assert_eq!(
+        pairs(&detail::accessor(&refused)),
+        [
+            ("binding", "refused-key-claim-missing"),
+            ("binding-claim", "oid"),
+        ]
+    );
+}
+
+/// An organisation a federation admits under a chained agreement yields
+/// how it was relayed, the provider and the agreement, marked asserted.
+#[test]
+fn a_relayed_organisation_yields_its_provider_and_agreement() {
+    let relayed = Relayed::try_from(organisation(AccessClass::Chained)).expect("a relayed access");
+    let ground = "https://example.org/gdpr|art-9-2-h";
+    let facility = format!("{FACILITY_SYSTEM}|{FACILITY}");
+    let organisation_type = format!("https://example.org/organisation-type|{ORGANISATION_TYPE}");
+    assert_eq!(
+        pairs(&detail::relayed(&relayed)),
+        [
+            ("relayed-via", "federation"),
+            ("relayed-issuer", FEDERATION),
+            ("asserted", "true"),
+            ("country-code", "XA"),
+            ("professional-named", "false"),
+            ("provider-identifier", HCP_ID),
+            ("provider-issuing-authority", HCP_AUTHORITY),
+            ("provider-name", HCP_NAME),
+            ("provider-address", HCP_ADDRESS),
+            ("provider-facility-type", facility.as_str()),
+            ("provider-home-community-id", HOME_COMMUNITY),
+            ("provider-organisation-type", organisation_type.as_str()),
+            ("agreement-name", AGREEMENT),
+            ("agreement-version", AGREEMENT_VERSION),
+            ("agreement-legal-ground", ground),
+            ("agreement-legal-ground", GROUND),
+            ("agreement-consent", CONSENT),
+            ("agreement-access-class", "chained"),
+        ]
+    );
+}
+
+/// An entry's `Debug` shows its name and no value.
+#[test]
+fn an_entry_shows_no_value_in_debug() {
+    let shown = format!("{:?}", Entry::new(detail::PARTY, "Qz7-party-95"));
+    assert!(shown.contains("party"), "{shown}");
+    assert!(!shown.contains("Qz7-party-95"), "{shown}");
 }
