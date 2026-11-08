@@ -20,14 +20,14 @@ use std::process::Command;
 const BALP_ONLY: &[&str] = &["fhir-types", "reqwest"];
 
 /// The crates of the RFC 5425 TLS connection, which only `atna` compiles.
-const ATNA_ONLY: &[&str] = &["tokio-rustls", "rustls-platform-verifier"];
+const ATNA_ONLY: &[&str] = &["tokio-rustls"];
 
 /// The DICOM message's XML writer, which only `atna` depends on itself;
 /// `fhir-types` takes it in for its own XML form under `balp`.
 const ATNA_DIRECT: &[&str] = &["quick-xml"];
 
 /// The crates no feature compiles.
-const NEVER: &[&str] = &["uuid"];
+const NEVER: &[&str] = &["uuid", "rustls-platform-verifier"];
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");

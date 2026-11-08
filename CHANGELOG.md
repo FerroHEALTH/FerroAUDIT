@@ -11,13 +11,26 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.5.3] - 2026-11-08
+## [0.6.0] - 2026-11-08
 
-`ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.10 line.
-Products pin `=0.5.3`; a product that hands its token source to the FHIR
-Feed moves to `ferrohealth-smart` 0.10 with it.
+`ihe-atna` takes the syslog sender's TLS configuration from its caller and
+its `smart` feature follows `ferrohealth-smart` to the 0.10 line. Both break
+the public API. Products pin `=0.6.0`: a product builds the rustls
+`ClientConfig` for `Repository::tls` with `ferrohealth-server`'s
+`TlsClient` from its family TLS keys, and a product that hands its token
+source to the FHIR Feed moves to `ferrohealth-smart` 0.10.
 
 ### Changed
+
+- `atna::repository::Repository::tls` takes the caller's
+  `Arc<rustls::ClientConfig>` in place of `TlsSettings`, so the trust roots
+  and the client identity of the RFC 5425 connection come from the
+  product's own TLS keys (`client_identity`, `client_identity_file`,
+  `trust_roots_file`) through `ferrohealth_server::tls_client::TlsClient`,
+  whose `platform_config` keeps the platform's roots beside the extra ones.
+  A rustls configuration speaks TLS 1.2 or 1.3 alone, so the ITI TF-2
+  §3.20.4.1.2.1.1 floor holds by the type. To upgrade, build the
+  configuration with `TlsClient` and pass it in `Arc` (#173).
 
 - `ihe-atna` requires `ferrohealth-smart` 0.10 (caret `0.10.1`) in place of
   0.9, so the `smart` feature's `atna::bearer::Bearer` takes a
@@ -25,6 +38,12 @@ Feed moves to `ferrohealth-smart` 0.10 with it.
   the FHIR Feed moves to `ferrohealth-smart` 0.10 with this release, which
   adds the onward `cache` setting and the TRC patient type and reads a
   Keycloak 26.8 impersonation as issued (#170).
+
+### Removed
+
+- `atna::repository::TlsSettings`, the PEM parsing behind it and the
+  `RepositoryError` variants `Roots`, `Identity`, `NoCertificate` and
+  `Tls`; `ihe-atna` no longer depends on `rustls-platform-verifier` (#173).
 
 ## [0.5.2] - 2026-11-08
 

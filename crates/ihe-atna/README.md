@@ -35,9 +35,10 @@ The crate depends on no application. The profiles are published at
 - `syslog::Sender`: the RFC 5424 message with the PRI `<85>` and the MSGID
   `IHE+RFC-3881` §3.20.4.1.2 fixes, in its RFC 5425 octet-counted frame.
 - `repository::Repository`: the connection to an Audit Record Repository,
-  `tls://host[:port]` over rustls at TLS 1.2 or later with the platform's
-  roots and yours, and an optional client certificate;
-  `unencrypted_for_development` admits `tcp://` for development and tests.
+  `tls://host[:port]` over the rustls `ClientConfig` you hand it, which
+  speaks TLS 1.2 or 1.3 alone and carries your trust roots and client
+  certificate; `unencrypted_for_development` admits `tcp://` for
+  development and tests.
 - `repository::Timeouts`: the connect timeout, and the send timeout that
   bounds the TLS handshake and each write and flush.
 - `spool::Spool`: the bounded store a sender that cannot reach its
@@ -58,6 +59,22 @@ The crate depends on no application. The profiles are published at
   ParticipantObjectDataLifeCycle codes and the RFC 3881 participant object id
   types, as triples `CodedValue::of` reads.
 - `targets`: the stable `tracing` targets of the spool and the forwarder.
+
+A product builds the TLS configuration from the family's outbound TLS keys
+(`client_identity` or `client_identity_file`, and `trust_roots_file`) with
+`ferrohealth-server`'s `TlsClient`, so the syslog connection trusts what the
+product's HTTP clients trust:
+
+```rust
+use std::sync::Arc;
+
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ihe_atna::atna::repository::{Repository, Timeouts};
+
+// `section` is the product's `[audit.syslog]` table.
+let tls = TlsClient::read("audit.syslog", &section)?.platform_config()?;
+let repository = Repository::tls(&address, Arc::new(tls), timeouts)?;
+```
 
 ## BALP (`balp`)
 
