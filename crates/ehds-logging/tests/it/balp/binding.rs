@@ -192,6 +192,34 @@ fn the_caller_kind_refusals_are_written_with_their_codes() {
     }
 }
 
+/// The two Wabvpz Art. 15f refusals 0.5.1 lacked, which FerroEHR records for
+/// a caller under a Dutch agreement, are refusals written with their codes,
+/// and neither is a security event.
+#[test]
+fn the_wabvpz_refusals_are_written_with_their_codes() {
+    for (binding, code) in [
+        (Binding::RefusedWabvpzRole, "refused-wabvpz-role"),
+        (
+            Binding::RefusedWabvpzOrganisationType,
+            "refused-wabvpz-organisation-type",
+        ),
+    ] {
+        assert_eq!(binding.code(), code);
+        assert!(binding.is_refusal(), "{code}");
+        assert!(!binding.is_security_event(), "{code}");
+        assert!(binding.party().is_none(), "{code}");
+        let mut record = record(Action::Read, Outcome::MinorFailure);
+        record.accessor.binding = Some(binding);
+        let accessor = accessor_entity(&record);
+        assert_eq!(details(&accessor, "binding"), [code]);
+        assert_eq!(
+            details(&accessor, "security-event"),
+            Vec::<&str>::new(),
+            "{code}"
+        );
+    }
+}
+
 /// Annex II 3.2(a): the provider a bound person or a system client acts
 /// for, and each facility a system client's commit names, have no BALP
 /// 1.1.4 element and ride in the accessor entity.

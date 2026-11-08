@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `Binding::RefusedWabvpzRole` and `Binding::RefusedWabvpzOrganisationType`,
+  the codes `refused-wabvpz-role` and `refused-wabvpz-organisation-type` a
+  recording system writes when it refuses a caller under a Dutch agreement
+  by Wabvpz Art. 15f; each is a refusal and neither a security event
+  (#167).
+
 ## [0.5.1] - 2026-11-08
 
 A recording system that writes its own DICOM audit message names and

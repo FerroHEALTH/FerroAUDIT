@@ -784,6 +784,13 @@ pub enum Binding {
     /// `refused-correlation-missing`: a `chained` organisation's request
     /// carries no attested correlation id.
     RefusedCorrelationMissing,
+    /// `refused-wabvpz-role`: a caller under a Dutch agreement asserts the
+    /// UZI role of an occupational or insurance physician (Wabvpz Art.
+    /// 15f(2)).
+    RefusedWabvpzRole,
+    /// `refused-wabvpz-organisation-type`: a caller under a Dutch agreement
+    /// asserts no care provider type (Wabvpz Art. 15f(1)).
+    RefusedWabvpzOrganisationType,
 }
 
 impl Binding {
@@ -814,6 +821,8 @@ impl Binding {
             Self::RefusedNoAgreement => "refused-no-agreement",
             Self::RefusedScopeBeyondAgreement => "refused-scope-beyond-agreement",
             Self::RefusedCorrelationMissing => "refused-correlation-missing",
+            Self::RefusedWabvpzRole => "refused-wabvpz-role",
+            Self::RefusedWabvpzOrganisationType => "refused-wabvpz-organisation-type",
         }
     }
 
@@ -864,6 +873,8 @@ impl Binding {
                 | Self::RefusedNoAgreement
                 | Self::RefusedScopeBeyondAgreement
                 | Self::RefusedCorrelationMissing
+                | Self::RefusedWabvpzRole
+                | Self::RefusedWabvpzOrganisationType
         )
     }
 
