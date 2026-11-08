@@ -26,7 +26,7 @@
 //! use ihe_atna::atna::message::{
 //!     ActiveParticipant, AuditMessage, AuditSource, CodedValue, EventIdentification,
 //! };
-//! use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+//! use ihe_atna::atna::repository::{Repository, Timeouts};
 //! use ihe_atna::atna::spool::{Bounds, Spool};
 //! use ihe_atna::atna::syslog::Sender;
 //! use url::Url;
@@ -37,9 +37,17 @@
 //!     connect: Duration::from_secs(5),
 //!     send: Duration::from_secs(5),
 //! };
+//! // A product builds this with ferrohealth-server's `TlsClient`.
+//! let mut roots = rustls::RootCertStore::empty();
+//! roots.add(rustls::pki_types::CertificateDer::from(std::fs::read("/etc/audit/ca.der")?))?;
+//! let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+//! let tls = rustls::ClientConfig::builder_with_provider(provider)
+//!     .with_safe_default_protocol_versions()?
+//!     .with_root_certificates(roots)
+//!     .with_no_client_auth();
 //! let repository = Repository::tls(
 //!     &Url::parse("tls://arr.example.org")?,
-//!     &TlsSettings::default(),
+//!     Arc::new(tls),
 //!     timeouts,
 //! )?;
 //! let bounds = Bounds {
@@ -90,10 +98,8 @@ use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 
 use rustls::ClientConfig;
-use rustls::pki_types::pem::PemObject as _;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
-use rustls_platform_verifier::Verifier;
-use secrecy::{ExposeSecret, SecretSlice, SecretString};
+use rustls::pki_types::ServerName;
+use secrecy::{ExposeSecret, SecretSlice};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _, ReadBuf};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
@@ -101,7 +107,7 @@ use url::Url;
 
 use super::syslog::TLS_PORT;
 
-/// Why a repository address or its TLS settings were refused.
+/// Why a repository address or its TLS configuration was refused.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum RepositoryError {
@@ -115,18 +121,6 @@ pub enum RepositoryError {
     /// The host is no TLS server name.
     #[error("the audit repository host is not a TLS server name")]
     ServerName(#[source] rustls::pki_types::InvalidDnsNameError),
-    /// The trust roots do not read as PEM certificates.
-    #[error("the audit repository trust roots are not PEM certificates")]
-    Roots(#[source] rustls::pki_types::pem::Error),
-    /// The client certificate and key do not read as PEM.
-    #[error("the audit repository client certificate and key are not PEM")]
-    Identity(#[source] rustls::pki_types::pem::Error),
-    /// The client identity holds a key and no certificate.
-    #[error("the audit repository client identity holds no certificate")]
-    NoCertificate,
-    /// rustls refused the configuration.
-    #[error("the TLS configuration for the audit repository could not be built")]
-    Tls(#[source] rustls::Error),
 }
 
 /// Why a frame was not written.
@@ -211,27 +205,23 @@ impl fmt::Debug for Repository {
     }
 }
 
-/// The TLS settings of a repository connection.
-#[derive(Debug, Clone, Default)]
-pub struct TlsSettings {
-    /// PEM certificates trusted beside the platform's roots.
-    pub roots: Option<Vec<u8>>,
-    /// The PEM client certificate chain and private key the sender
-    /// authenticates with, when the repository asks for one.
-    pub identity: Option<SecretString>,
-}
-
 impl Repository {
-    /// The repository at `address`, `tls://host[:port]`, reached over TLS
-    /// 1.2 or later with `tls`, each step bounded by `timeouts`.
+    /// The repository at `address`, `tls://host[:port]`, reached with the
+    /// caller's TLS configuration `tls`, each step bounded by `timeouts`.
+    ///
+    /// The configuration carries the trust roots and the client identity; a
+    /// product builds it from its family TLS keys with `ferrohealth-server`'s
+    /// `TlsClient`. ITI TF-2 §3.20.4.1.2.1.1 requires TLS with 1.2
+    /// recommended, and RFC 7525 §3.1.1 rules out 1.0 and 1.1: a rustls
+    /// configuration speaks TLS 1.2 or 1.3 alone, since rustls implements no
+    /// older version, so the floor holds by the type.
     ///
     /// # Errors
     ///
-    /// A [`RepositoryError`] for an address of another form, and for trust
-    /// roots or an identity that do not read as PEM.
+    /// A [`RepositoryError`] for an address of another form.
     pub fn tls(
         address: &Url,
-        tls: &TlsSettings,
+        tls: Arc<ClientConfig>,
         timeouts: Timeouts,
     ) -> Result<Self, RepositoryError> {
         if address.scheme() != "tls" {
@@ -239,7 +229,7 @@ impl Repository {
         }
         let (host, port) = host_port(address, Some(TLS_PORT))?;
         let name = ServerName::try_from(host.clone()).map_err(RepositoryError::ServerName)?;
-        let connector = TlsConnector::from(Arc::new(client_config(tls)?));
+        let connector = TlsConnector::from(tls);
         Ok(Self {
             host,
             port,
@@ -442,42 +432,6 @@ fn host_port(address: &Url, default: Option<u16>) -> Result<(String, u16), Repos
     };
     let port = address.port().or(default).ok_or(RepositoryError::Address)?;
     Ok((host, port))
-}
-
-/// The client configuration: rustls over aws-lc-rs at TLS 1.2 or later,
-/// verifying the repository against the platform's roots and `tls.roots`.
-fn client_config(tls: &TlsSettings) -> Result<ClientConfig, RepositoryError> {
-    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-    let roots = match &tls.roots {
-        Some(pem) => CertificateDer::pem_slice_iter(pem)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(RepositoryError::Roots)?,
-        None => Vec::new(),
-    };
-    let verifier = Verifier::new_with_extra_roots(roots, Arc::clone(&provider))
-        .map_err(RepositoryError::Tls)?;
-    // NOTE: ITI TF-2 §3.20.4.1.2.1.1: the transport must be TLS, 1.2 recommended.
-    let builder = ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()
-        .map_err(RepositoryError::Tls)?
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(verifier));
-    match &tls.identity {
-        None => Ok(builder.with_no_client_auth()),
-        Some(pem) => {
-            let pem = pem.expose_secret().as_bytes();
-            let chain = CertificateDer::pem_slice_iter(pem)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(RepositoryError::Identity)?;
-            let key = PrivateKeyDer::from_pem_slice(pem).map_err(RepositoryError::Identity)?;
-            if chain.is_empty() {
-                return Err(RepositoryError::NoCertificate);
-            }
-            builder
-                .with_client_auth_cert(chain, key)
-                .map_err(RepositoryError::Tls)
-        }
-    }
 }
 
 #[cfg(test)]

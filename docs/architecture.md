@@ -126,9 +126,12 @@ the message for the wire as RFC 5425 §4.3 octet counting.
 ### 3.3 The repository connection
 
 `atna::repository::Repository` reaches a repository at `tls://host[:port]`
-(port 6514 by default) over rustls at TLS 1.2 or later, with the platform's
-roots plus the caller's, and an optional client certificate for the mutual
-TLS of a Secure Node (ITI TF-2 §3.20.4.1.2.1.1 recommends TLS). Plain TCP
+(port 6514 by default) over the rustls `ClientConfig` its caller hands it
+(ITI TF-2 §3.20.4.1.2.1.1 requires TLS and recommends 1.2). The caller builds
+it with `ferrohealth-server`'s `TlsClient` from the family's outbound TLS
+keys, so the trust roots and the client certificate for the mutual TLS of a
+Secure Node are the product's, read once for all its outbound calls; a rustls
+configuration speaks TLS 1.2 or 1.3 alone (#173). Plain TCP
 exists only through `Repository::unencrypted_for_development`: an audit
 message names a patient. `Timeouts` bounds the connect, the TLS handshake and
 each write and flush.

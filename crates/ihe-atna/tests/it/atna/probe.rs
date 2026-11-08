@@ -10,7 +10,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+use ihe_atna::atna::repository::{Repository, Timeouts};
 use rustls::pki_types::PrivateKeyDer;
 use secrecy::SecretSlice;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -19,7 +19,7 @@ use tokio::sync::oneshot;
 use tokio_rustls::TlsAcceptor;
 use url::Url;
 
-use super::repository::{Pki, pki};
+use super::repository::{Pki, client, pki};
 use crate::timing;
 
 const TIMEOUTS: Timeouts = Timeouts {
@@ -62,10 +62,7 @@ async fn repository(pki: &Pki, end: oneshot::Receiver<()>) -> Repository {
     });
     Repository::tls(
         &Url::parse(&format!("tls://localhost:{port}")).expect("address"),
-        &TlsSettings {
-            roots: Some(pki.ca_pem.clone().into_bytes()),
-            identity: None,
-        },
+        client(pki),
         TIMEOUTS,
     )
     .expect("repository")

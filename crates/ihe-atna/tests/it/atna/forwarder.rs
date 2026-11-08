@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use ihe_atna::atna::forwarder::Forwarder;
-use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+use ihe_atna::atna::repository::{Repository, Timeouts};
 use ihe_atna::atna::spool::{Bounds, QUARANTINE, Spool};
 use tokio::io::AsyncReadExt as _;
 use tokio::net::{TcpListener, TcpStream};
@@ -248,6 +248,18 @@ async fn a_spooled_message_that_cannot_be_sent_is_quarantined_and_the_rest_deliv
     assert!(!first.exists());
 }
 
+/// A TLS configuration that trusts no root, for a test that never connects.
+fn trusting_nothing() -> Arc<rustls::ClientConfig> {
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    Arc::new(
+        rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .expect("protocol versions")
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth(),
+    )
+}
+
 #[test]
 fn an_address_of_another_form_is_refused() {
     for address in [
@@ -257,7 +269,7 @@ fn an_address_of_another_form_is_refused() {
     ] {
         let url = Url::parse(address).expect("a URL");
         assert!(
-            Repository::tls(&url, &TlsSettings::default(), TIMEOUTS).is_err(),
+            Repository::tls(&url, trusting_nothing(), TIMEOUTS).is_err(),
             "{address}"
         );
     }
@@ -268,7 +280,7 @@ fn an_address_of_another_form_is_refused() {
     );
     let tls = Url::parse("tcp://arr.example.org:601").expect("a URL");
     assert!(
-        Repository::tls(&tls, &TlsSettings::default(), TIMEOUTS).is_err(),
+        Repository::tls(&tls, trusting_nothing(), TIMEOUTS).is_err(),
         "tls:// only"
     );
 }

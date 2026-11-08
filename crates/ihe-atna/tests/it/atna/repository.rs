@@ -12,7 +12,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+use ihe_atna::atna::repository::{Repository, Timeouts};
+use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use secrecy::SecretSlice;
 use tokio::io::AsyncReadExt as _;
@@ -92,6 +93,31 @@ pub(super) fn pki() -> Pki {
     }
 }
 
+/// The client configuration a product's `TlsClient` builds: TLS 1.2 or
+/// later, trusting `pki`'s CA.
+pub(super) fn client(pki: &Pki) -> Arc<rustls::ClientConfig> {
+    client_at(pki, rustls::DEFAULT_VERSIONS)
+}
+
+/// The client configuration trusting `pki`'s CA at `versions` alone.
+fn client_at(
+    pki: &Pki,
+    versions: &[&'static rustls::SupportedProtocolVersion],
+) -> Arc<rustls::ClientConfig> {
+    let mut roots = rustls::RootCertStore::empty();
+    roots
+        .add(CertificateDer::from_pem_slice(pki.ca_pem.as_bytes()).expect("the CA reads as PEM"))
+        .expect("the CA is a trust root");
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    Arc::new(
+        rustls::ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(versions)
+            .expect("protocol versions")
+            .with_root_certificates(roots)
+            .with_no_client_auth(),
+    )
+}
+
 /// A listener that completes one TLS handshake, says so on `ready`, reads
 /// nothing until `release`, then reads to the end of the stream and returns
 /// what it read.
@@ -164,10 +190,7 @@ async fn a_connection_ended_right_after_two_frames_delivers_both() {
     } = held(&pki);
     let repository = Repository::tls(
         &Url::parse(&format!("tls://localhost:{port}")).expect("address"),
-        &TlsSettings {
-            roots: Some(pki.ca_pem.into_bytes()),
-            identity: None,
-        },
+        client(&pki),
         TIMEOUTS,
     )
     .expect("repository");
@@ -196,5 +219,59 @@ async fn a_connection_ended_right_after_two_frames_delivers_both() {
         "the listener received {} of the {} octets sent",
         bytes.len(),
         2 * frame(b'a').len()
+    );
+}
+
+/// TLS 1.2 and TLS 1.3 each meet the floor of ITI TF-2 §3.20.4.1.2.1.1, and a
+/// repository reached at either version takes a frame.
+#[tokio::test]
+async fn a_configuration_at_tls_1_2_or_1_3_alone_is_taken_and_connects() {
+    for version in [&rustls::version::TLS12, &rustls::version::TLS13] {
+        let pki = pki();
+        let Held {
+            port,
+            ready,
+            release,
+            read,
+        } = held(&pki);
+        let repository = Repository::tls(
+            &Url::parse(&format!("tls://localhost:{port}")).expect("address"),
+            client_at(&pki, &[version]),
+            TIMEOUTS,
+        )
+        .expect("a configuration at TLS 1.2 or later is taken");
+        let mut connection = repository.connect().await.expect("connect");
+        ready.await.expect("the listener finished the handshake");
+        let sent = frame(b'v');
+        connection
+            .send(&SecretSlice::from(sent.clone()))
+            .await
+            .expect("the frame");
+        let closed = tokio::spawn(connection.close());
+        release.send(()).expect("the listener waits");
+        assert_eq!(read.await.expect("the listener ends"), sent, "{version:?}");
+        closed
+            .await
+            .expect("the close ends")
+            .expect("the connection closes");
+    }
+}
+
+/// A repository that trusts nothing the listener presents fails the
+/// handshake, so the caller's roots are the ones verified against.
+#[tokio::test]
+async fn the_callers_roots_are_the_ones_verified_against() {
+    let other = pki();
+    let listener = pki();
+    let Held { port, .. } = held(&listener);
+    let repository = Repository::tls(
+        &Url::parse(&format!("tls://localhost:{port}")).expect("address"),
+        client(&other),
+        TIMEOUTS,
+    )
+    .expect("repository");
+    assert!(
+        repository.connect().await.is_err(),
+        "a leaf from another CA is refused"
     );
 }
