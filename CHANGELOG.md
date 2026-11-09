@@ -11,8 +11,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-09
+
+`ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.14 line,
+so a product on that line links one copy of it, and its `balp` and
+`retrieve` features compile the FHIR R4 resources of `fhir-types` alone.
+The move of `ferrohealth-smart` breaks the public API. Products pin
+`=0.9.0`; a product that hands its token source to the FHIR Feed moves to
+`ferrohealth-smart` 0.14 with it.
+
 ### Changed
 
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.14 (caret `0.14.0`)
+  in place of 0.13, so the `smart` feature's `atna::bearer::Bearer` takes a
+  `TokenSource` of the 0.14 line and a product on that line links one copy
+  of the crate. None of the smart API the bearer reads changed. To upgrade,
+  move the product to `ferrohealth-smart` 0.14 (#192).
 - `ihe-atna`'s `balp` and `retrieve` features enable `fhir-types/r4-resources`
   in place of `fhir-types/r4` with `fhir-types/resources`, which widened every
   FHIR release enabled anywhere in a product's build to all its resources.
