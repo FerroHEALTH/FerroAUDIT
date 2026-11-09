@@ -460,7 +460,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "ehds-logging"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -532,9 +532,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-smart"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d03e2f39b7c38e171ee2b1090e2af504df9d0fce7e4c2abb618378b5f95a196"
+checksum = "a911955711aa1861bd5713298a2e3a8679b16b718b005e9a9c4f54a6e8b55faf"
 dependencies = [
  "argon2",
  "aws-lc-rs",
@@ -999,10 +999,11 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
+ "ferrohealth-config",
  "ferrohealth-secret",
  "ferrohealth-smart",
  "fhir-search",

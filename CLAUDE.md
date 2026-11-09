@@ -37,10 +37,13 @@ with its history and its tests.
   (`atna::spool`), and the forwarder that stores first and delivers oldest
   first (`atna::forwarder`).
 - `balp` (feature): the FHIR R4 `AuditEvent` an IHE FHIR transaction is
-  audited as (`balp`), the `AuditRecorder` seam an audited client records
-  through, and the ATX: FHIR Feed client (`atna::feed`), over the same spool
-  and forwarder, without the syslog sender or its TLS stack (owner decision
-  2026-10-20, FerroHEALTH/FerroAUDIT#11).
+  audited as (`balp`) and the `AuditRecorder` seam an audited client records
+  through, without the syslog sender or its TLS stack (owner decision
+  2026-10-20, FerroHEALTH/FerroAUDIT#11), and with no HTTP client.
+- `smart` (feature): the ATX: FHIR Feed client (`atna::feed`) over the same
+  spool and forwarder, sent through `ferrohealth-smart`'s `OutboundClient`,
+  the family's one outbound client, built from the repository's endpoint
+  table (FerroHEALTH/FerroAUDIT#197).
 - `user` (always): whom an audited exchange is made for, a user an OAuth
   2.0 access token names or the system.
 - `ehds-logging`: the Annex II 3.2 access record, the Article 14(1)

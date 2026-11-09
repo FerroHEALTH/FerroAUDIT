@@ -6,14 +6,16 @@
 //! of the patient identifier a record carries, what a described entity and a
 //! user add to it, and where it carries the purposes of use.
 
-#[cfg(feature = "smart")]
-mod bearer;
 mod content;
+#[cfg(feature = "smart")]
 mod credentials;
 mod described;
 mod escaping;
+#[cfg(feature = "smart")]
 mod feed;
 mod hygiene;
+#[cfg(feature = "smart")]
+pub(crate) mod outbound;
 mod purposes;
 
 use ihe_atna::balp::{NetworkAddress, Observer};

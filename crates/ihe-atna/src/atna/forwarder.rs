@@ -22,7 +22,7 @@
 //! [`Forwarder::stop`] ends the loop, are closed with
 //! [`Connection::close`], so the frames written last are not lost to a
 //! reset (RFC 5425 §4.4).
-//! To a FHIR Feed repository (feature `balp`) it posts each stored record,
+//! To a FHIR Feed repository (feature `smart`) it posts each stored record,
 //! removes it on a `2xx`, retries the same way after a failure that may
 //! pass, and quarantines a record the repository refused, so the drain goes
 //! on.
@@ -37,7 +37,7 @@ use secrecy::SecretSlice;
 use tokio::sync::Notify;
 
 use super::chain;
-#[cfg(feature = "balp")]
+#[cfg(feature = "smart")]
 use super::feed::{FeedError, FeedRepository};
 #[cfg(feature = "atna")]
 use super::repository::{Connection, Repository};
@@ -196,7 +196,7 @@ enum Destination {
     #[cfg(feature = "atna")]
     Syslog(Repository),
     /// A FHIR Feed repository (ITI TF-2 §3.20.4.2).
-    #[cfg(feature = "balp")]
+    #[cfg(feature = "smart")]
     Feed(FeedRepository),
 }
 
@@ -236,18 +236,13 @@ impl Forwarder<Spool> {
     }
 
     /// The sender of the `AuditEvent` records in `spool` to the FHIR Feed
-    /// repository `feed`, waiting at most `retry_max` between two attempts.
-    #[cfg(feature = "balp")]
+    /// repository `feed`, retrying as its endpoint's `retry` table says: each
+    /// send is one round of the table's tries, and a failed round waits
+    /// `max_backoff` before the next.
+    #[cfg(feature = "smart")]
     #[must_use]
-    pub fn fhir_feed(spool: Spool, feed: FeedRepository, retry_max: Duration) -> Arc<Self> {
-        Self::to(spool, Destination::Feed(feed), Retry::capped_at(retry_max))
-    }
-
-    /// The sender of the `AuditEvent` records in `spool` to the FHIR Feed
-    /// repository `feed`, retrying in the rounds `retry` sets.
-    #[cfg(feature = "balp")]
-    #[must_use]
-    pub fn fhir_feed_with_retry(spool: Spool, feed: FeedRepository, retry: Retry) -> Arc<Self> {
+    pub fn fhir_feed(spool: Spool, feed: FeedRepository) -> Arc<Self> {
+        let retry = feed.between_rounds();
         Self::to(spool, Destination::Feed(feed), retry)
     }
 
@@ -297,19 +292,12 @@ impl<O: Outbox> Forwarder<O> {
     }
 
     /// The sender of the `AuditEvent` records in the caller's `outbox` to the
-    /// FHIR Feed repository `feed`, waiting at most `retry_max` between two
-    /// attempts.
-    #[cfg(feature = "balp")]
+    /// FHIR Feed repository `feed`, retrying as its endpoint's `retry` table
+    /// says, as [`Forwarder::fhir_feed`] does.
+    #[cfg(feature = "smart")]
     #[must_use]
-    pub fn fhir_feed_from(outbox: O, feed: FeedRepository, retry_max: Duration) -> Arc<Self> {
-        Self::to(outbox, Destination::Feed(feed), Retry::capped_at(retry_max))
-    }
-
-    /// The sender of the `AuditEvent` records in the caller's `outbox` to the
-    /// FHIR Feed repository `feed`, retrying in the rounds `retry` sets.
-    #[cfg(feature = "balp")]
-    #[must_use]
-    pub fn fhir_feed_from_with_retry(outbox: O, feed: FeedRepository, retry: Retry) -> Arc<Self> {
+    pub fn fhir_feed_from(outbox: O, feed: FeedRepository) -> Arc<Self> {
+        let retry = feed.between_rounds();
         Self::to(outbox, Destination::Feed(feed), retry)
     }
 
@@ -376,7 +364,7 @@ impl<O: Outbox> Forwarder<O> {
         match &self.destination {
             #[cfg(feature = "atna")]
             Destination::Syslog(repository) => self.run_syslog(repository).await,
-            #[cfg(feature = "balp")]
+            #[cfg(feature = "smart")]
             Destination::Feed(feed) => self.run_feed(feed).await,
         }
     }
@@ -475,7 +463,7 @@ impl<O: Outbox> Forwarder<O> {
 
     // NOTE: the `RESTful` ATNA supplement §3.20.4.3.3 leaves a failure to the
     // client: a refusal is quarantined, every other failure is retried.
-    #[cfg(feature = "balp")]
+    #[cfg(feature = "smart")]
     async fn run_feed(&self, feed: &FeedRepository) {
         let mut backoff = Backoff::new(self.retry);
         loop {

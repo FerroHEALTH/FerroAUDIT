@@ -77,6 +77,7 @@ impl Retry {
     /// The policy of the constructors that take only the longest wait: a
     /// first wait of 250 ms, doubling up to `max_backoff` (raised to 250 ms
     /// when shorter), with no end to a round.
+    #[cfg(feature = "atna")]
     pub(crate) fn capped_at(max_backoff: Duration) -> Self {
         let initial_backoff = Duration::from_millis(250);
         Self {
@@ -229,6 +230,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "atna")]
     #[test]
     fn the_longest_wait_alone_keeps_the_former_schedule() {
         let policy = Retry::capped_at(1000 * MS);

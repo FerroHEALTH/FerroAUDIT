@@ -15,5 +15,5 @@ mod balp;
 #[cfg(test)]
 mod features;
 #[cfg(test)]
-#[cfg(any(feature = "atna", feature = "balp"))]
+#[cfg(any(feature = "atna", feature = "smart"))]
 mod timing;

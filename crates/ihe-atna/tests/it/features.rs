@@ -6,18 +6,23 @@
 //!
 //! `atna` compiles no FHIR model and no HTTP client: the syslog sender needs
 //! neither, so a caller that audits over syslog alone links none of them.
-//! `balp` adds both for the `AuditEvent` and the FHIR Feed, and compiles
-//! neither the RFC 5425 TLS stack nor, of its own, the DICOM message's XML
-//! writer (owner decision of 2026-10-20): the Feed is an HTTP create whose
-//! TLS is the caller's client's. Neither feature compiles the message ids of an XCPD
-//! exchange, which the ITI-55 audit message's caller supplies.
+//! `balp` adds the FHIR model for the `AuditEvent`, and compiles neither an
+//! HTTP client, nor the RFC 5425 TLS stack, nor, of its own, the DICOM
+//! message's XML writer (owner decision of 2026-10-20). `smart` adds the FHIR
+//! Feed, an HTTP create sent through `ferrohealth-smart`'s outbound client,
+//! which brings the HTTP client and its TLS. Neither `atna` nor `balp`
+//! compiles the message ids of an XCPD exchange, which the ITI-55 audit
+//! message's caller supplies.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The crates only `balp` compiles.
-const BALP_ONLY: &[&str] = &["fhir-types", "reqwest"];
+/// The crates `balp` compiles and `atna` does not.
+const BALP_ONLY: &[&str] = &["fhir-types"];
+
+/// The crates of the FHIR Feed's client, which only `smart` compiles.
+const SMART_ONLY: &[&str] = &["ferrohealth-smart", "reqwest"];
 
 /// The crates of the RFC 5425 TLS connection, which only `atna` compiles.
 const ATNA_ONLY: &[&str] = &["tokio-rustls"];
@@ -98,7 +103,7 @@ fn tree(feature: &str, depth: Option<&str>) -> BTreeSet<String> {
 }
 
 #[test]
-fn only_balp_compiles_the_fhir_model_and_the_http_client() {
+fn only_balp_compiles_the_fhir_model() {
     let atna = tree("atna", None);
     let balp = tree("balp", None);
     for name in BALP_ONLY {
@@ -108,6 +113,27 @@ fn only_balp_compiles_the_fhir_model_and_the_http_client() {
     let balp_direct = tree("balp", Some("1"));
     for name in BALP_ONLY {
         assert!(balp_direct.contains(*name), "balp names {name}");
+    }
+}
+
+#[test]
+fn only_smart_compiles_the_http_client() {
+    let smart = tree("smart", None);
+    for name in SMART_ONLY {
+        assert!(smart.contains(*name), "smart lost {name}: {smart:?}");
+    }
+    for feature in ["atna", "balp"] {
+        let closure = tree(feature, None);
+        for name in SMART_ONLY {
+            assert!(
+                !closure.contains(*name),
+                "{feature} compiles {name}: {closure:?}"
+            );
+        }
+    }
+    let smart_direct = tree("smart", Some("1"));
+    for name in SMART_ONLY {
+        assert!(smart_direct.contains(*name), "smart names {name}");
     }
 }
 
@@ -145,7 +171,8 @@ fn only_atna_compiles_the_syslog_sender_and_its_tls_stack() {
 
 /// `recording` compiles the record bound alone and `redact` the URL helpers
 /// alone, so a profile crate takes them without the audit stack: neither the
-/// FHIR model and the HTTP client of `balp` nor the syslog sender of `atna`.
+/// FHIR model of `balp`, the HTTP client of `smart`, nor the syslog sender
+/// of `atna`.
 #[test]
 fn recording_and_redact_take_no_audit_stack() {
     for (feature, takes) in [("recording", "tokio"), ("redact", "url")] {
@@ -154,7 +181,12 @@ fn recording_and_redact_take_no_audit_stack() {
             closure.contains(takes),
             "{feature} lost {takes}: {closure:?}"
         );
-        for name in BALP_ONLY.iter().chain(ATNA_ONLY).chain(ATNA_DIRECT) {
+        for name in BALP_ONLY
+            .iter()
+            .chain(SMART_ONLY)
+            .chain(ATNA_ONLY)
+            .chain(ATNA_DIRECT)
+        {
             assert!(
                 !closure.contains(*name),
                 "{feature} compiles {name}: {closure:?}"

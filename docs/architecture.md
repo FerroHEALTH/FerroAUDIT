@@ -165,10 +165,12 @@ FHIR Feed repository one `create` per record. A transport failure drops the
 connection and retries with a jittered exponential backoff. `Forwarder::status`
 reports the depth, the quarantine, the deliveries and the retries.
 
-The backoff follows the caller's `atna::retry::Retry` policy, which
-`ferrohealth-smart`'s `RetrySection` converts into under feature `smart`. A
-sender stores a record it cannot deliver and sends it once it can (ITI TF-2
-§3.20.4.1.1), so the policy never gives a record up. Delivery runs in rounds:
+The backoff follows an `atna::retry::Retry` policy: the caller's for a
+syslog repository, which `ferrohealth-smart`'s `RetrySection` converts into
+under feature `smart`, and the repository's endpoint table for a FHIR Feed
+(§4.3). A sender stores a record it cannot deliver and sends it once it can
+(ITI TF-2 §3.20.4.1.1), so the policy never gives a record up. Delivery runs
+in rounds:
 
 - `initial_backoff` is the first wait of a round, and each wait after it
   doubles up to `max_backoff`.
@@ -248,22 +250,24 @@ success (§3.20.4.3.2). §3.20.4.3.3 leaves a failure to the client: a `4xx`
 other than `401`, `408` and `429` is `FeedError::Rejected` and the forwarder
 quarantines the record; a `401` is `FeedError::Unauthorized`, the
 credential's fault and never the record's, and is retried; every other
-failure is `FeedError::Unavailable` and is retried. A repository can take a
-`Credentials` source asked for the `Authorization` value of each request;
-after a `401` it is told, and the request is sent once more with a fresh
-value (RFC 6750 §3.1). `FeedRepository::new` takes `https` alone;
-`FeedRepository::cleartext` reaches `http` for an operator who accepts that
-records cross the network in clear text. No redirect is followed, and no
-error carries the record, the credential or the answer body.
+failure is `FeedError::Unavailable` and is retried.
 
-Under the `smart` feature, `atna::bearer::Bearer` is that `Credentials`
-source over the client credentials token of `ferrohealth-smart`, the
-family's SMART crate (its `TokenSource` fetches, caches and renews the
-token): it gives the token's `Authorization` value and drops a refused token
-so the repeated request carries one fetched anew. Every product that
-authorizes its Feed with that grant takes it in place of an adapter of its
-own. The dependency points from the audit crate to the SMART crate and is
-pinned exactly, as the products pin it.
+The repository is reached through `ferrohealth-smart`'s `OutboundClient`
+(feature `smart`), the one outbound client of the FerroHEALTH products,
+which a product builds from the repository's `EndpointSection` with its own
+reader of TLS material. It carries the TLS, the timeouts, no redirects, the
+authorization the table's `credentials` name (HTTP Basic, or a client
+credentials token renewed once on a `401`, RFC 6750 §3.1, with a `DPoP`
+proof for a bound token) and the `retry` table. One
+`FeedRepository::send` is one round of that table's tries
+(`OutboundClient::send` tries again after no answer or a `5xx`), and the
+forwarder waits the table's `max_backoff` before the next round, so the
+rounds of §3.5 hold with the endpoint's own keys. `FeedRepository::new`
+takes `https` alone; `FeedRepository::cleartext` reaches `http` for an
+operator who accepts that records cross the network in clear text. No error
+carries the record, the credential or the answer body. The dependency points
+from the audit crate to the SMART crate by a caret on its newest line, as a
+shared crate takes another (FerroHEALTH/FerroAUDIT#197).
 
 ### 4.4 The retrieval (feature `retrieve`)
 
@@ -336,18 +340,18 @@ uses the same rule. No specification governs this: our own design.
 | Feature | Compiles | Adds |
 |---|---|---|
 | none | `user` | nothing outside `std` |
-| `atna` | `message`, `codes`, `syslog`, `repository`, `spool`, `forwarder` | XML, timestamps, base64, rustls, tokio, tracing |
+| `atna` | `message`, `codes`, `syslog`, `repository`, `spool`, `forwarder`, `retry` | XML, timestamps, base64, rustls, tokio, tracing |
 | `recording` | `balp::recording` alone | tokio, thiserror |
 | `redact` | `redact::RedactedUrl`, `fhir_base` | url |
-| `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (`r4-resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
+| `balp` | `syslog`, `spool`, `balp` | `fhir-types` (`r4-resources`), serde_json, timestamps, base64, tokio, tracing |
 | `retrieve` | `retrieve` | `fhir-types` (`r4-resources`), `fhir-search`, timestamps, percent-encoding |
-| `smart` | `balp` and `bearer` | `ferrohealth-smart` (`fetch`) |
+| `smart` | `balp`, `feed`, `forwarder` and `retry` | `ferrohealth-smart` (`fetch`), its reqwest and the TLS it builds |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
-no HTTP client, and `balp` compiles no TLS stack and takes no XML writer of
-its own (the owner's decision of 2026-10-20; `fhir-types` takes `quick-xml`
-for its XML form). The Feed's TLS is the backend the caller builds its
-`reqwest::Client` with. The crate depends on no product.
+no HTTP client; `balp` compiles no HTTP client, no TLS stack and takes no XML
+writer of its own (the owner's decision of 2026-10-20; `fhir-types` takes
+`quick-xml` for its XML form); and only `smart` compiles the HTTP client,
+through `ferrohealth-smart`. The crate depends on no product.
 
 ## 8. The `ehds-logging` crate
 
@@ -486,7 +490,7 @@ the product's repository:
 - **FerroPIX:** `ihe-iti`, which moves there, takes its profile audit records
   (the PIXm, PDQm, mCSD, PMIR and ITI-55 writers) from this crate, and the
   Manager-side BALP records go through it.
-- **FerroEHR:** its `[audit.fhir_feed]` sends through `balp` and the feed,
+- **FerroEHR:** its `[audit.fhir_feed]` sends through `smart` and the feed,
   and its own implementation of the EHDS access record moves onto
   `ehds-logging` (its own issue).
 

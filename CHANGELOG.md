@@ -11,6 +11,49 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-09
+
+`ihe-atna` follows `ferrohealth-smart` to the 0.16 line, and its FHIR Feed
+sends through that line's `OutboundClient`, the outbound client every
+FerroHEALTH product now builds from an endpoint table. The move breaks the
+public API. Products pin `=0.10.0`, enable feature `smart` for the Feed,
+build the Feed's `OutboundClient` from their `[audit.fhir_feed.endpoint]`
+table, and drop their own `Credentials` glue. `ehds-logging` requires
+`ihe-atna` `=0.10.0` and changes nothing else.
+
+### Changed
+
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.16 (caret `0.16.0`)
+  in place of 0.15, so a product on that line links one copy of it (#197).
+- Breaking: the FHIR Feed sends through `ferrohealth-smart`'s
+  `client::outbound::OutboundClient`, the family's one outbound client.
+  `FeedRepository::new` and `FeedRepository::cleartext` take the
+  `OutboundClient` a product builds from the repository's `EndpointSection`
+  with its reader of TLS material, in place of a base URL, a
+  `reqwest::Client` and a timeout. The client carries the credential (HTTP
+  Basic, or a client credentials token renewed once on a `401`) and the
+  `retry` table. `FeedAddressError` is `FeedConfigError`, which also refuses
+  a `retry.max_backoff` of zero, and `FeedError::Credentials` carries the
+  outbound client's `SendError` (#197).
+- Breaking: `Forwarder::fhir_feed(spool, feed)` and
+  `Forwarder::fhir_feed_from(outbox, feed)` take their retry from the
+  repository's endpoint. One send is one round of the `retry` table's tries,
+  and a failed round waits `max_backoff` before the next. No record is
+  given up. The syslog constructors are unchanged (#197).
+- Breaking: the FHIR Feed (`atna::feed` and the forwarder to it) moves from
+  feature `balp` to feature `smart`, which adds `balp`. `balp` keeps the
+  `AuditEvent` writer and its spool and links no HTTP client. A product that
+  sends over the Feed enables `smart` (#197).
+
+### Removed
+
+- Breaking: the `atna::feed::Credentials` trait, `CredentialsError`,
+  `FeedRepository::with_credentials`, `atna::bearer::Bearer`,
+  `Forwarder::fhir_feed_with_retry` and `Forwarder::fhir_feed_from_with_retry`.
+  The `OutboundClient` the repository is built from carries the credential
+  and the retry. To upgrade, build an `OutboundClient` from the Feed's
+  endpoint table and drop the `Credentials` impl and the `Bearer` (#197).
+
 ## [0.9.1] - 2026-11-09
 
 ### Added
