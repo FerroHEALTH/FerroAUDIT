@@ -30,7 +30,7 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::observer;
-use super::outbound::{basic, client, grant, repository, retry, table};
+use super::outbound::{basic, client, grant, repository, retry, synthetic_password, table};
 use crate::timing;
 
 /// One synthetic record of an exchange the system made on its own behalf.
@@ -73,9 +73,10 @@ fn token_response(token: &str) -> ResponseTemplate {
 #[tokio::test]
 async fn a_basic_credential_is_carried_on_each_request() {
     let server = MockServer::start().await;
+    let password = synthetic_password();
     let expected = format!(
         "Basic {}",
-        base64::engine::general_purpose::STANDARD.encode("Qz7-audit-user:Qz7-audit-password")
+        base64::engine::general_purpose::STANDARD.encode(format!("Qz7-audit-user:{password}"))
     );
     Mock::given(method("POST"))
         .and(path("/arr/AuditEvent"))
@@ -84,7 +85,7 @@ async fn a_basic_credential_is_carried_on_each_request() {
         .expect(2)
         .mount(&server)
         .await;
-    let feed = repository(&server, basic("Qz7-audit-user", "Qz7-audit-password"));
+    let feed = repository(&server, basic("Qz7-audit-user", &password));
     for _ in 0..2 {
         feed.send(&record()).await.expect("the credential is taken");
     }
@@ -224,8 +225,9 @@ async fn an_unauthorized_record_stays_spooled_and_is_never_quarantined() {
 #[tokio::test]
 async fn the_cleartext_constructor_reaches_http_and_new_refuses_it() {
     let server = MockServer::start().await;
+    let password = synthetic_password();
     let with_basic = EndpointSection {
-        credentials: basic("Qz7-audit-user", "Qz7-audit-password"),
+        credentials: basic("Qz7-audit-user", &password),
         ..table(&server)
     };
     assert_eq!(
@@ -240,6 +242,7 @@ async fn the_cleartext_constructor_reaches_http_and_new_refuses_it() {
     );
     let shown = format!("{accepted:?}");
     assert!(!shown.contains("Qz7-audit"), "{shown}");
+    assert!(!shown.contains(&password), "{shown}");
     assert!(shown.contains("authorization: true"), "{shown}");
 }
 
