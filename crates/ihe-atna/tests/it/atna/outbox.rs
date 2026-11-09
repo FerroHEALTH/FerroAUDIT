@@ -19,6 +19,7 @@ use secrecy::SecretSlice;
 use tokio::io::AsyncReadExt as _;
 #[cfg(feature = "atna")]
 use tokio::net::TcpListener;
+#[cfg(feature = "atna")]
 use url::Url;
 
 use crate::timing;
@@ -52,7 +53,7 @@ impl Table {
         held(&self.removed).clone()
     }
 
-    #[cfg(feature = "balp")]
+    #[cfg(feature = "smart")]
     pub(crate) fn quarantined(&self) -> Vec<u64> {
         held(&self.quarantined).clone()
     }
@@ -146,10 +147,9 @@ async fn a_callers_store_is_delivered_oldest_first_and_emptied() {
 /// A record the FHIR Feed repository refused is moved aside in the caller's
 /// store and the drain goes on (the `RESTful` ATNA supplement §3.20.4.3.3
 /// leaves the failure to the client).
-#[cfg(feature = "balp")]
+#[cfg(feature = "smart")]
 #[tokio::test]
 async fn a_refused_record_is_moved_aside_in_the_callers_store() {
-    use ihe_atna::atna::feed::FeedRepository;
     use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -158,14 +158,12 @@ async fn a_refused_record_is_moved_aside_in_the_callers_store() {
         .respond_with(ResponseTemplate::new(400))
         .mount(&server)
         .await;
-    let base = Url::parse(&format!("{}/arr/", server.uri())).expect("a base");
-    let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("an HTTP client");
-    let feed = FeedRepository::cleartext(base, http, timing::SLACK).expect("a repository");
+    let feed = crate::balp::outbound::repository(
+        &server,
+        ferrohealth_smart::config::credentials::CredentialsSection::default(),
+    );
     let table = Table::holding(&[br#"{"resourceType":"AuditEvent"}"#]);
-    let forwarder = Forwarder::fhir_feed_from(Arc::clone(&table), feed, Duration::from_millis(400));
+    let forwarder = Forwarder::fhir_feed_from(Arc::clone(&table), feed);
     let running = tokio::spawn(Arc::clone(&forwarder).run());
     let deadline = Instant::now() + timing::SLACK;
     while table.quarantined().is_empty() && Instant::now() < deadline {

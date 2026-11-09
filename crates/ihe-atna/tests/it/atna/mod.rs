@@ -15,6 +15,7 @@ mod forwarder;
 mod message;
 #[cfg(feature = "atna")]
 mod mutual;
+#[cfg(any(feature = "atna", feature = "smart"))]
 mod outbox;
 #[cfg(feature = "atna")]
 mod probe;
@@ -24,8 +25,10 @@ mod spool;
 #[cfg(feature = "atna")]
 mod targets;
 
+#[cfg(any(feature = "atna", feature = "smart"))]
 use std::time::{Duration, Instant};
 
+#[cfg(any(feature = "atna", feature = "smart"))]
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use secrecy::SecretSlice;
 
@@ -36,6 +39,7 @@ fn message(text: &str) -> SecretSlice<u8> {
 
 /// Waits until `done` holds of the forwarder's status or `deadline` passes,
 /// and returns the last status.
+#[cfg(any(feature = "atna", feature = "smart"))]
 pub(crate) async fn until(
     forwarder: &Forwarder,
     deadline: Instant,

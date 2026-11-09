@@ -47,12 +47,10 @@ recording = ["dep:thiserror", "dep:tokio"]
 # (`fhir_base`), alone, for a client that logs URLs it does not audit.
 redact = ["dep:url"]
 # BALP, the Basic Audit Log Patterns: the FHIR R4 AuditEvent an IHE FHIR
-# transaction is audited as, and the ATX: FHIR Feed Option of ITI-20 that
-# posts it to an Audit Record Repository through the same spool and
-# forwarder. It builds without the syslog sender, the DICOM message and the
-# RFC 5425 TLS stack (owner decision of 2026-10-20): the Feed is an HTTP
-# create, and its TLS backend is the one the caller builds its
-# reqwest::Client with.
+# transaction is audited as, and the spool of AuditEvent records. It builds
+# without the syslog sender, the DICOM message and the RFC 5425 TLS stack
+# (owner decision of 2026-10-20) and links no HTTP client: the ATX: FHIR Feed
+# that posts the records is feature `smart`.
 balp = [
   "dep:async-trait",
   "dep:base64",
@@ -64,8 +62,6 @@ balp = [
   "dep:url",
   "dep:fhir-types",
   "fhir-types/r4-resources",
-  "dep:http",
-  "dep:reqwest",
   "dep:serde_json",
 ]
 # Retrieve ATNA Audit Event (ITI-81): the query an Audit Consumer sends, read
@@ -80,10 +76,11 @@ retrieve = [
   "dep:percent-encoding",
   "dep:thiserror",
 ]
-# The bearer token of ferrohealth-smart's client credentials grant as the
-# Credentials source of a FHIR Feed repository (`atna::bearer`), so a product
-# writes no adapter of its own.
-smart = ["balp", "dep:ferrohealth-smart"]
+# The ATX: FHIR Feed (`atna::feed`) and the forwarder to it, sent through
+# ferrohealth-smart's OutboundClient, the family's one outbound client, which
+# carries the endpoint's TLS, credential and retry; and the conversion of its
+# RetrySection into the forwarder's policy.
+smart = ["balp", "dep:ferrohealth-smart", "dep:http", "dep:reqwest"]
 
 [dependencies]
 async-trait = { workspace = true, optional = true }
@@ -107,6 +104,7 @@ tracing = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
+ferrohealth-config = { workspace = true }
 ferrohealth-smart = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }

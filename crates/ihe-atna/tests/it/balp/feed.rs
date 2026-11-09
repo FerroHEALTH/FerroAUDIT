@@ -11,9 +11,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use ihe_atna::atna::feed::{FeedAddressError, FeedRepository};
+use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::config::endpoint::EndpointSection;
+use ihe_atna::atna::feed::{FeedConfigError, FeedRepository};
 use ihe_atna::atna::forwarder::Forwarder;
-use ihe_atna::atna::retry::Retry;
 use ihe_atna::atna::spool::{Bounds, Content, QUARANTINE, Spool};
 use ihe_atna::balp::{
     DESTINATION_ROLE, Direction, Entity, EventKind, Exchange, Outcome, Peer, REST, SEARCH,
@@ -25,6 +26,7 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::observer;
+use super::outbound::{client, retry, table};
 use crate::atna::until;
 use crate::timing;
 
@@ -37,10 +39,11 @@ const BOUNDS: Bounds = Bounds {
 /// The timeout of each request to the repository.
 const REQUEST: Duration = Duration::from_secs(2);
 
+/// The wait between two rounds, the endpoint's `max_backoff`.
 const RETRY_MAX: Duration = Duration::from_millis(400);
 
-/// The longest one failed delivery may hold the forwarder: its request and
-/// the backoff after it.
+/// The longest one failed delivery may hold the forwarder: its one try and
+/// the wait after it.
 const FAILED_ATTEMPT: Duration = REQUEST.saturating_add(RETRY_MAX);
 
 /// A search on the BALP Patient Query pattern.
@@ -55,17 +58,18 @@ fn kind() -> EventKind {
     }
 }
 
-fn http() -> reqwest::Client {
-    reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("an HTTP client")
+/// The endpoint table of the repository at `server`'s `/arr/` base, over
+/// clear text for the test: one try a round, each bounded by [`REQUEST`].
+fn endpoint(server: &MockServer) -> EndpointSection {
+    EndpointSection {
+        timeout: "2s".parse().expect("a duration"),
+        ..table(server)
+    }
 }
 
 /// The repository at `server`'s `/arr/` base, over clear text for the test.
 fn repository(server: &MockServer) -> FeedRepository {
-    let base = Url::parse(&format!("{}/arr/", server.uri())).expect("a base");
-    FeedRepository::cleartext(base, http(), REQUEST).expect("a repository")
+    FeedRepository::cleartext(client(&endpoint(server))).expect("a repository")
 }
 
 /// One synthetic ITI-83 record naming the patient `value`.
@@ -122,7 +126,7 @@ async fn answering_once_taking(server: &MockServer, taking: Arc<AtomicBool>) {
 async fn a_stored_record_is_created_at_the_repository_as_fhir_json() {
     let server = MockServer::start().await;
     answering(&server, 201).await;
-    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), repository(&server), RETRY_MAX);
+    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), repository(&server));
     let sent = record("Qz7-feed-1");
     forwarder
         .submit(SecretSlice::from(sent.expose_secret().to_vec()))
@@ -146,7 +150,7 @@ async fn a_repository_that_cannot_take_records_leaves_them_spooled_until_it_can(
     let server = MockServer::start().await;
     let taking = Arc::new(AtomicBool::new(false));
     answering_once_taking(&server, Arc::clone(&taking)).await;
-    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), repository(&server), RETRY_MAX);
+    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), repository(&server));
     let running = tokio::spawn(Arc::clone(&forwarder).run());
     for value in ["Qz7-feed-2", "Qz7-feed-3"] {
         forwarder.submit(record(value)).await.expect("stored");
@@ -173,39 +177,81 @@ async fn a_repository_that_cannot_take_records_leaves_them_spooled_until_it_can(
     assert_eq!(0, up.depth.messages);
 }
 
-/// ITI TF-2 §3.20.4.1.1: a round of the retry policy that ends gives no
+/// The endpoint's `retry` table makes one send a round: a try the
+/// repository could not take is tried again within it, so the record is
+/// delivered with no failed round counted.
+#[tokio::test]
+async fn a_try_that_fails_within_a_round_is_tried_again_in_it() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/arr/AuditEvent"))
+        .respond_with(ResponseTemplate::new(503))
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    answering(&server, 201).await;
+    let section = EndpointSection {
+        retry: retry(2, "20ms", "1s"),
+        ..endpoint(&server)
+    };
+    let feed = FeedRepository::cleartext(client(&section)).expect("a repository");
+    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), feed);
+    forwarder
+        .submit(record("Qz7-feed-in-round"))
+        .await
+        .expect("stored");
+    let running = tokio::spawn(Arc::clone(&forwarder).run());
+    let status = until(
+        &forwarder,
+        timing::deadline(REQUEST.saturating_mul(2)),
+        |status| status.delivered == 1,
+    )
+    .await;
+    running.abort();
+    assert_eq!(1, status.delivered);
+    assert_eq!(0, status.retries, "no round failed");
+    let received = server.received_requests().await.expect("requests");
+    assert_eq!(2, received.len(), "the second try of the first round");
+}
+
+/// ITI TF-2 §3.20.4.1.1: a round of the endpoint's tries that fails gives no
 /// record up; the next round starts and delivery goes on until it succeeds.
 #[tokio::test]
 async fn a_record_outlives_every_retry_round_until_the_repository_takes_it() {
     let server = MockServer::start().await;
     let taking = Arc::new(AtomicBool::new(false));
     answering_once_taking(&server, Arc::clone(&taking)).await;
-    let retry =
-        Retry::new(2, Duration::from_millis(20), Duration::from_millis(200)).expect("a policy");
-    let forwarder =
-        Forwarder::fhir_feed_with_retry(Spool::in_memory(BOUNDS), repository(&server), retry);
+    let section = EndpointSection {
+        retry: retry(2, "20ms", "200ms"),
+        ..endpoint(&server)
+    };
+    let feed = FeedRepository::cleartext(client(&section)).expect("a repository");
+    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), feed);
     let running = tokio::spawn(Arc::clone(&forwarder).run());
     forwarder
         .submit(record("Qz7-feed-rounds"))
         .await
         .expect("stored");
-    // Three rounds of two attempts each.
-    let attempt = REQUEST.saturating_add(retry.max_backoff());
+    // Three rounds of two tries each, and the wait after each round.
+    let round = REQUEST
+        .saturating_mul(2)
+        .saturating_add(Duration::from_millis(220));
     let down = until(
         &forwarder,
-        timing::deadline(attempt.saturating_mul(6)),
-        |status| status.retries >= 6,
+        timing::deadline(round.saturating_mul(3)),
+        |status| status.retries >= 3,
     )
     .await;
     assert!(!down.reachable);
     assert_eq!(1, down.depth.waiting(), "no round gives the record up");
     assert_eq!(0, down.delivered);
+    let tries = server.received_requests().await.expect("requests").len();
+    assert!(tries >= 6, "two tries in each of three rounds: {tries}");
     taking.store(true, Ordering::SeqCst);
-    let up = until(
-        &forwarder,
-        timing::deadline(attempt.saturating_add(REQUEST)),
-        |status| status.delivered == 1,
-    )
+    let up = until(&forwarder, timing::deadline(round), |status| {
+        status.delivered == 1
+    })
     .await;
     running.abort();
     assert_eq!(1, up.delivered, "delivered once the repository takes it");
@@ -224,7 +270,7 @@ async fn a_refused_record_is_quarantined_and_the_drain_goes_on() {
     let directory = tempfile::tempdir().expect("a directory");
     let spool_dir = directory.path().join("feed-spool");
     let spool = Spool::open_for(&spool_dir, BOUNDS, Content::AuditEvents).expect("a spool");
-    let forwarder = Forwarder::fhir_feed(spool, repository(&server), RETRY_MAX);
+    let forwarder = Forwarder::fhir_feed(spool, repository(&server));
     for value in ["Qz7-feed-4", "Qz7-feed-5"] {
         forwarder.submit(record(value)).await.expect("stored");
     }
@@ -261,34 +307,33 @@ async fn a_spooled_file_that_is_no_audit_event_is_quarantined() {
     assert_eq!(1, spool.depth().quarantined);
 }
 
-#[test]
-fn a_repository_base_in_clear_text_or_with_a_query_is_refused() {
+#[tokio::test]
+async fn a_repository_base_in_clear_text_or_with_a_query_is_refused() {
+    let server = MockServer::start().await;
     let refused = |base: &str| {
-        FeedRepository::new(
-            Url::parse(base).expect("a URL"),
-            http(),
-            Duration::from_secs(1),
-        )
-        .err()
+        let section = EndpointSection {
+            url: SecretUrl::new(base),
+            ..endpoint(&server)
+        };
+        FeedRepository::new(client(&section)).err()
     };
     assert_eq!(
         refused("http://arr.example.org/fhir/"),
-        Some(FeedAddressError::Cleartext)
+        Some(FeedConfigError::Cleartext)
     );
     assert_eq!(
         refused("https://arr.example.org/fhir?x=1"),
-        Some(FeedAddressError::Base)
+        Some(FeedConfigError::Base)
     );
     assert_eq!(
         refused("tls://arr.example.org:6514"),
-        Some(FeedAddressError::Base)
+        Some(FeedConfigError::Base)
     );
-    let accepted = FeedRepository::new(
-        Url::parse("https://arr.example.org/fhir").expect("a URL"),
-        http(),
-        Duration::from_secs(1),
-    )
-    .expect("an https base");
+    let section = EndpointSection {
+        url: SecretUrl::new("https://arr.example.org/fhir"),
+        ..endpoint(&server)
+    };
+    let accepted = FeedRepository::new(client(&section)).expect("an https base");
     assert_eq!(
         accepted.endpoint().as_str(),
         "https://arr.example.org/fhir/AuditEvent"

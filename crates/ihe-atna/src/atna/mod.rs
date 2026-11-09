@@ -14,33 +14,35 @@
 //!   cannot reach its repository (§3.20.4.1.1): one file per message on disk,
 //!   fsynced before it counts as stored, or a queue in memory for
 //!   development.
-//! - `feed` (feature `balp`): the ATX: FHIR Feed Option's Send Audit
+//! - `feed` (feature `smart`): the ATX: FHIR Feed Option's Send Audit
 //!   Resource Request, a FHIR `create` of one `AuditEvent` (the `RESTful` ATNA
-//!   supplement, ITI TF-2 §3.20.4.2).
-//! - `bearer` (feature `smart`): the client credentials token of
-//!   `ferrohealth-smart` as the `Credentials` source of a Feed repository.
-//! - [`forwarder`]: the sender that writes every message to the spool, or a
-//!   caller's own store, first and delivers it from there, in order.
-//! - [`retry`]: the rounds the forwarder retries a failed delivery in.
+//!   supplement, ITI TF-2 §3.20.4.2), sent through `ferrohealth-smart`'s
+//!   outbound client.
+//! - `forwarder` (feature `atna` or `smart`): the sender that writes every
+//!   message to the spool, or a caller's own store, first and delivers it
+//!   from there, in order.
+//! - `retry` (feature `atna` or `smart`): the rounds the forwarder retries a
+//!   failed delivery in.
 //!
-//! The spool, the forwarder and the syslog frame compile under either
-//! feature; the syslog sender's message and TLS connection under `atna`
-//! alone, and the FHIR Feed under `balp` alone.
+//! The spool and the syslog frame compile under either `atna` or `balp`; the
+//! forwarder under a feature that gives it a destination; the syslog
+//! sender's message and TLS connection under `atna` alone; and the FHIR Feed
+//! under `smart`, which adds `balp`.
 //!
 //! A message names whatever its event names, a patient identifier included,
 //! so no part of this module logs a message or renders one in `Debug`.
 
-#[cfg(feature = "smart")]
-pub mod bearer;
 #[cfg(feature = "atna")]
 pub mod codes;
-#[cfg(feature = "balp")]
+#[cfg(feature = "smart")]
 pub mod feed;
+#[cfg(any(feature = "atna", feature = "smart"))]
 pub mod forwarder;
 #[cfg(feature = "atna")]
 pub mod message;
 #[cfg(feature = "atna")]
 pub mod repository;
+#[cfg(any(feature = "atna", feature = "smart"))]
 pub mod retry;
 pub mod spool;
 pub mod syslog;
