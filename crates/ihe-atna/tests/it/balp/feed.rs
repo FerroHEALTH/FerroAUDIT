@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use ihe_atna::atna::feed::{FeedAddressError, FeedRepository};
 use ihe_atna::atna::forwarder::Forwarder;
+use ihe_atna::atna::retry::Retry;
 use ihe_atna::atna::spool::{Bounds, Content, QUARANTINE, Spool};
 use ihe_atna::balp::{
     DESTINATION_ROLE, Direction, Entity, EventKind, Exchange, Outcome, Peer, REST, SEARCH,
@@ -169,6 +170,45 @@ async fn a_repository_that_cannot_take_records_leaves_them_spooled_until_it_can(
     .await;
     running.abort();
     assert_eq!(2, up.delivered, "delivered once the repository takes them");
+    assert_eq!(0, up.depth.messages);
+}
+
+/// ITI TF-2 §3.20.4.1.1: a round of the retry policy that ends gives no
+/// record up; the next round starts and delivery goes on until it succeeds.
+#[tokio::test]
+async fn a_record_outlives_every_retry_round_until_the_repository_takes_it() {
+    let server = MockServer::start().await;
+    let taking = Arc::new(AtomicBool::new(false));
+    answering_once_taking(&server, Arc::clone(&taking)).await;
+    let retry =
+        Retry::new(2, Duration::from_millis(20), Duration::from_millis(200)).expect("a policy");
+    let forwarder =
+        Forwarder::fhir_feed_with_retry(Spool::in_memory(BOUNDS), repository(&server), retry);
+    let running = tokio::spawn(Arc::clone(&forwarder).run());
+    forwarder
+        .submit(record("Qz7-feed-rounds"))
+        .await
+        .expect("stored");
+    // Three rounds of two attempts each.
+    let attempt = REQUEST.saturating_add(retry.max_backoff());
+    let down = until(
+        &forwarder,
+        timing::deadline(attempt.saturating_mul(6)),
+        |status| status.retries >= 6,
+    )
+    .await;
+    assert!(!down.reachable);
+    assert_eq!(1, down.depth.waiting(), "no round gives the record up");
+    assert_eq!(0, down.delivered);
+    taking.store(true, Ordering::SeqCst);
+    let up = until(
+        &forwarder,
+        timing::deadline(attempt.saturating_add(REQUEST)),
+        |status| status.delivered == 1,
+    )
+    .await;
+    running.abort();
+    assert_eq!(1, up.delivered, "delivered once the repository takes it");
     assert_eq!(0, up.depth.messages);
 }
 

@@ -15,8 +15,9 @@
 //! [`Forwarder::run`] is the delivery loop. To a syslog repository it keeps
 //! one connection open, writes each stored message to it within the
 //! repository's timeouts, removes the message once it is written, and after
-//! any transport failure drops the connection and retries with an
-//! exponential backoff, with jitter, capped at the configured longest wait.
+//! any transport failure drops the connection and retries in rounds with an
+//! exponential backoff and jitter, as its [`Retry`] policy says. A record is
+//! never given up: a round that ends starts the next one.
 //! A connection the repository ended, and the open connection when
 //! [`Forwarder::stop`] ends the loop, are closed with
 //! [`Connection::close`], so the frames written last are not lost to a
@@ -40,11 +41,9 @@ use super::chain;
 use super::feed::{FeedError, FeedRepository};
 #[cfg(feature = "atna")]
 use super::repository::{Connection, Repository};
+use super::retry::{Backoff, Retry};
 use super::spool::reserve::Reservation;
 use super::spool::{Depth, Spool, SpoolError, Stored};
-
-/// The first wait after a failed delivery.
-const FIRST_RETRY: Duration = Duration::from_millis(250);
 
 /// What the forwarder reports of itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,7 +206,7 @@ enum Destination {
 pub struct Forwarder<O: Outbox = Spool> {
     outbox: O,
     destination: Destination,
-    retry_max: Duration,
+    retry: Retry,
     delivered: AtomicU64,
     retries: AtomicU64,
     reachable: AtomicBool,
@@ -221,7 +220,19 @@ impl Forwarder<Spool> {
     #[cfg(feature = "atna")]
     #[must_use]
     pub fn new(spool: Spool, repository: Repository, retry_max: Duration) -> Arc<Self> {
-        Self::to(spool, Destination::Syslog(repository), retry_max)
+        Self::to(
+            spool,
+            Destination::Syslog(repository),
+            Retry::capped_at(retry_max),
+        )
+    }
+
+    /// The sender of the syslog frames in `spool` to `repository`, retrying
+    /// in the rounds `retry` sets.
+    #[cfg(feature = "atna")]
+    #[must_use]
+    pub fn new_with_retry(spool: Spool, repository: Repository, retry: Retry) -> Arc<Self> {
+        Self::to(spool, Destination::Syslog(repository), retry)
     }
 
     /// The sender of the `AuditEvent` records in `spool` to the FHIR Feed
@@ -229,7 +240,15 @@ impl Forwarder<Spool> {
     #[cfg(feature = "balp")]
     #[must_use]
     pub fn fhir_feed(spool: Spool, feed: FeedRepository, retry_max: Duration) -> Arc<Self> {
-        Self::to(spool, Destination::Feed(feed), retry_max)
+        Self::to(spool, Destination::Feed(feed), Retry::capped_at(retry_max))
+    }
+
+    /// The sender of the `AuditEvent` records in `spool` to the FHIR Feed
+    /// repository `feed`, retrying in the rounds `retry` sets.
+    #[cfg(feature = "balp")]
+    #[must_use]
+    pub fn fhir_feed_with_retry(spool: Spool, feed: FeedRepository, retry: Retry) -> Arc<Self> {
+        Self::to(spool, Destination::Feed(feed), retry)
     }
 
     /// Stores `frame` for delivery, returning once it is stored.
@@ -262,7 +281,19 @@ impl<O: Outbox> Forwarder<O> {
     #[cfg(feature = "atna")]
     #[must_use]
     pub fn syslog_from(outbox: O, repository: Repository, retry_max: Duration) -> Arc<Self> {
-        Self::to(outbox, Destination::Syslog(repository), retry_max)
+        Self::to(
+            outbox,
+            Destination::Syslog(repository),
+            Retry::capped_at(retry_max),
+        )
+    }
+
+    /// The sender of the syslog frames in the caller's `outbox` to
+    /// `repository`, retrying in the rounds `retry` sets.
+    #[cfg(feature = "atna")]
+    #[must_use]
+    pub fn syslog_from_with_retry(outbox: O, repository: Repository, retry: Retry) -> Arc<Self> {
+        Self::to(outbox, Destination::Syslog(repository), retry)
     }
 
     /// The sender of the `AuditEvent` records in the caller's `outbox` to the
@@ -271,14 +302,22 @@ impl<O: Outbox> Forwarder<O> {
     #[cfg(feature = "balp")]
     #[must_use]
     pub fn fhir_feed_from(outbox: O, feed: FeedRepository, retry_max: Duration) -> Arc<Self> {
-        Self::to(outbox, Destination::Feed(feed), retry_max)
+        Self::to(outbox, Destination::Feed(feed), Retry::capped_at(retry_max))
     }
 
-    fn to(outbox: O, destination: Destination, retry_max: Duration) -> Arc<Self> {
+    /// The sender of the `AuditEvent` records in the caller's `outbox` to the
+    /// FHIR Feed repository `feed`, retrying in the rounds `retry` sets.
+    #[cfg(feature = "balp")]
+    #[must_use]
+    pub fn fhir_feed_from_with_retry(outbox: O, feed: FeedRepository, retry: Retry) -> Arc<Self> {
+        Self::to(outbox, Destination::Feed(feed), retry)
+    }
+
+    fn to(outbox: O, destination: Destination, retry: Retry) -> Arc<Self> {
         Arc::new(Self {
             outbox,
             destination,
-            retry_max: retry_max.max(FIRST_RETRY),
+            retry,
             delivered: AtomicU64::new(0),
             retries: AtomicU64::new(0),
             reachable: AtomicBool::new(true),
@@ -345,7 +384,7 @@ impl<O: Outbox> Forwarder<O> {
     /// The oldest stored message, after waiting for one while the spool is
     /// empty; `None` after a wake-up or after a failure to read the spool,
     /// which has backed off.
-    async fn next(&self, retry: &mut Duration) -> Option<Stored> {
+    async fn next(&self, backoff: &mut Backoff) -> Option<Stored> {
         match self.outbox.oldest().await {
             Ok(Some(stored)) => Some(stored),
             Ok(None) => {
@@ -354,16 +393,16 @@ impl<O: Outbox> Forwarder<O> {
             }
             Err(error) => {
                 tracing::warn!(target: crate::atna::targets::FORWARDER, error = %chain(&error), "the audit spool could not be read");
-                *retry = self.back_off(*retry).await;
+                self.back_off(backoff).await;
                 None
             }
         }
     }
 
     /// Removes the delivered message `sequence` and counts it.
-    async fn delivered(&self, sequence: u64, retry: &mut Duration) {
+    async fn delivered(&self, sequence: u64, backoff: &mut Backoff) {
         self.reachable.store(true, Ordering::Relaxed);
-        *retry = FIRST_RETRY;
+        backoff.reset();
         match self.outbox.remove(sequence).await {
             Ok(()) => {
                 self.delivered.fetch_add(1, Ordering::Relaxed);
@@ -373,7 +412,7 @@ impl<O: Outbox> Forwarder<O> {
                     error = %chain(&error),
                     "a delivered audit message could not be removed from the spool"
                 );
-                *retry = self.back_off(*retry).await;
+                self.back_off(backoff).await;
             }
         }
     }
@@ -383,12 +422,12 @@ impl<O: Outbox> Forwarder<O> {
     #[cfg(feature = "atna")]
     async fn run_syslog(&self, repository: &Repository) {
         let mut connection: Option<Connection> = None;
-        let mut retry = FIRST_RETRY;
+        let mut backoff = Backoff::new(self.retry);
         loop {
             let next = tokio::select! {
                 biased;
                 () = self.stopped() => break,
-                next = self.next(&mut retry) => next,
+                next = self.next(&mut backoff) => next,
             };
             let Some(stored) = next else {
                 continue;
@@ -413,7 +452,7 @@ impl<O: Outbox> Forwarder<O> {
                             error = %chain(&error),
                             "the audit repository could not be reached; its messages stay spooled"
                         );
-                        retry = self.back_off(retry).await;
+                        self.back_off(&mut backoff).await;
                         continue;
                     }
                 },
@@ -423,11 +462,11 @@ impl<O: Outbox> Forwarder<O> {
                     error = %chain(&error),
                     "an audit message could not be delivered; the connection is dropped and the message stays spooled"
                 );
-                retry = self.back_off(retry).await;
+                self.back_off(&mut backoff).await;
                 continue;
             }
             connection = Some(open);
-            self.delivered(stored.sequence, &mut retry).await;
+            self.delivered(stored.sequence, &mut backoff).await;
         }
         if let Some(open) = connection {
             closed(open).await;
@@ -438,18 +477,18 @@ impl<O: Outbox> Forwarder<O> {
     // client: a refusal is quarantined, every other failure is retried.
     #[cfg(feature = "balp")]
     async fn run_feed(&self, feed: &FeedRepository) {
-        let mut retry = FIRST_RETRY;
+        let mut backoff = Backoff::new(self.retry);
         loop {
             let next = tokio::select! {
                 biased;
                 () = self.stopped() => break,
-                next = self.next(&mut retry) => next,
+                next = self.next(&mut backoff) => next,
             };
             let Some(stored) = next else {
                 continue;
             };
             match feed.send(&stored.message).await {
-                Ok(()) => self.delivered(stored.sequence, &mut retry).await,
+                Ok(()) => self.delivered(stored.sequence, &mut backoff).await,
                 Err(FeedError::Rejected { status }) => {
                     self.reachable.store(true, Ordering::Relaxed);
                     tracing::error!(target: crate::atna::targets::FORWARDER,
@@ -462,7 +501,7 @@ impl<O: Outbox> Forwarder<O> {
                             error = %chain(&error),
                             "a refused audit message could not be quarantined"
                         );
-                        retry = self.back_off(retry).await;
+                        self.back_off(&mut backoff).await;
                     }
                 }
                 Err(error) => {
@@ -470,23 +509,22 @@ impl<O: Outbox> Forwarder<O> {
                         error = %chain(&error),
                         "an AuditEvent could not be delivered; it stays spooled"
                     );
-                    retry = self.back_off(retry).await;
+                    self.back_off(&mut backoff).await;
                 }
             }
         }
     }
 
-    /// Records a failed attempt, waits about `retry`, and returns the wait
-    /// after it: twice as long, at most the configured longest wait.
-    /// A stop ends the wait early.
-    async fn back_off(&self, retry: Duration) -> Duration {
+    /// Records a failed attempt and waits about as long as `backoff` says
+    /// for it. A stop ends the wait early.
+    async fn back_off(&self, backoff: &mut Backoff) {
         self.reachable.store(false, Ordering::Relaxed);
         self.retries.fetch_add(1, Ordering::Relaxed);
+        let wait = backoff.failed();
         tokio::select! {
             () = self.stopped() => {}
-            () = tokio::time::sleep(jittered(retry)) => {}
+            () = tokio::time::sleep(jittered(wait)) => {}
         }
-        retry.saturating_mul(2).min(self.retry_max)
     }
 }
 
