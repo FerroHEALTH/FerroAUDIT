@@ -11,6 +11,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-09
+
+`ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.13 line,
+the release that refuses a malformed JSON document without quoting it, so
+a product hands the FHIR Feed bearer the same `TokenSource` it hands its
+other clients. The change breaks the public API. Products pin `=0.8.0`; a
+product that hands its token source to the FHIR Feed moves to
+`ferrohealth-smart` 0.13 with it.
+
+### Changed
+
+- `ihe-atna` requires `ferrohealth-smart` 0.13 (caret `0.13.0`) in place of
+  0.12, so the `smart` feature's `atna::bearer::Bearer` takes a
+  `TokenSource` of the 0.13 line. None of the smart API the bearer reads
+  changed. To upgrade, move the product to `ferrohealth-smart` 0.13 and
+  pin `ihe-atna` and `ehds-logging` at `=0.8.0` (#183).
+
 ## [0.7.1] - 2026-11-09
 
 `ihe-atna`'s `retrieve` feature reads the ITI-81 search values with
