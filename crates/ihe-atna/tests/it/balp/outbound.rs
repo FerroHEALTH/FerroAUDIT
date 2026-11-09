@@ -61,6 +61,14 @@ pub(crate) fn table(server: &MockServer) -> EndpointSection {
     }
 }
 
+/// A synthetic Basic password minted for one run, so no credential is
+/// written in the source.
+pub(crate) fn synthetic_password() -> String {
+    use std::hash::BuildHasher as _;
+    let minted = std::collections::hash_map::RandomState::new().hash_one(std::process::id());
+    format!("Qz7-{minted:016x}")
+}
+
 /// The `credentials` table of HTTP Basic.
 pub(crate) fn basic(user: &str, password: &str) -> CredentialsSection {
     CredentialsSection {
