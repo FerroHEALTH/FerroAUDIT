@@ -22,8 +22,18 @@ Actions Security Cheat Sheet, SLSA v1.0, OpenSSF Scorecard, and Sigstore.
   `--all-features`, plus `cargo test --doc`; `cargo doc` with
   `RUSTDOCFLAGS=-D warnings`; `cargo deny check`; `cargo publish -p
   ihe-atna --dry-run --locked`; the crate-version guard and
-  `dependency-review-action` on pull requests). The `conclusion` job is the
-  single required status check on `main`.
+  `dependency-review-action` on pull requests; the build on the declared
+  MSRV). The `conclusion` job is the single required status check on `main`.
+
+  These run as four jobs that all start at once, `guards` (every guard, the
+  publish dry run and the MSRV build, no build cache), `lint`, `nextest
+  (each feature set)` and, on a pull request, `cargo-semver-checks`, beside
+  `conclusion`. The hosted runner pool is shared across the organisation, so
+  every job pays a wait for a runner however short its work, and a job that
+  waits on another pays it twice: 18 jobs in three waves made a run take up
+  to 57 minutes for about 9 runner-minutes of work (#190). Add a step to one
+  of the four before adding a job, and give a guard step
+  `if: ${{ !cancelled() }}` so a run still reports every finding.
 - `.github/workflows/specs.yml`: the vendored-specification guard,
   `scripts/checks/versions.sh`, offline, on the same events.
 - `.github/workflows/codeql.yml`: CodeQL over the `actions` language and Rust.
