@@ -11,6 +11,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-09
+
+`ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.12 line,
+so a product hands the FHIR Feed bearer the same `TokenSource` it hands its
+other clients. The change breaks the public API. Products pin `=0.7.0`; a
+product that hands its token source to the FHIR Feed moves to
+`ferrohealth-smart` 0.12 with it.
+
+### Changed
+
+- `ihe-atna` requires `ferrohealth-smart` 0.12 (caret `0.12.0`) in place of
+  0.10, so the `smart` feature's `atna::bearer::Bearer` takes a
+  `TokenSource` of the 0.12 line. None of the smart API the bearer reads
+  changed. To upgrade, move the product to `ferrohealth-smart` 0.12 and
+  pin `ihe-atna` and `ehds-logging` at `=0.7.0` (#179).
+
 ## [0.6.0] - 2026-11-08
 
 `ihe-atna` takes the syslog sender's TLS configuration from its caller,
