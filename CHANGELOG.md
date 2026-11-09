@@ -11,6 +11,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-09
+
+`ihe-atna`'s `retrieve` feature reads the ITI-81 search values with
+`fhir-search` 0.1.129, the version the rest of the family requires, so a
+product that takes `ihe-atna/retrieve` beside a crate on 0.1.129 resolves.
+The public API is unchanged. Products pin `=0.7.1`.
+
+### Fixed
+
+- `ihe-atna` requires `fhir-search` `=0.1.129` in place of `=0.1.128`.
+  `ihe-iti` requires 0.1.129 through its `rest` feature, so a product that
+  took `ihe-atna/retrieve` and `ihe-iti/pixm` together could not resolve
+  its dependencies. `ehds-logging` follows on its exact requirement (#181).
+
 ## [0.7.0] - 2026-11-09
 
 `ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.12 line,

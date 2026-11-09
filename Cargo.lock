@@ -460,7 +460,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "ehds-logging"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -542,9 +542,9 @@ dependencies = [
 
 [[package]]
 name = "fhir-search"
-version = "0.1.128"
+version = "0.1.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bda895d27df2cc71a33b6af4112d4b9c3649bdea781682916668656c4b7d21ec"
+checksum = "26e0b37d7eaa56d365aee1c65b7f1fd3f99da67a603cc9ac97d42e98ef08643a"
 dependencies = [
  "jiff",
  "thiserror",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
