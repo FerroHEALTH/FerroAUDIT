@@ -44,6 +44,9 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "ferrohealth-smart" },
   # The family's shared mask crate, the same Licensor's code.
   { allow = ["BUSL-1.1"], crate = "ferrohealth-secret" },
+  # The family's configuration types, which ferrohealth-smart links from its
+  # 0.14 line on: the same Licensor's code, as FerroAUTH admits it.
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-config" },
   # The family's FHIR search value grammar, FerroBRIDGE's crate (feature
   # `retrieve`).
   { allow = ["BUSL-1.1"], crate = "fhir-search" },
