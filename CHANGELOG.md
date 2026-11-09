@@ -11,6 +11,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-09
+
 ### Added
 
 - `ihe-atna`'s forwarder takes a whole retry policy, `atna::retry::Retry`,
@@ -22,6 +24,11 @@ and this project adheres to
   record up: `max_attempts` ends a round, which waits `max_backoff` and
   starts the next one from `initial_backoff`. The constructors that take
   only the longest wait keep their schedule (#194).
+
+### Changed
+
+- `ehds-logging` requires `ihe-atna` `=0.9.1`, the version it releases
+  with; nothing else in it changes.
 
 ## [0.9.0] - 2026-11-09
 
