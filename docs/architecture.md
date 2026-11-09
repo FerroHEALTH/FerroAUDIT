@@ -326,8 +326,8 @@ uses the same rule. No specification governs this: our own design.
 | `atna` | `message`, `codes`, `syslog`, `repository`, `spool`, `forwarder` | XML, timestamps, base64, rustls, tokio, tracing |
 | `recording` | `balp::recording` alone | tokio, thiserror |
 | `redact` | `redact::RedactedUrl`, `fhir_base` | url |
-| `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (R4 `resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
-| `retrieve` | `retrieve` | `fhir-types` (R4 `resources`), `fhir-search`, timestamps, percent-encoding |
+| `balp` | `syslog`, `spool`, `forwarder`, `balp`, `feed` | `fhir-types` (`r4-resources`), reqwest (no TLS backend of its own), serde_json, timestamps, base64, tokio, tracing |
+| `retrieve` | `retrieve` | `fhir-types` (`r4-resources`), `fhir-search`, timestamps, percent-encoding |
 | `smart` | `balp` and `bearer` | `ferrohealth-smart` (`fetch`) |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
@@ -511,9 +511,12 @@ Recorded on the tracker with their grounds; each is a decision, not a gap.
   the transport may truncate a message over 1024 bytes, which breaks this
   crate's rule that no record is dropped silently (FerroHEALTH/FerroAUDIT#50).
 - **A narrower FHIR model for `balp`.** `fhir-types` has no feature narrower
-  than `resources` that holds `AuditEvent`, and a hand-written `AuditEvent`
-  would fork the generated model; the route is a root-set feature of
-  `fhir-types` in its generator (FerroHEALTH/FerroAUDIT#56).
+  than one release's resources that holds `AuditEvent`, and a hand-written
+  `AuditEvent` would fork the generated model; the route is a root-set feature
+  of `fhir-types` in its generator (FerroHEALTH/FerroAUDIT#56). Since
+  `fhir-types` 0.1.130, `balp` and `retrieve` take `r4-resources`, so a
+  product that enables other FHIR releases compiles none of their resources
+  for this crate (FerroHEALTH/FerroAUDIT#187).
 - **A per-access legal basis, a pseudonymisation domain and the raw
   assurance claim.** Annex II 3.2 asks for none of them, and they stay the
   columns of the product that keeps them (FerroHEALTH/FerroAUDIT#29,

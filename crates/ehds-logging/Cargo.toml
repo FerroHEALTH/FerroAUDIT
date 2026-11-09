@@ -55,7 +55,7 @@ quick-xml.workspace = true
 openehr-base.workspace = true
 # The FHIR R4 resource types a literal reference in a written record is
 # held to.
-fhir-types = { workspace = true, features = ["r4", "resources"] }
+fhir-types = { workspace = true, features = ["r4-resources"] }
 # The vendored HL7 Europe package the priority category codes are held to.
 flate2.workspace = true
 # The property that no access the map cannot classify exactly reads as of no

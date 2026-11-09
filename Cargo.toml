@@ -36,18 +36,20 @@ tracing = "0.1.44"
 url = "2.5.8"
 # BALP: the FHIR R4 `AuditEvent` and the ATX: FHIR Feed client, and the
 # ITI-81 searchset Bundle. fhir-types tracks its newest release, the line the
-# products build on, so a product carries one copy. Verified on crates.io
-# 2026-10-25 (0.1.128).
+# products build on, so a product carries one copy; 0.1.130 is the first with
+# one resources feature per release. Verified on crates.io 2026-11-09
+# (0.1.130).
 async-trait = "0.1.92"
-fhir-types = { version = "0.1.128", default-features = false }
+fhir-types = { version = "0.1.130", default-features = false }
 http = "1.5.0"
 # ITI-81: RFC 3986 percent-decoding of the query string. Verified on
 # crates.io 2026-10-25 (2.3.2).
 percent-encoding = "2.3.2"
 # ITI-81: the family's FHIR R4 search value grammar, FerroBRIDGE's BUSL-1.1
-# crate. Its crate line moves one patch per change, breaking ones included, so
-# the requirement is exact. Verified on crates.io 2026-11-09 (0.1.129).
-fhir-search = "=0.1.129"
+# crate. FerroBRIDGE's crates follow Cargo SemVer (FerroHEALTH/FerroBRIDGE#1745),
+# so the requirement is a caret range, as a shared crate takes another.
+# Verified on crates.io 2026-11-09 (0.1.130).
+fhir-search = "0.1.129"
 # The family's SMART crate, whose client credentials token a FHIR Feed
 # repository takes (feature `smart`): the same Licensor's BUSL-1.1 code, a
 # caret requirement on the newest release it needs, as a shared crate takes
