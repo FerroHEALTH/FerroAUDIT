@@ -13,6 +13,16 @@ and this project adheres to
 
 ### Changed
 
+- `ihe-atna`'s `balp` and `retrieve` features enable `fhir-types/r4-resources`
+  in place of `fhir-types/r4` with `fhir-types/resources`, which widened every
+  FHIR release enabled anywhere in a product's build to all its resources.
+  The workspace requires `fhir-types` 0.1.130, the first release with that
+  feature. A product that used another release's resources through this
+  crate enables them on its own `fhir-types` requirement (#187).
+- `ihe-atna` requires `fhir-search` by the caret range `0.1.129` in place of
+  `=0.1.129`, now that FerroBRIDGE's crates follow Cargo SemVer, so a
+  product resolves one copy beside another family crate on a later patch
+  of the 0.1 line (#185).
 - `SECURITY.md` names `security@cadasto.com` as the email route for a
   vulnerability report, in place of `info@cadasto.com`, which stays the
   address for licensing and other business questions.

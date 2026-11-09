@@ -27,6 +27,12 @@ true`), so the tag, the crate and the changelog section always agree.
   patch reaches every product through its lockfile without a release of
   every shared crate in between (owner decision, 2026-10-26). That is safe
   only because a patch release never breaks the public API.
+- **The FerroBRIDGE crates** (`fhir-types`, `fhir-search` and the rest of its
+  published line) are required by caret ranges on the newest release this
+  workspace needs, never with `=`. FerroBRIDGE's crates follow Cargo SemVer
+  (FerroHEALTH/FerroBRIDGE#1745), and an exact requirement kept two family
+  crates pinned to different patches of one of them from building together
+  (FerroHEALTH/FerroAUDIT#185).
 - A pull request that breaks a public API says so in its body and its
   CHANGELOG entry, naming what a product changes; while the line is `0.x`,
   such a release moves the minor version.
