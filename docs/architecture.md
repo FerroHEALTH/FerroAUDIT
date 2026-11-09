@@ -162,10 +162,23 @@ design: no specification governs them.
 the network, so a slow repository never holds an exchange. `Forwarder::run`
 delivers oldest first: to a syslog repository over one kept connection, to a
 FHIR Feed repository one `create` per record. A transport failure drops the
-connection and retries with a jittered exponential backoff capped where the
-caller says. `Forwarder::status` reports the depth, the quarantine, the
-deliveries and the retries. No specification governs the backoff: our own
-design.
+connection and retries with a jittered exponential backoff. `Forwarder::status`
+reports the depth, the quarantine, the deliveries and the retries.
+
+The backoff follows the caller's `atna::retry::Retry` policy, which
+`ferrohealth-smart`'s `RetrySection` converts into under feature `smart`. A
+sender stores a record it cannot deliver and sends it once it can (ITI TF-2
+§3.20.4.1.1), so the policy never gives a record up. Delivery runs in rounds:
+
+- `initial_backoff` is the first wait of a round, and each wait after it
+  doubles up to `max_backoff`.
+- `max_attempts` is the number of failed attempts in one round. After the
+  last of them the forwarder waits `max_backoff` and starts the next round
+  from `initial_backoff`.
+- A delivery that succeeds starts a fresh round.
+
+A constructor that takes only the longest wait starts at 250 ms and never
+ends a round. No specification governs the backoff: our own design.
 
 The forwarder delivers from any `Outbox`: the spool is one, and a product
 that keeps its records in its own durable store, such as a database table,

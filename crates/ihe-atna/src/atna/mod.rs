@@ -21,6 +21,7 @@
 //!   `ferrohealth-smart` as the `Credentials` source of a Feed repository.
 //! - [`forwarder`]: the sender that writes every message to the spool, or a
 //!   caller's own store, first and delivers it from there, in order.
+//! - [`retry`]: the rounds the forwarder retries a failed delivery in.
 //!
 //! The spool, the forwarder and the syslog frame compile under either
 //! feature; the syslog sender's message and TLS connection under `atna`
@@ -40,6 +41,7 @@ pub mod forwarder;
 pub mod message;
 #[cfg(feature = "atna")]
 pub mod repository;
+pub mod retry;
 pub mod spool;
 pub mod syslog;
 

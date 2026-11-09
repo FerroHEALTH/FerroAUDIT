@@ -11,6 +11,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ihe-atna`'s forwarder takes a whole retry policy, `atna::retry::Retry`,
+  with `max_attempts`, `initial_backoff` and `max_backoff`, through
+  `Forwarder::fhir_feed_with_retry`, `fhir_feed_from_with_retry`,
+  `new_with_retry` and `syslog_from_with_retry`. Under feature `smart`,
+  `ferrohealth-smart`'s `RetrySection` converts into it, so a product hands
+  its endpoint's `retry` table over as it is. The forwarder never gives a
+  record up: `max_attempts` ends a round, which waits `max_backoff` and
+  starts the next one from `initial_backoff`. The constructors that take
+  only the longest wait keep their schedule (#194).
+
 ## [0.9.0] - 2026-11-09
 
 `ihe-atna`'s `smart` feature follows `ferrohealth-smart` to the 0.15 line,
