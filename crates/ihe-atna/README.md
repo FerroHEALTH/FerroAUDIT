@@ -65,18 +65,28 @@ The crate depends on no application. The profiles are published at
 
 A product builds the TLS configuration from the family's outbound TLS keys
 (`client_identity` or `client_identity_file`, and `trust_roots_file`) with
-`ferrohealth-server`'s `TlsClient`, so the syslog connection trusts what the
-product's HTTP clients trust:
+`ferrohealth-server`'s `TlsClient::platform_config`, so the syslog
+connection trusts what the product's HTTP clients trust, and hands it to the
+repository:
 
 ```rust
 use std::sync::Arc;
+use std::time::Duration;
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use ihe_atna::atna::repository::{Repository, Timeouts};
+use rustls::ClientConfig;
+use url::Url;
 
-// `section` is the product's `[audit.syslog]` table.
-let tls = TlsClient::read("audit.syslog", &section)?.platform_config()?;
-let repository = Repository::tls(&address, Arc::new(tls), timeouts)?;
+// `tls` is what `TlsClient::platform_config` built from `[audit.syslog]`.
+fn repository(tls: ClientConfig) -> Result<Repository, Box<dyn std::error::Error>> {
+    let address = Url::parse("tls://arr.example.org")?;
+    let timeouts = Timeouts {
+        connect: Duration::from_secs(5),
+        send: Duration::from_secs(10),
+    };
+    Ok(Repository::tls(&address, Arc::new(tls), timeouts)?)
+}
+# let _ = repository;
 ```
 
 ## BALP (`balp`)
