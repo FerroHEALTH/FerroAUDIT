@@ -83,7 +83,7 @@ Legal Provisions for the RFCs, and Auteurswet Art. 11 for the Dutch acts.
 | Rust toolchain | 1.99.1, profile `minimal`, components `rustfmt` and `clippy` | `rust-toolchain.toml` |
 | Rust edition | 2024 | `Cargo.toml` `[workspace.package] edition`, `rustfmt.toml` |
 | MSRV | 1.98, the FerroHEALTH family floor (the pinned toolchain's release minus one), checked on every pull request by the MSRV steps of the `guards` job with no feature, with `atna` and with every feature | `Cargo.toml` `[workspace.package] rust-version`, `.github/workflows/ci.yml` (reads it from the manifest) |
-| `ihe-atna`, `ehds-logging` | 0.10.0, the workspace version both crates inherit, the release tag `v0.10.0` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version` (held to this row by `scripts/checks/versions.sh`), `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
+| `ihe-atna`, `ehds-logging` | 0.10.1, the workspace version both crates inherit, the release tag `v0.10.1` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version` (held to this row by `scripts/checks/versions.sh`), `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
 | Third-party crates | the `[workspace.dependencies]` table, each version checked against crates.io on 2026-10-20 | `Cargo.toml`, `Cargo.lock` |
 
 ## The CI tools
