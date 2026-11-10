@@ -513,7 +513,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "ehds-logging"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -1120,7 +1120,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
