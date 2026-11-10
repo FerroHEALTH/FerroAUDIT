@@ -15,6 +15,12 @@ on:
   merge_group:
   workflow_dispatch:
 
+# A newer push to a pull request cancels its running check (#210); a run on
+# main, in the merge queue or on the schedule is never cancelled in flight.
+concurrency:
+  group: specs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions: {}
 
 jobs:
