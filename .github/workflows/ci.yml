@@ -9,7 +9,7 @@
 #   2. `lint` runs rustfmt, clippy with no feature, with `atna` and with
 #      every feature, rustdoc and cargo-deny over one build cache.
 #   3. `nextest (each feature set)` runs the tests and the doctests.
-#   4. `cargo-semver-checks` runs on a pull request only.
+#   4. `cargo-semver-checks` runs on a pull request and in the merge queue.
 #
 # Every job starts at once and pays one runner queue wait: the hosted runner
 # pool is shared across the organisation, so each job pays the wait for a
@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
           # The crate version guard compares the pull request's base and head.
           fetch-depth: 0
-      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: zizmor@1.31.1,shellcheck@0.11.0
       - name: zizmor audits .github
@@ -179,7 +179,7 @@ jobs:
         with:
           components: rustfmt,clippy
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-deny
       - name: rustfmt
@@ -220,7 +220,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-nextest
       - run: cargo nextest run --workspace --locked
@@ -228,12 +228,13 @@ jobs:
       - run: cargo nextest run --workspace --all-features --locked
       - run: cargo test --doc --workspace --all-features --locked
 
-  # Every crate's public API against its newest version on crates.io: a break
-  # the manifest version does not answer with a minor bump fails, so a caret
-  # requirement on these crates stays safe (scripts/checks/semver.sh).
+  # Every crate's public API against its newest version on crates.io, on the
+  # default feature set and on --only-explicit-features: a break, or a public
+  # dependency on another line, that the manifest version does not answer
+  # with a minor bump fails (scripts/checks/semver.sh, #204).
   semver:
     name: cargo-semver-checks
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -248,7 +249,7 @@ jobs:
       - id: pin
         name: Read the cargo-semver-checks pin
         run: echo "version=$(bash scripts/checks/semver.sh --pin)" >> "$GITHUB_OUTPUT"
-      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-semver-checks@${{ steps.pin.outputs.version }}
       - run: bash scripts/checks/semver.sh

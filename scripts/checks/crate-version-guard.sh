@@ -6,11 +6,15 @@
 # backwards, Cargo.lock carries it for ihe-atna, and CHANGELOG.md has
 # a section for it. A change that moves the version is a release change and
 # must move all three together (no specification governs this: our own
-# design).
+# design). A public dependency (scripts/checks/lib/public-deps.sh) moved to
+# another compatibility line breaks the crates that require it, so a change
+# that moves one moves the version to a later minor at patch 0 (#204).
 #
 # Usage: scripts/checks/crate-version-guard.sh <base-ref> [head-ref]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# shellcheck disable=SC1091 # shellcheck is not run with -x; the library is checked on its own
+. scripts/checks/lib/public-deps.sh
 
 # NOTE: a reader that stops at its first match would end a `git show` pipe early, and
 # under pipefail the writer's SIGPIPE fails the guard; each file is read whole first.
@@ -18,8 +22,9 @@ if [[ "${1:-}" == "--self-test" ]]; then
   guard="$(pwd)/scripts/checks/crate-version-guard.sh"
   scratch="$(mktemp -d)"
   trap 'rm -rf "$scratch"' EXIT
-  mkdir -p "$scratch/scripts/checks"
+  mkdir -p "$scratch/scripts/checks/lib"
   cp "$guard" "$scratch/scripts/checks/"
+  cp "$(pwd)/scripts/checks/lib/public-deps.sh" "$scratch/scripts/checks/lib/"
   cd "$scratch"
   git init -q -b main
   git -c user.email=t@example.org -c user.name=t commit -q --allow-empty -m base
@@ -44,6 +49,37 @@ if [[ "${1:-}" == "--self-test" ]]; then
     echo "crate-version-guard self-test: a missing changelog section passed" >&2
     exit 1
   fi
+  # The #204 cases: a public dependency moved to another compatibility line
+  # breaks the crate, so the version moves to a later minor at patch 0.
+  release() {
+    printf '[workspace.package]\nversion = "%s"\n\n[workspace.dependencies]\nferrohealth-smart = "%s"\nserde = "%s"\n' "$1" "$2" "$3" > Cargo.toml
+    mkdir -p crates/demo
+    printf '[package]\nname = "demo"\nversion.workspace = true\n\n[dependencies]\nferrohealth-smart = { workspace = true, optional = true }\nserde.workspace = true\n' > crates/demo/Cargo.toml
+    printf '[[package]]\nname = "ihe-atna"\nversion = "%s"\n' "$1" > Cargo.lock
+    printf '# Changelog\n\n## [%s] - 2026-11-10\n' "$1" > CHANGELOG.md
+    git add -A
+    git -c user.email=t@example.org -c user.name=t commit -q -m "$4"
+  }
+  case_of() {
+    local want="$1" label="$2" status=0
+    bash scripts/checks/crate-version-guard.sh public-base HEAD > /dev/null 2>&1 || status=$?
+    if [[ "$status" -ne "$want" ]]; then
+      echo "crate-version-guard self-test: $label: exit $status, want $want" >&2
+      exit 1
+    fi
+  }
+  release 0.10.1 0.16.0 1.0.0 "a public dependency"
+  git branch public-base
+  release 0.10.1 0.17.0 1.0.0 "a public dependency on another line, same version"
+  case_of 1 "a public dependency on another line without a bump"
+  release 0.10.2 0.17.0 1.0.0 "a public dependency on another line, a patch"
+  case_of 1 "a public dependency on another line with a patch step"
+  release 0.11.0 0.17.0 1.0.0 "a public dependency on another line, a minor"
+  case_of 0 "a public dependency on another line with a minor step"
+  release 0.11.1 0.17.0 1.0.0 "a public dependency on another line, a minor keeping a patch"
+  case_of 1 "a public dependency on another line with a minor step that keeps a patch"
+  release 0.10.1 0.16.4 2.0.0 "a compatible public and an incompatible private dependency"
+  case_of 0 "a private dependency on another line without a bump"
   echo "crate-version-guard self-test: OK"
   exit 0
 fi
@@ -95,6 +131,28 @@ fi
 if ! grep -qF "## [$want]" <<< "$changelog"; then
   echo "crate-version-guard: CHANGELOG.md has no section for $want" >&2
   failed=1
+fi
+
+# The line a version sits on, as a caret requirement names it: `0.Y` while
+# the major is 0, the major otherwise.
+version_line() {
+  if [[ "${1%%.*}" == "0" ]]; then cut -d. -f1-2 <<<"$1"; else echo "${1%%.*}"; fi
+}
+
+# A public dependency required on another compatibility line breaks every
+# crate that requires it, so the version moves to a later minor at patch 0.
+if [[ -n "$was" ]]; then
+  for member in $(git ls-tree -r --name-only "$head" -- crates | grep '^crates/[^/]*/Cargo.toml$' || true); do
+    git cat-file -e "$base:$member" 2> /dev/null || continue
+    moved="$(moved_lines \
+      "$(manifest_requirements <(printf '%s\n' "$base_manifest") <(git show "$base:$member") | public_lines)" \
+      "$(manifest_requirements <(printf '%s\n' "$manifest") <(git show "$head:$member") | public_lines)")"
+    [[ -n "$moved" ]] || continue
+    if [[ "$(version_line "$was")" == "$(version_line "$want")" ]] || [[ "${want##*.}" != "0" ]]; then
+      echo "crate-version-guard: $member requires a public dependency on another compatibility line ($moved), which breaks its consumers; the version moves from $was to a later minor at patch 0, not $want (.claude/rules/crates-publishing.md)" >&2
+      failed=1
+    fi
+  done
 fi
 
 [[ "$failed" -eq 0 ]] || exit 1
