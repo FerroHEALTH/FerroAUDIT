@@ -11,6 +11,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-10
+
+The disk spool group-commits its writes, so a product under load no longer
+pays one directory flush per audit record and misses its write bound. The
+release is compatible with 0.10.0: products move their pin to `=0.10.1`.
+
 ### Changed
 
 - The disk spool writes the messages that queue while one write is in
