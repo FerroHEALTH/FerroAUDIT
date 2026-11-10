@@ -7,8 +7,8 @@
 **The audit trail of the FerroHEALTH products: who looked at which patient's data, recorded the standard way.**
 
 [Documentation](https://docs.rs/ihe-atna) ·
-[Quick start](#quick-start) ·
-[What ships today](#what-ships-today) ·
+[The crates](#the-crates) ·
+[Install](#install) ·
 [Licensing](https://ferrohealth.eu/docs/licensing.html)
 
 **Project**<br>
@@ -18,7 +18,7 @@
 [![Docs](https://img.shields.io/docsrs/ihe-atna?logo=docsdotrs&label=docs.rs)](https://docs.rs/ihe-atna)
 
 **Quality and security**<br>
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/FerroHEALTH/FerroAUDIT/badge)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroAUDIT)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/FerroHEALTH/FerroAUDIT/badge)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroAUDIT)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroAUDIT/codeql.yml?branch=main&logo=github&label=CodeQL)](https://github.com/FerroHEALTH/FerroAUDIT/actions/workflows/codeql.yml)
 [![Signed releases](https://img.shields.io/badge/releases-signed-brightgreen?logo=github)](docs/release.md)
 [![SLSA Build L3](https://slsa.dev/images/gh-badge-level3.svg)](docs/release.md)
@@ -74,48 +74,130 @@ sign-in and access control, FerroAUDIT for the audit trail, and FerroUI for
 the web consoles. FerroEHR, FerroFED and FerroPIX send their audit records
 through FerroAUDIT, and each keeps its own audit store.
 
-## Quick start
+## The crates
 
-Add the crates to a Rust project:
+Both crates are published on crates.io and released together on one
+version line. Each has its own README, which is its crates.io page.
+
+| Crate | Version | What it provides | Features |
+|---|---|---|---|
+| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `smart`, `retrieve`, `recording`, `redact` |
+| [`ehds-logging`](crates/ehds-logging/README.md) | [![crates.io](https://img.shields.io/crates/v/ehds-logging?logo=rust&label=crates.io)](https://crates.io/crates/ehds-logging) | The EHDS logging component of Regulation (EU) 2025/327: the Annex II 3.2 access record, the Art 14(1) categories and the map that classifies an access, retention and security labels, written as a BALP `AuditEvent` or a DICOM audit message | `balp`, `atna`, `schema` |
+
+## What it provides
+
+- **ATNA audit messages (ITI-20):** the DICOM PS3.15 audit message in an
+  RFC 5424 syslog message, sent over RFC 5425 TLS to any Audit Record
+  Repository (feature `atna`).
+- **BALP audit events:** the FHIR R4 `AuditEvent` of every IHE FHIR
+  transaction, posted over the ATX: FHIR Feed through
+  `ferrohealth-smart`'s outbound client (features `balp` and `smart`).
+- **A store-and-forward spool** that keeps every record, one fsynced file
+  per message, until the repository takes it, oldest first, with a
+  quarantine for a record that cannot be read.
+- **Retrieving audit events (ITI-81):** the FHIR search a product serves
+  over its own audit store, read into typed criteria with the family's FHIR
+  search grammar, and the `searchset` answer (feature `retrieve`).
+- **The EHDS access record:** who accessed which categories of whose data,
+  when and from where, as Annex II 3.2 of Regulation (EU) 2025/327 asks,
+  with the deployment's category map, retention within the Art 9(2) floor,
+  the Annex II 3.4 security labels and the person's own access trail.
+
+## Install
+
+The crates need Rust 1.98 or newer (edition 2024). Pin the versions
+exactly, as every FerroHEALTH product does:
 
 ```sh
 cargo add ihe-atna@=0.11.1 --features balp
 cargo add ehds-logging@=0.11.1 --features balp
 ```
 
-Pin the versions exactly. The crate documentation on
-[docs.rs](https://docs.rs/ihe-atna) is the integration guide, and
-[`docs/architecture.md`](docs/architecture.md) has the design.
+The release plan refuses a tag while this page or a crate README pins
+another version, so these lines name the release being cut.
 
-## What ships today
+## Usage
 
-- [ATNA audit messages (ITI-20)](crates/ihe-atna/README.md#atna-atna): the DICOM audit message over syslog with TLS, to any Audit Record Repository
-- [BALP audit events](crates/ihe-atna/README.md#balp-balp): the FHIR `AuditEvent` for every IHE FHIR transaction, posted over the FHIR feed
-- [A store-and-forward queue](crates/ihe-atna/README.md#atna-atna) that keeps every record until the repository takes it, oldest first
-- [Retrieving audit events (ITI-81)](crates/ihe-atna/README.md#retrieve-retrieve): the FHIR search a product serves over its own audit store
-- [The EHDS access record](crates/ehds-logging/README.md), as Annex II 3.2 of Regulation (EU) 2025/327 asks, with its data categories and retention
+A deployment declares which templates hold which EHDS category, and each
+access is classified by what it returned:
 
-<details>
-<summary><b>Published crates</b> (2)</summary>
+```rust
+use std::collections::BTreeMap;
 
-| Crate | What it does | Version | Docs | Downloads |
-|---|---|---|---|---|
-| [`ihe-atna`](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA (ITI-20) over syslog and TLS, BALP AuditEvents over the FHIR feed, the spool and forwarder, and ITI-81 retrieval | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | [![docs.rs](https://img.shields.io/docsrs/ihe-atna?logo=docsdotrs&label=docs.rs)](https://docs.rs/ihe-atna) | [![downloads](https://img.shields.io/crates/d/ihe-atna?logo=rust&label=downloads)](https://crates.io/crates/ihe-atna) |
-| [`ehds-logging`](https://crates.io/crates/ehds-logging) | The EHDS logging component: the Annex II 3.2 access record, its categories and retention, written as a BALP AuditEvent | [![crates.io](https://img.shields.io/crates/v/ehds-logging?logo=rust&label=crates.io)](https://crates.io/crates/ehds-logging) | [![docs.rs](https://img.shields.io/docsrs/ehds-logging?logo=docsdotrs&label=docs.rs)](https://docs.rs/ehds-logging) | [![downloads](https://img.shields.io/crates/d/ehds-logging?logo=rust&label=downloads)](https://crates.io/crates/ehds-logging) |
+use ehds_logging::category::Category;
+use ehds_logging::classify::{Basis, Evidence, RootObject};
+use ehds_logging::map::{CategoryMap, Declared};
 
-</details>
+let templates = BTreeMap::from([(
+    "Example Lab Report.v1".to_owned(),
+    Declared::Codes(vec!["Laboratory-Reports".to_owned()]),
+)]);
+let map = CategoryMap::declare(&[], &templates, &BTreeMap::new())?;
+let read = RootObject {
+    template_id: Some("Example Lab Report.v1".to_owned()),
+    ..RootObject::default()
+};
+let classified = map.classify(&Evidence::reached(Basis::Returned, vec![read]));
+assert!(classified.categories().contains_key(&Category::MedicalTestResult));
+assert!(classified.unclassified().is_none());
+# Ok::<(), ehds_logging::map::MapError>(())
+```
 
-## Learn more
+CI runs this example as a doctest of `ehds-logging`. The crate READMEs show
+the rest: the syslog connection, the spool, the FHIR Feed and ITI-81 in
+[`ihe-atna`](crates/ihe-atna/README.md), and the record, retention and the
+category codes on the wire in [`ehds-logging`](crates/ehds-logging/README.md).
 
-- [`ihe-atna`](https://docs.rs/ihe-atna) and [`ehds-logging`](https://docs.rs/ehds-logging) on docs.rs, and the [FerroHEALTH book](https://ferrohealth.eu/docs/)
-- [Architecture](docs/architecture.md) and the [pinned specifications](docs/VERSIONS.md)
-- [Changelog](CHANGELOG.md) and [milestones](https://github.com/FerroHEALTH/FerroAUDIT/milestones)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md), [code of conduct](CODE_OF_CONDUCT.md), [support](SUPPORT.md), [governance](GOVERNANCE.md) and [maintainers](MAINTAINERS.md)
+## Security
+
+- A record names a patient toward its repository and nowhere else: the
+  participant objects are held as secrets, and no `Debug` rendering shows a
+  value.
+- Every value is escaped before it reaches the XML or JSON of a record, so
+  no control or bidirectional character gets through.
+- A record the spool cannot take is refused at once, never dropped
+  silently.
+- The syslog connection speaks TLS 1.2 or 1.3 alone, over the rustls
+  configuration and trust roots you hand it.
+- The crates contain no `unsafe` code (`unsafe_code = "forbid"`), and
+  `cargo-deny` checks every dependency on every pull request.
+- Every release is signed and carries SLSA build provenance
+  ([`docs/release.md`](docs/release.md)).
+- Report a vulnerability privately as the [security policy](SECURITY.md)
+  describes.
+
+## Versioning
+
+Both crates follow [Cargo's SemVer rules](https://doc.rust-lang.org/cargo/reference/semver.html)
+on one version line, released by the tag `vX.Y.Z`, with one
+[changelog](CHANGELOG.md). On a `0.x` line a public API break moves the
+minor version. Every pull request runs
+[`cargo-semver-checks`](https://github.com/obi1kenobi/cargo-semver-checks)
+against the newest release on crates.io and refuses a break the version
+does not allow; `ehds-logging` lists the public dependencies its API
+exposes under "API stability" in its README.
+
+## Documentation
+
+- The API reference on docs.rs: [`ihe-atna`](https://docs.rs/ihe-atna) and
+  [`ehds-logging`](https://docs.rs/ehds-logging).
+- The [architecture](docs/architecture.md) and the
+  [pinned specifications](docs/VERSIONS.md).
+- The [release process](docs/release.md).
+- The [FerroHEALTH book](https://ferrohealth.eu/docs/).
+
+## Support
+
+[SUPPORT.md](SUPPORT.md) says where to ask a question and how to report a
+defect. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[code of conduct](CODE_OF_CONDUCT.md) before you open a pull request;
+[GOVERNANCE.md](GOVERNANCE.md) and [MAINTAINERS.md](MAINTAINERS.md) say who
+decides and who reviews.
 
 ## Licence
 
-Business Source License 1.1 ([LICENSE](LICENSE)), with Apache License 2.0 as
-the Change License four years after each version; the
+Business Source License 1.1 ([LICENSE](LICENSE), [NOTICE](NOTICE)), with
+Apache License 2.0 as the Change License four years after each version.
+Non-production use and non-commercial production use are free; the
 [licensing page](https://ferrohealth.eu/docs/licensing.html) says when you
 need a commercial licence from Cadasto B.V.
