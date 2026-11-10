@@ -11,6 +11,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-10
+
+`ehds-logging` gains the `schema` feature, so a product can generate its
+configuration reference from the types its configuration holds. The public
+API is otherwise unchanged. Products pin `=0.11.1`.
+
 ### Added
 
 - `ehds-logging` feature `schema`: `schemars::JsonSchema` on `map::Declared`,
