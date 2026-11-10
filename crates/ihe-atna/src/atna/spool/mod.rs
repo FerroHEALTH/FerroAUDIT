@@ -20,7 +20,10 @@
 //! On disk ([`Spool::open`]), each message is one file named by its sequence
 //! number. It is written to a temporary file, flushed to the device, renamed,
 //! and the directory is flushed too, so a stored message survives a crash or
-//! a restart. On Unix the directory must give its owner alone access, and
+//! a restart. The messages that queue while one write is in flight are
+//! written together as one batch, each file flushed on its own and the
+//! directory once for the batch, and each counts as stored once its batch is
+//! durable. On Unix the directory must give its owner alone access, and
 //! every file is created readable by its owner alone, because a message
 //! names a patient. In memory ([`Spool::in_memory`]), the messages live as
 //! long as the process, for a development deployment.
@@ -52,10 +55,12 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretSlice};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinError;
 
-use disk::{check_private, create_private, file, io, probe, scan, sync_directory, write_durably};
+use disk::{
+    check_private, create_private, file, io, probe, scan, settle, sync_directory, write_partial,
+};
 use in_flight::InFlight;
 
 /// The extension of a stored message.
@@ -174,6 +179,10 @@ pub enum SpoolError {
     /// The task that touched the disk did not finish.
     #[error("the audit spool task did not finish")]
     Task(#[source] JoinError),
+    /// The write of the batch that held the message did not finish, so the
+    /// message is not counted as stored.
+    #[error("the audit spool's write of the batch holding the message did not finish")]
+    Unfinished,
 }
 
 /// What a spool holds right now.
@@ -219,6 +228,7 @@ impl std::fmt::Debug for Stored {
 pub struct Spool {
     inner: Arc<Mutex<Inner>>,
     shown: Arc<Mutex<Ledger>>,
+    waiting: Arc<Mutex<VecDeque<Waiting>>>,
     turn: Arc<tokio::sync::Mutex<()>>,
     arrived: Arc<Notify>,
     bounds: Bounds,
@@ -241,6 +251,17 @@ struct Inner {
     depth: Depth,
     shown: Arc<Mutex<Ledger>>,
     next: u64,
+    /// The directory flushes the writes have made.
+    #[cfg(test)]
+    syncs: u64,
+}
+
+/// A message waiting for the batch that writes it, with its place under the
+/// bounds and the caller waiting for its sequence number.
+struct Waiting {
+    message: SecretSlice<u8>,
+    place: Place,
+    done: oneshot::Sender<Result<u64, SpoolError>>,
 }
 
 /// What readers of the spool see without taking its lock: the depth it
@@ -266,13 +287,25 @@ impl Ledger {
 struct Place {
     ledger: Arc<Mutex<Ledger>>,
     size: u64,
+    held: bool,
+}
+
+impl Place {
+    /// Gives the place back in `ledger`, which the caller holds locked.
+    fn give_back(mut self, ledger: &mut Ledger) {
+        ledger.queued = ledger.queued.saturating_sub(1);
+        ledger.queued_bytes = ledger.queued_bytes.saturating_sub(self.size);
+        self.held = false;
+    }
 }
 
 impl Drop for Place {
     fn drop(&mut self) {
-        let mut ledger = lock(&self.ledger);
-        ledger.queued = ledger.queued.saturating_sub(1);
-        ledger.queued_bytes = ledger.queued_bytes.saturating_sub(self.size);
+        if self.held {
+            let mut ledger = lock(&self.ledger);
+            ledger.queued = ledger.queued.saturating_sub(1);
+            ledger.queued_bytes = ledger.queued_bytes.saturating_sub(self.size);
+        }
     }
 }
 
@@ -381,8 +414,11 @@ impl Spool {
                 depth,
                 shown: Arc::clone(&shown),
                 next,
+                #[cfg(test)]
+                syncs: 0,
             })),
             shown,
+            waiting: Arc::new(Mutex::new(VecDeque::new())),
             turn: Arc::new(tokio::sync::Mutex::new(())),
             arrived: Arc::new(Notify::new()),
             bounds,
@@ -461,33 +497,60 @@ impl Spool {
     /// Stores `message` once every write before it has ended, so a stalled
     /// write holds one blocking thread however many messages wait behind it.
     ///
-    /// The write is its own task from the start, waiting for its turn there:
-    /// a caller that stops waiting while the message is still queued leaves
-    /// it queued, and it is written once the writes before it end.
+    /// The message joins the queue, and the write is its own task from the
+    /// start, waiting for its turn there. The task that has the turn writes
+    /// every message queued by then as one batch, so a message whose task
+    /// gets the turn after its batch was written only reads its outcome. A
+    /// caller that stops waiting while the message is still queued leaves it
+    /// queued, and it is written once the writes before it end.
     // NOTE: ITI TF-2 §3.20.4.1.1 has a record stored locally and sent when the sender
     // is able, so a queued record its exchange gave up on is still written, never dropped.
     async fn store(&self, message: SecretSlice<u8>, place: Place) -> Result<(), SpoolError> {
+        let (done, outcome) = oneshot::channel();
+        lock(&self.waiting).push_back(Waiting {
+            message,
+            place,
+            done,
+        });
         let turn = Arc::clone(&self.turn);
+        let waiting = Arc::clone(&self.waiting);
         let inner = Arc::clone(&self.inner);
         let arrived = Arc::clone(&self.arrived);
         let write = InFlight::new(tokio::spawn(async move {
             let turn = turn.lock_owned().await;
-            tokio::task::spawn_blocking(move || {
-                let stored = {
-                    let mut inner = lock(&inner);
-                    let stored = inner.push(message);
-                    inner.publish();
-                    stored
-                };
-                drop(place);
-                drop(turn);
-                if stored.is_ok() {
-                    arrived.notify_one();
-                }
-                stored
-            })
-            .await
-            .map_err(SpoolError::Task)?
+            let batch: Vec<Waiting> = lock(&waiting).drain(..).collect();
+            if !batch.is_empty() {
+                tokio::task::spawn_blocking(move || {
+                    let mut messages = Vec::with_capacity(batch.len());
+                    let mut places = Vec::with_capacity(batch.len());
+                    let mut answers = Vec::with_capacity(batch.len());
+                    for waiting in batch {
+                        messages.push(waiting.message);
+                        places.push(waiting.place);
+                        answers.push(waiting.done);
+                    }
+                    let stored = {
+                        let mut inner = lock(&inner);
+                        let stored = inner.push_batch(messages);
+                        inner.publish_giving_back(places);
+                        stored
+                    };
+                    drop(turn);
+                    if stored.iter().any(Result::is_ok) {
+                        arrived.notify_one();
+                    }
+                    for (done, stored) in answers.into_iter().zip(stored) {
+                        // NOTE: no specification governs this: our own design; a caller that
+                        // stopped waiting has its task log the outcome, so none is lost here.
+                        let _unread: Result<(), _> = done.send(stored);
+                    }
+                })
+                .await
+                .map_err(SpoolError::Task)?;
+            }
+            outcome
+                .await
+                .map_err(|_unfinished| SpoolError::Unfinished)?
         }));
         write.await.map_err(SpoolError::Task)?.map(|_sequence| ())
     }
@@ -516,6 +579,7 @@ impl Spool {
         Ok(Place {
             ledger: Arc::clone(&self.shown),
             size,
+            held: true,
         })
     }
 
@@ -575,36 +639,126 @@ impl Inner {
         lock(&self.shown).depth = self.depth;
     }
 
-    fn push(&mut self, message: SecretSlice<u8>) -> Result<u64, SpoolError> {
-        let size = u64::try_from(message.expose_secret().len()).unwrap_or(u64::MAX);
-        let bytes = self.depth.bytes.saturating_add(size);
-        if self.depth.messages >= self.bounds.max_messages || bytes > self.bounds.max_bytes {
+    /// Shows the depth and gives back the `places` of the messages a batch
+    /// wrote in one step, so no reader sees a message both queued and
+    /// stored, or neither.
+    fn publish_giving_back(&self, places: Vec<Place>) {
+        let mut ledger = lock(&self.shown);
+        ledger.depth = self.depth;
+        for place in places {
+            place.give_back(&mut ledger);
+        }
+    }
+
+    /// Refuses a message of `size` bytes when the spool already holds its
+    /// most messages or bytes, `ahead` of them written in its batch and not
+    /// yet counted.
+    fn check_room(&self, ahead: Depth, size: u64) -> Result<(), SpoolError> {
+        let messages = self.depth.messages.saturating_add(ahead.messages);
+        let bytes = self.depth.bytes.saturating_add(ahead.bytes);
+        if messages >= self.bounds.max_messages
+            || bytes.saturating_add(size) > self.bounds.max_bytes
+        {
             let refused = lock(&self.shown).refuse();
             tracing::warn!(target: crate::atna::targets::SPOOL,
                 refused,
-                messages = self.depth.messages,
-                bytes = self.depth.bytes,
+                messages,
+                bytes,
                 "an audit message was refused: the spool is at its bounds"
             );
-            return Err(SpoolError::Full {
-                messages: self.depth.messages,
-                bytes: self.depth.bytes,
-            });
+            return Err(SpoolError::Full { messages, bytes });
         }
-        let sequence = self.next;
-        match &mut self.store {
-            Store::Disk {
-                directory, sizes, ..
-            } => {
-                write_durably(directory, sequence, &message)?;
-                sizes.insert(sequence, size);
-            }
-            Store::Memory { queue, .. } => queue.push_back((sequence, message)),
+        Ok(())
+    }
+
+    /// Counts a message of `size` bytes as stored under `sequence`.
+    fn count(&mut self, sequence: u64, size: u64) {
+        if let Store::Disk { sizes, .. } = &mut self.store {
+            sizes.insert(sequence, size);
         }
-        self.next = sequence.saturating_add(1);
         self.depth.messages = self.depth.messages.saturating_add(1);
-        self.depth.bytes = bytes;
-        Ok(sequence)
+        self.depth.bytes = self.depth.bytes.saturating_add(size);
+    }
+
+    /// Stores `messages` in their order as one batch, each with its own
+    /// outcome: its sequence number once it is durable, or why it is not.
+    ///
+    /// On disk each message is written to its partial file and flushed, every
+    /// one written is renamed, and the directory is flushed once for them
+    /// all. When that flush fails, each renamed message is flushed again on
+    /// its own, so each one's outcome is its own flush.
+    fn push_batch(&mut self, messages: Vec<SecretSlice<u8>>) -> Vec<Result<u64, SpoolError>> {
+        let mut outcomes = Vec::with_capacity(messages.len());
+        let mut renamed = Vec::new();
+        let mut ahead = Depth::default();
+        for message in messages {
+            let size = u64::try_from(message.expose_secret().len()).unwrap_or(u64::MAX);
+            if let Err(full) = self.check_room(ahead, size) {
+                outcomes.push(Err(full));
+                continue;
+            }
+            let sequence = self.next;
+            self.next = sequence.saturating_add(1);
+            match &mut self.store {
+                Store::Disk { directory, .. } => {
+                    let written = write_partial(directory, sequence, &message)
+                        .and_then(|()| settle(directory, sequence));
+                    match written {
+                        Ok(()) => {
+                            renamed.push((outcomes.len(), sequence, size));
+                            ahead.messages = ahead.messages.saturating_add(1);
+                            ahead.bytes = ahead.bytes.saturating_add(size);
+                            outcomes.push(Ok(sequence));
+                        }
+                        Err(error) => outcomes.push(Err(error)),
+                    }
+                }
+                Store::Memory { queue, .. } => {
+                    queue.push_back((sequence, message));
+                    self.count(sequence, size);
+                    outcomes.push(Ok(sequence));
+                }
+            }
+        }
+        if renamed.is_empty() {
+            return outcomes;
+        }
+        let Store::Disk { directory, .. } = &self.store else {
+            return outcomes;
+        };
+        let directory = directory.clone();
+        let flushed = self.sync(&directory);
+        for (at, sequence, size) in renamed {
+            let durable = match &flushed {
+                Ok(()) => Ok(()),
+                Err(_batch) => self.sync(&directory),
+            };
+            match durable {
+                Ok(()) => self.count(sequence, size),
+                Err(error) => {
+                    if let Some(outcome) = outcomes.get_mut(at) {
+                        *outcome = Err(error);
+                    }
+                }
+            }
+        }
+        outcomes
+    }
+
+    /// Flushes `directory`, counting the flush under test.
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unused_self,
+            reason = "the flushes are counted only under test"
+        )
+    )]
+    fn sync(&mut self, directory: &Path) -> Result<(), SpoolError> {
+        #[cfg(test)]
+        {
+            self.syncs = self.syncs.saturating_add(1);
+        }
+        sync_directory(directory)
     }
 
     fn oldest(&mut self) -> Result<Option<Stored>, SpoolError> {

@@ -148,7 +148,10 @@ bounded in time (`Bounds::write_timeout`): a late write is refused as
 other.
 
 On disk each message is one file, written to a temporary name, flushed,
-renamed, and the directory flushed, so a stored message survives a crash. On
+renamed, and the directory flushed, so a stored message survives a crash.
+The messages that queue while one write is in flight are written as one
+batch: each file is flushed on its own, the directory once for the batch, and
+each caller is answered once its batch is durable (#201). On
 Unix the directory must be private to its owner and every file is created
 readable by its owner alone. A message that cannot be read, or that is not of
 the spool's content, moves to `quarantine/` when the drain reaches it, logged

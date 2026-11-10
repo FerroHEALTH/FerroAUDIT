@@ -275,6 +275,53 @@ pub(in crate::atna) mod tests {
     }
 
     #[tokio::test]
+    async fn the_pushes_queued_behind_one_write_share_one_directory_flush() {
+        const PUSHES: usize = 8;
+        let directory = tempfile::tempdir().expect("a directory");
+        let bounds = Bounds {
+            max_messages: 16,
+            max_bytes: 1 << 20,
+            write_timeout: SLACK + SLACK,
+        };
+        let spool = Spool::open(&directory.path().join("spool"), bounds).expect("it opens");
+        let turn = Arc::clone(&spool.turn).lock_owned().await;
+        let pushes: Vec<_> = (0..PUSHES)
+            .map(|_| {
+                let spool = spool.clone();
+                tokio::spawn(async move { spool.push(naming_the_patient()).await })
+            })
+            .collect();
+        let until = Instant::now() + SLACK;
+        while lock(&spool.waiting).len() < PUSHES && Instant::now() < until {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(PUSHES, lock(&spool.waiting).len(), "every push is queued");
+        assert_eq!(Depth::default(), spool.depth(), "none is stored yet");
+
+        drop(turn);
+        for push in pushes {
+            push.await
+                .expect("the push ends")
+                .expect("each is stored once its batch is durable");
+        }
+        assert_eq!(PUSHES, spool.depth().messages, "every push is stored");
+        assert_eq!(
+            1,
+            lock(&spool.inner).syncs,
+            "the pushes queued behind one write share one directory flush"
+        );
+        for sequence in 0..PUSHES {
+            let stored = spool.oldest().await.expect("it reads").expect("one");
+            assert_eq!(
+                u64::try_from(sequence).expect("a small number"),
+                stored.sequence,
+                "stored in the order pushed"
+            );
+            spool.remove(stored.sequence).await.expect("it removes");
+        }
+    }
+
+    #[tokio::test]
     async fn the_queue_behind_a_stalled_write_is_held_to_the_bounds() {
         const CAP: usize = 3;
         let logs = Logs::default();
