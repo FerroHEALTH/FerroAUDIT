@@ -287,13 +287,25 @@ impl Ledger {
 struct Place {
     ledger: Arc<Mutex<Ledger>>,
     size: u64,
+    held: bool,
+}
+
+impl Place {
+    /// Gives the place back in `ledger`, which the caller holds locked.
+    fn give_back(mut self, ledger: &mut Ledger) {
+        ledger.queued = ledger.queued.saturating_sub(1);
+        ledger.queued_bytes = ledger.queued_bytes.saturating_sub(self.size);
+        self.held = false;
+    }
 }
 
 impl Drop for Place {
     fn drop(&mut self) {
-        let mut ledger = lock(&self.ledger);
-        ledger.queued = ledger.queued.saturating_sub(1);
-        ledger.queued_bytes = ledger.queued_bytes.saturating_sub(self.size);
+        if self.held {
+            let mut ledger = lock(&self.ledger);
+            ledger.queued = ledger.queued.saturating_sub(1);
+            ledger.queued_bytes = ledger.queued_bytes.saturating_sub(self.size);
+        }
     }
 }
 
@@ -509,22 +521,25 @@ impl Spool {
             let batch: Vec<Waiting> = lock(&waiting).drain(..).collect();
             if !batch.is_empty() {
                 tokio::task::spawn_blocking(move || {
-                    let (messages, rest): (Vec<_>, Vec<_>) = batch
-                        .into_iter()
-                        .map(|waiting| (waiting.message, (waiting.place, waiting.done)))
-                        .unzip();
+                    let mut messages = Vec::with_capacity(batch.len());
+                    let mut places = Vec::with_capacity(batch.len());
+                    let mut answers = Vec::with_capacity(batch.len());
+                    for waiting in batch {
+                        messages.push(waiting.message);
+                        places.push(waiting.place);
+                        answers.push(waiting.done);
+                    }
                     let stored = {
                         let mut inner = lock(&inner);
                         let stored = inner.push_batch(messages);
-                        inner.publish();
+                        inner.publish_giving_back(places);
                         stored
                     };
                     drop(turn);
                     if stored.iter().any(Result::is_ok) {
                         arrived.notify_one();
                     }
-                    for ((place, done), stored) in rest.into_iter().zip(stored) {
-                        drop(place);
+                    for (done, stored) in answers.into_iter().zip(stored) {
                         // NOTE: no specification governs this: our own design; a caller that
                         // stopped waiting has its task log the outcome, so none is lost here.
                         let _unread: Result<(), _> = done.send(stored);
@@ -564,6 +579,7 @@ impl Spool {
         Ok(Place {
             ledger: Arc::clone(&self.shown),
             size,
+            held: true,
         })
     }
 
@@ -621,6 +637,17 @@ impl Inner {
     /// Shows the depth to readers that do not take the spool's lock.
     fn publish(&self) {
         lock(&self.shown).depth = self.depth;
+    }
+
+    /// Shows the depth and gives back the `places` of the messages a batch
+    /// wrote in one step, so no reader sees a message both queued and
+    /// stored, or neither.
+    fn publish_giving_back(&self, places: Vec<Place>) {
+        let mut ledger = lock(&self.shown);
+        ledger.depth = self.depth;
+        for place in places {
+            place.give_back(&mut ledger);
+        }
     }
 
     /// Refuses a message of `size` bytes when the spool already holds its
