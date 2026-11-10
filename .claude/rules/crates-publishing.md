@@ -17,8 +17,31 @@ true`), so the tag, the crate and the changelog section always agree.
 
 ## The bump rule
 
-- **A release bumps the workspace version, the changelog section and the
-  lock together** (`cargo update -w`), in the release pull request.
+- **The crates follow the Cargo SemVer rules and no rule of their own**
+  (owner decision 2026-11-10, #204). The Cargo Book, "SemVer
+  Compatibility" (<https://doc.rust-lang.org/cargo/reference/semver.html>),
+  is the one authority: a 0.y.z release "can treat changes in "y" as a
+  major release, and "z" as a minor release", so a breaking change moves
+  the minor and a compatible change the patch.
+- **A breaking change moves the minor in the pull request that breaks.**
+  That pull request bumps the workspace version, the changelog section and
+  the lock together (`cargo update -w`), so it is the release change of the
+  next minor. A compatible change leaves the version alone, and the release
+  pull request moves the patch with the section and the lock.
+- **A public dependency moved to another compatibility line is a breaking
+  change.** The Cargo Book chapter has no entry for it. Its intro counts as
+  breaking the "changes that will cause cargo and rustc to fail to build
+  something that previously worked", and a type of the dependency in the
+  crate's API becomes another type on the new line. The
+  `cargo-semver-checks` README (v0.51.0) lists "breaking type changes, for
+  example in the type of a field or function parameter" among what the
+  judge does not catch. For a 0.x dependency the incompatible step is the
+  left-most non-zero component (`ferrohealth-smart` 0.16 to 0.17,
+  `openehr-base` 0.0.109 to 0.0.110). A public dependency is any normal
+  dependency of the `openehr-*`, `fhir-types`, `fhir-search` and
+  `ferrohealth-*` families or a sibling of this workspace
+  (`scripts/checks/lib/public-deps.sh`), optional ones included. The
+  reference is FerroHEALTH/FerroBRIDGE's rule of the same name.
 - A **product** pins the crate exactly (`=X.Y.Z`) and moves its pin
   deliberately, in lockstep with the other products. A **shared crate** that
   builds on it takes a caret requirement on the newest release it needs
@@ -39,23 +62,31 @@ true`), so the tag, the crate and the changelog section always agree.
 - `ehds-logging` keeps its exact requirement on `ihe-atna`: both release
   from this one workspace, together.
 
-## Every release is checked for compatibility
+## Every change is checked for compatibility
 
 A caret on these crates, which other family shared crates take, is only
 safe while a patch never breaks the API. `cargo-semver-checks`
 (<https://github.com/obi1kenobi/cargo-semver-checks>) holds that by machine:
 it builds the rustdoc of each crate and of its newest version on crates.io
-and refuses a break the manifest version does not allow (Cargo's SemVer
-rules count `0.x.y` to `0.x.(y+1)` as compatible, so a break on a `0.x`
-line moves the minor version). An unchanged version is checked as a patch.
-`scripts/checks/semver.sh` runs it over the workspace at the version pinned
-in `docs/VERSIONS.md`:
+and refuses a break the manifest version does not allow. An unchanged
+version is judged as a patch. Each crate is judged on the judge's default
+feature set and on `--only-explicit-features`, what a product built with
+`default-features = false` compiles against, since the README says the
+judge does not catch "breaking changes that exist when only a subset of all
+crate features are activated". `scripts/checks/semver.sh` runs it over the
+workspace at the version pinned in `docs/VERSIONS.md`, compares each
+crate's public dependency lines with its newest release's, and names a
+judge that could not build apart from a judged break:
 
-- on every pull request (the `cargo-semver-checks` job of `ci.yml`), so a
-  breaking change carries its minor bump in the pull request that breaks;
+- on every pull request and in the merge queue (the `cargo-semver-checks`
+  job of `ci.yml`);
 - in the release plan (`scripts/release/plan.sh`, which
   `scripts/release/preflight.sh` and the `plan` job of `release.yml` both
   run) at every tag.
+
+`scripts/checks/crate-version-guard.sh` refuses, on every pull request, a
+change that moves a public dependency to another line without moving the
+version to a later minor at patch 0.
 
 A failure is answered with the minor bump and a changelog entry naming what
 a product changes, or by keeping the API; never by skipping the check.
@@ -93,4 +124,4 @@ beside it.
 - `cargo publish`: <https://doc.rust-lang.org/cargo/commands/cargo-publish.html>
 - Caret requirements: <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#caret-requirements>
 - SemVer compatibility: <https://doc.rust-lang.org/cargo/reference/semver.html>
-- cargo-semver-checks: <https://github.com/obi1kenobi/cargo-semver-checks>
+- cargo-semver-checks README, v0.51.0: <https://github.com/obi1kenobi/cargo-semver-checks/blob/v0.51.0/README.md>

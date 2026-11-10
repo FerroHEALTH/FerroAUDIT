@@ -161,9 +161,9 @@ check_version() {
 
 check_changelog_structure() { bash scripts/checks/changelog-structure.sh; }
 
-# Each crate's public API against its newest version on crates.io: a break
-# needs a minor bump (https://doc.rust-lang.org/cargo/reference/semver.html),
-# which keeps a caret requirement on these crates safe.
+# Each crate's public API against its newest version on crates.io: a break,
+# or a public dependency on another line, needs a minor bump
+# (https://doc.rust-lang.org/cargo/reference/semver.html).
 check_semver() { bash scripts/checks/semver.sh; }
 
 # Regulation (EU) 2024/2847 Annex I Part II(2), (4) and (8): the section
