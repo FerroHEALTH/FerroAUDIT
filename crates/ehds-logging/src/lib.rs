@@ -85,3 +85,9 @@ pub mod retention;
 pub mod sink;
 pub mod transformation;
 pub mod withheld;
+
+// The Rust example of the repository's README compiles as a doctest of this
+// crate.
+#[cfg(doctest)]
+#[doc = include_str!("../../../README.md")]
+struct RootReadme;
