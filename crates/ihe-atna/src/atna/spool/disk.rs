@@ -122,23 +122,33 @@ pub(super) fn file(directory: &Path, sequence: u64, extension: &str) -> PathBuf 
     directory.join(format!("{sequence:020}.{extension}"))
 }
 
-/// Writes `message` as message `sequence`: to a partial file flushed to the
-/// device, renamed, with the directory flushed after it.
-pub(super) fn write_durably(
+/// Writes `message` as the partial file of message `sequence`, flushed to
+/// the device; a partial file a failed write leaves is removed.
+pub(super) fn write_partial(
     directory: &Path,
     sequence: u64,
     message: &SecretSlice<u8>,
 ) -> Result<(), SpoolError> {
     let partial = file(directory, sequence, PARTIAL);
-    let stored = file(directory, sequence, STORED);
     let mut handle = private_file(&partial)?;
-    handle
+    let written = handle
         .write_all(message.expose_secret())
-        .map_err(io("written", &partial))?;
-    handle.sync_all().map_err(io("written", &partial))?;
+        .and_then(|()| handle.sync_all())
+        .map_err(io("written", &partial));
     drop(handle);
-    fs::rename(&partial, &stored).map_err(io("written", &stored))?;
-    sync_directory(directory)
+    if written.is_err() {
+        // NOTE: no specification governs this: our own design; a partial file
+        // never counts as stored, and the next open removes one left here.
+        let _kept: std::io::Result<()> = fs::remove_file(&partial);
+    }
+    written
+}
+
+/// Renames the partial file of message `sequence` to its stored name, which
+/// is durable once the directory is flushed after it.
+pub(super) fn settle(directory: &Path, sequence: u64) -> Result<(), SpoolError> {
+    let stored = file(directory, sequence, STORED);
+    fs::rename(file(directory, sequence, PARTIAL), &stored).map_err(io("written", &stored))
 }
 
 #[cfg(unix)]

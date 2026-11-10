@@ -11,6 +11,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The disk spool writes the messages that queue while one write is in
+  flight as one batch: each file is flushed on its own and the directory
+  once for the batch, so concurrent pushes cost one directory flush per
+  batch in place of one per message. Each push still returns only once its
+  message is durable, and `SpoolError::Late` keeps its meaning. A message
+  whose batch's write does not finish is refused with the new
+  `SpoolError::Unfinished` (#201).
+
 ## [0.10.0] - 2026-11-09
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.16 line, and its FHIR Feed
