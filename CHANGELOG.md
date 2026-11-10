@@ -11,6 +11,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-10
+
+`ihe-atna` follows `ferrohealth-smart` to the 0.18 line, whose configured
+issuer identifiers render with any userinfo masked. Its FHIR Feed takes that
+line's `OutboundClient`, so the move breaks the public API even though no
+item of `ihe-atna` changes shape. Products pin `=0.12.0` and move their own
+`ferrohealth-smart` requirement to 0.18 in the same change, so they link one
+copy of it. `ehds-logging` requires `ihe-atna` `=0.12.0` and changes nothing
+else.
+
+### Changed
+
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.18 (caret `0.18.0`)
+  in place of 0.17. `FeedRepository::new` and `FeedRepository::cleartext`
+  take the 0.18 `OutboundClient`, whose credentials table carries its OAuth
+  `issuer` as `SecretUrl` beside the `token_endpoint` (#219).
+- `ehds-logging` requires `ihe-atna` `=0.12.0`, the version it releases
+  with (#219).
+
 ### Fixed
 
 - `ihe-atna`: the syslog example of the README compiles. It takes the
