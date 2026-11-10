@@ -83,7 +83,7 @@ pub(crate) fn basic(user: &str, password: &str) -> CredentialsSection {
 pub(crate) fn grant(server: &MockServer) -> CredentialsSection {
     CredentialsSection {
         oauth: Some(OauthSection {
-            token_endpoint: format!("{}/token", server.uri()),
+            token_endpoint: SecretUrl::new(format!("{}/token", server.uri())),
             client_id: "Qz7-audit-client".to_owned(),
             client_secret: Some(SecretString::from("Qz7-audit-secret")),
             ..OauthSection::default()
