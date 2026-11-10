@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ehds-logging` feature `schema`: `schemars::JsonSchema` on `map::Declared`,
+  which admits the word `none` or a non-empty list of categories, so a
+  product can generate its configuration reference from the types its
+  configuration holds (#208).
+
 ## [0.11.0] - 2026-11-10
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.17 line. Its FHIR Feed takes

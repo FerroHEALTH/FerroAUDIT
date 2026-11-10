@@ -49,6 +49,10 @@ what classifies it.
   PS3.15 A.5 audit message from the same exchange, by the `RESTful` ATNA
   mapping, for an ITI-20 syslog sender, with the participants the eHDSI
   Audit Trail Profile 10.1.0 names for a relayed access.
+- `schema` (feature `schema`): `schemars::JsonSchema` on `map::Declared`,
+  for a product that generates its configuration reference from the types
+  its configuration holds: the word `none` or a non-empty list of
+  categories.
 
 The accessor carries how the recording system bound it to a party (the
 binding outcome, the party and its groups), the token's actor chain, the
