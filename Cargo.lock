@@ -460,7 +460,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "ehds-logging"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -506,9 +506,9 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferrohealth-config"
-version = "0.4.0"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17c97163b43a0d4211ee76c83601b19b2d67fc162afdff0f07359e6317a51d91"
+checksum = "0988b65c0d550f4240abc4decc0ab8eb9e2f3118d194f3fdb8fcea37dafd0c4d"
 dependencies = [
  "ferrohealth-secret",
  "percent-encoding",
@@ -532,9 +532,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-smart"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a911955711aa1861bd5713298a2e3a8679b16b718b005e9a9c4f54a6e8b55faf"
+checksum = "1c98e84b2d4f212401f565f5ef1101865f36be91022baa69679ea67f065636f9"
 dependencies = [
  "argon2",
  "aws-lc-rs",
@@ -558,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "fhir-search"
-version = "0.1.129"
+version = "0.1.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26e0b37d7eaa56d365aee1c65b7f1fd3f99da67a603cc9ac97d42e98ef08643a"
+checksum = "10e5837219cec0417479595c9813d4bf4ae9106c06988b5a041bbff982a4d3d1"
 dependencies = [
  "jiff",
  "thiserror",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -1315,9 +1315,9 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "openehr-base"
-version = "0.0.109"
+version = "0.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14071a834b98361d9bb10fe23e86d6d147607a6fb4544fc3751465f6834d8b3a"
+checksum = "c8ae1ae6d02dcaa29ae3b4b80b5250aae114122a80e195ca6e25d5c1aefeb151"
 dependencies = [
  "serde",
  "serde_json",

@@ -11,6 +11,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-10
+
+`ihe-atna` follows `ferrohealth-smart` to the 0.17 line. Its FHIR Feed takes
+that line's `OutboundClient`, so the move breaks the public API even though
+no item of `ihe-atna` changes shape. Products pin `=0.11.0` and move their
+own `ferrohealth-smart` requirement to 0.17 in the same change, so they link
+one copy of it. `ehds-logging` requires `ihe-atna` `=0.11.0` and changes
+nothing else.
+
+### Changed
+
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.17 (caret `0.17.0`)
+  in place of 0.16. `FeedRepository::new` and `FeedRepository::cleartext`
+  take the 0.17 `OutboundClient`, whose endpoint table carries its URLs as
+  `SecretUrl`, the OAuth `token_endpoint` included (#205).
+- `ihe-atna` requires `fhir-search` 0.1.130, the newest release (#205).
+- `ehds-logging` requires `ihe-atna` `=0.11.0`, the version it releases
+  with (#205).
+
 ## [0.10.1] - 2026-11-10
 
 The disk spool group-commits its writes, so a product under load no longer
