@@ -41,3 +41,9 @@ pub mod redact;
 #[cfg(feature = "retrieve")]
 pub mod retrieve;
 pub mod user;
+
+// The Rust example of this crate's README compiles as a doctest, with the
+// feature its syslog repository needs.
+#[cfg(all(doctest, feature = "atna"))]
+#[doc = include_str!("../README.md")]
+struct CrateReadme;

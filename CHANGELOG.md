@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `ihe-atna`: the syslog example of the README compiles. It takes the
+  `rustls::ClientConfig` a product builds with `ferrohealth-server`'s
+  `TlsClient::platform_config` and declares what it uses, and the README's
+  examples compile as doctests (#217).
+
 ## [0.11.1] - 2026-11-10
 
 `ehds-logging` gains the `schema` feature, so a product can generate its
