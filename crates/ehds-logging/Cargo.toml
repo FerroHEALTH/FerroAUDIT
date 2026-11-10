@@ -30,6 +30,9 @@ balp = ["dep:ihe-atna", "dep:url"]
 # syslog message carries, from the same exchange as its BALP record by the
 # RESTful ATNA mapping, so it takes the balp feature with it.
 atna = ["balp", "ihe-atna/atna"]
+# `schemars::JsonSchema` on `map::Declared`, for a product that generates its
+# configuration reference from the types its configuration holds.
+schema = ["dep:schemars"]
 
 # docs.rs documents the BALP rendering too (no specification governs this:
 # our own design).
@@ -40,6 +43,7 @@ all-features = true
 async-trait.workspace = true
 ihe-atna = { workspace = true, optional = true, features = ["balp"] }
 jiff.workspace = true
+schemars = { workspace = true, optional = true }
 secrecy.workspace = true
 serde.workspace = true
 thiserror.workspace = true
@@ -58,6 +62,8 @@ openehr-base.workspace = true
 fhir-types = { workspace = true, features = ["r4-resources"] }
 # The vendored HL7 Europe package the priority category codes are held to.
 flate2.workspace = true
+# The schema of `map::Declared` (feature `schema`), validated against.
+jsonschema.workspace = true
 # The property that no access the map cannot classify exactly reads as of no
 # category.
 proptest.workspace = true

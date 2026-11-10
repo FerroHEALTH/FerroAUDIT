@@ -386,6 +386,10 @@ natural person, the categories of the data, when, and where it came from
   writes from, so a product that writes its own DICOM message names and
   formats the binding and relayed members without the `balp` feature (no
   specification governs where the names live: our own design).
+- `schema` (feature `schema`): `schemars::JsonSchema` on `map::Declared`, the
+  value a product's category map configuration holds, so the product can
+  generate its configuration reference from its types (no specification
+  governs a configuration value's schema: our own design).
 - `withheld`: the person's own access trail under a hold. Article 3(3) lets
   a Member State delay a person's access to their data until a health
   professional can explain it, and Article 9 gives the person the record of

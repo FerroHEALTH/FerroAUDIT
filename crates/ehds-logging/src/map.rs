@@ -45,6 +45,29 @@ pub enum Declared {
     Codes(Vec<String>),
 }
 
+// NOTE: JSON Schema 2020-12 Validation §6.1.3, §6.4.2; no specification governs
+// a configuration value's schema, so its shape is our own design.
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Declared {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Declared")
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("ehds_logging::map::Declared")
+    }
+
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "description": "One declaration as a configuration writes it: the word `none`, or a list of categories, at least one: a priority category by its bare code or as `<system>|<code>`, a national one as `<system>|<code>`.",
+            "anyOf": [
+                { "type": "string", "enum": [NONE] },
+                { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            ]
+        })
+    }
+}
+
 /// What a key maps to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mapping {

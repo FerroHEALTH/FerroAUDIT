@@ -33,6 +33,9 @@ mod relayed;
 #[cfg(test)]
 mod retention;
 #[cfg(test)]
+#[cfg(feature = "schema")]
+mod schema;
+#[cfg(test)]
 mod withheld;
 
 /// A record of a read by a local user, with no feature's types.
