@@ -11,6 +11,27 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-11
+
+`ihe-atna` follows `ferrohealth-smart` to the 0.19 line, which holds the
+issuer of four more configuration tables as `SecretUrl`, so no configured
+issuer's userinfo renders anywhere. Its FHIR Feed takes that line's
+`OutboundClient`, so the move breaks the public API even though no item of
+`ihe-atna` changes shape. Products pin `=0.13.0` and move their own
+`ferrohealth-smart` requirement to 0.19 in the same change, so they link one
+copy of it. `ehds-logging` requires `ihe-atna` `=0.13.0` and changes nothing
+else.
+
+### Changed
+
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.19 (caret `0.19.0`)
+  in place of 0.18. `FeedRepository::new` and `FeedRepository::cleartext`
+  take the 0.19 `OutboundClient`; the 0.19 line holds the issuer of
+  `[[auth.attributes]]`, `[[auth.federation]]`, `[[auth.party]]` and
+  `auth.scopeless_subjects` as `SecretUrl` (#221).
+- `ehds-logging` requires `ihe-atna` `=0.13.0`, the version it releases
+  with (#221).
+
 ## [0.12.0] - 2026-11-10
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.18 line, whose configured
