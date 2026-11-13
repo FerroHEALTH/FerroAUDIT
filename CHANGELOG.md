@@ -11,6 +11,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-13
+
+`ihe-atna` follows `ferrohealth-smart` to the 0.23 line, where
+`[[auth.basic.users]]` holds a Basic user's credential alone and a product
+grants that user's scopes and roles from its own configuration. Its FHIR
+Feed takes that line's `OutboundClient`, so the move breaks the public API
+even though no item of `ihe-atna` changes shape. Products pin `=0.17.0` and
+move their own `ferrohealth-smart` requirement to 0.23 in the same change,
+so they link one copy of it. `ehds-logging` requires `ihe-atna` `=0.17.0`
+and changes nothing else.
+
+### Changed
+
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.23 (caret `0.23.0`)
+  in place of 0.22. `FeedRepository::new` and `FeedRepository::cleartext`
+  take the 0.23 `OutboundClient` (#229).
+- `ehds-logging` requires `ihe-atna` `=0.17.0`, the version it releases
+  with (#229).
+
 ## [0.16.0] - 2026-11-12
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.22 line, where
