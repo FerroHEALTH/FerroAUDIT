@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-11-15
+
+`ihe-atna` hands a repository the typed `AuditEvent` it builds, so a
+repository that serves its records typed, as an ITI-81 searchset does, no
+longer parses each record back from its JSON value. The bytes and the JSON
+value are those 0.18.0 wrote. The release is compatible with 0.18.0:
+products move their pin to `=0.18.1`.
+
 ### Added
 
 - `Exchange::audit_event_resource` hands over the record as the typed FHIR
