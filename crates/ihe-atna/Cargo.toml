@@ -16,7 +16,7 @@ publish = true
 readme = "README.md"
 keywords = ["ihe", "atna", "audit", "fhir", "syslog"]
 categories = ["api-bindings", "science"]
-include = ["src/**", "tests/**", "README.md"]
+include = ["src/**", "tests/**", "benches/**", "README.md"]
 
 # One feature per layer (no specification governs this: our own design). The
 # crate depends on no product.
@@ -104,6 +104,7 @@ tracing = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 ferrohealth-config = { workspace = true }
 ferrohealth-smart = { workspace = true }
 async-trait = { workspace = true }
@@ -119,6 +120,12 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time
 tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
+
+# What a repository that serves the records typed pays per record (#233).
+[[bench]]
+name = "audit_event"
+harness = false
+required-features = ["balp"]
 
 [lints]
 workspace = true

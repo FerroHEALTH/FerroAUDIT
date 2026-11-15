@@ -226,8 +226,14 @@ the RESTful `agent:user` is not, so no record claims it. The recording
 system's own agent is addressed by URL, host or IP (`network-type` `5`,
 `1`, `2`). A patient identifier's namespace is `Identifier.system` only
 when it is a URI; any other namespace is a `namespace` detail of the
-patient entity. `Exchange::audit_event_value` gives the record as a JSON
-value behind a redacting type, for a store that keeps JSON.
+patient entity. `Exchange::audit_event_resource` gives the record as the
+typed FHIR R4 `AuditEvent`, every string already escaped, behind a
+redacting type; its bytes (`Exchange::audit_event`) and its JSON value
+(`Exchange::audit_event_value`, for a store that keeps JSON) are written
+from it, so a repository that serves the record typed, as an ITI-81
+searchset does, never reads the written record back. The escape is applied
+to each value as the resource is built (no specification governs where the
+escape runs: our own design).
 
 `balp::recording` bounds the record of an audited exchange by the
 exchange's own timeout: a record not accepted in time fails a successful

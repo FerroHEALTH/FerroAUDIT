@@ -17,6 +17,7 @@ mod hygiene;
 #[cfg(feature = "smart")]
 pub(crate) mod outbound;
 mod purposes;
+mod rendering;
 
 use ihe_atna::balp::{NetworkAddress, Observer};
 use ihe_atna::user::{OnBehalfOf, PurposeOfUse, User};

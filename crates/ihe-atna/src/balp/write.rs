@@ -20,9 +20,10 @@ use fhir_types::r4::reference::Reference;
 use secrecy::{ExposeSecret, SecretSlice};
 
 use super::{
-    APPLICATION, AuditEventValue, AuditRecord, Coded, Described, Direction, Entity, Exchange,
-    INFORMATION_RECIPIENT, NetworkAddress, OAUTH_COMPREHENSIVE, Observer, PATIENT_NAMESPACE,
-    PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT, SecurityLabel, What,
+    APPLICATION, AuditEventResource, AuditEventValue, AuditRecord, Coded, Described, Direction,
+    Entity, Exchange, INFORMATION_RECIPIENT, NetworkAddress, OAUTH_COMPREHENSIVE, Observer,
+    PATIENT_NAMESPACE, PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT,
+    SecurityLabel, What,
 };
 use crate::user::{Code, PurposeOfUse, User};
 
@@ -53,9 +54,7 @@ impl Exchange {
     /// A [`RecordError`] when the resource cannot be written as JSON, which
     /// writing to memory does not do.
     pub fn audit_event(&self, observer: &Observer) -> Result<AuditRecord, RecordError> {
-        serde_json::to_vec(&self.escaped(observer)?)
-            .map(|json| AuditRecord(SecretSlice::from(json)))
-            .map_err(RecordError)
+        self.audit_event_resource(observer).to_record()
     }
 
     /// The `AuditEvent` of this exchange as `observer` records it, as the
@@ -66,19 +65,19 @@ impl Exchange {
     /// A [`RecordError`] when the resource cannot be written as JSON, which
     /// writing to memory does not do.
     pub fn audit_event_value(&self, observer: &Observer) -> Result<AuditEventValue, RecordError> {
-        self.escaped(observer).map(AuditEventValue)
+        self.audit_event_resource(observer).to_value()
     }
 
-    /// The resource as a JSON value whose every string went through
-    /// [`escape::untrusted`](crate::escape::untrusted).
-    #[expect(
-        clippy::disallowed_types,
-        reason = "the escape walks the written resource as a JSON value"
-    )]
-    fn escaped(&self, observer: &Observer) -> Result<serde_json::Value, RecordError> {
-        let mut value = serde_json::to_value(self.resource(observer)).map_err(RecordError)?;
-        escape_strings(&mut value);
-        Ok(value)
+    /// The `AuditEvent` of this exchange as `observer` records it, as the
+    /// typed FHIR R4 resource [`Exchange::audit_event`] writes as bytes.
+    ///
+    /// Every string it carries has gone through
+    /// [`escape::untrusted`](crate::escape::untrusted) already, so a caller
+    /// that needs the resource typed, such as an ITI-81 searchset Bundle,
+    /// takes it from here and never reads the written record back.
+    #[must_use]
+    pub fn audit_event_resource(&self, observer: &Observer) -> AuditEventResource {
+        AuditEventResource(self.resource(observer))
     }
 
     fn resource(&self, observer: &Observer) -> AuditEvent {
@@ -132,39 +131,34 @@ impl Exchange {
             }
             agent.extend(organisation_agent(user));
         }
-        let purpose_of_event = purposes_of_event(&agent);
+        let purpose_of_event =
+            purposes_of_event(self.on_behalf.user().into_iter().flat_map(User::purposes));
         AuditEvent {
             meta: (!profiles.is_empty() || !self.security.is_empty()).then(|| Meta {
-                profile: profiles
-                    .into_iter()
-                    .map(primitives::Canonical::from)
-                    .collect(),
+                profile: profiles.into_iter().map(escaped).collect(),
                 security: self.security.iter().map(label).collect(),
                 ..Meta::default()
             }),
-            r#type: self.kind.event_type.coding(),
-            subtype: self.kind.subtypes.iter().map(Coded::coding).collect(),
-            action: Some(primitives::Code::from(self.kind.action)),
-            recorded: primitives::Instant::from(self.recorded.to_string()),
-            outcome: Some(primitives::Code::from(self.outcome.code())),
-            outcome_desc: self
-                .outcome_description
-                .as_deref()
-                .map(primitives::String::from),
+            r#type: coding(&self.kind.event_type),
+            subtype: self.kind.subtypes.iter().map(coding).collect(),
+            action: Some(escaped(self.kind.action)),
+            recorded: escaped(self.recorded.to_string()),
+            outcome: Some(escaped(self.outcome.code())),
+            outcome_desc: self.outcome_description.as_deref().map(escaped),
             purpose_of_event,
             agent,
             source: AuditEventSource {
-                site: observer.site.as_deref().map(primitives::String::from),
+                site: observer.site.as_deref().map(escaped),
                 // NOTE: RESTful ATNA Table 3.81.4.2.2.1-1 maps AuditSourceId to source.observer, and
                 // §3.81.4.1.2.2 matches source.identifier against source.observer.identifier.
                 observer: Reference {
                     identifier: Some(Box::new(Identifier {
-                        value: Some(primitives::String::from(observer.source_id.as_str())),
+                        value: Some(escaped(observer.source_id.as_str())),
                         ..Identifier::default()
                     })),
                     ..display(&observer.source_id)
                 },
-                r#type: observer.source_types.iter().map(Coded::coding).collect(),
+                r#type: observer.source_types.iter().map(coding).collect(),
                 ..AuditEventSource::default()
             },
             entity: self.entities.iter().map(entity).collect(),
@@ -173,39 +167,66 @@ impl Exchange {
     }
 }
 
-/// Every string of `value`, member names left as they are, written through
-/// [`escape::untrusted`](crate::escape::untrusted).
-#[expect(
-    clippy::disallowed_types,
-    reason = "the escape walks the written resource as a JSON value"
-)]
-fn escape_strings(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::String(text) => {
-            if let std::borrow::Cow::Owned(escaped) = crate::escape::untrusted(text) {
-                *text = escaped;
-            }
-        }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(escape_strings),
-        serde_json::Value::Object(members) => members.values_mut().for_each(escape_strings),
-        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
+/// `value` as a record writes it: through
+/// [`escape::untrusted`](crate::escape::untrusted), as every string of a
+/// written `AuditEvent` is.
+fn escaped<P: From<String>>(value: impl AsRef<str>) -> P {
+    P::from(crate::escape::untrusted(value.as_ref()).into_owned())
+}
+
+impl AuditEventResource {
+    /// The resource as the FHIR JSON bytes of an [`AuditRecord`].
+    ///
+    /// # Errors
+    ///
+    /// A [`RecordError`] when the resource cannot be written as JSON, which
+    /// writing to memory does not do.
+    pub fn to_record(&self) -> Result<AuditRecord, RecordError> {
+        serde_json::to_vec(&self.json()?)
+            .map(|json| AuditRecord(SecretSlice::from(json)))
+            .map_err(RecordError)
+    }
+
+    /// The resource as the JSON value of an [`AuditEventValue`], the value
+    /// [`AuditEventResource::to_record`] writes as bytes.
+    ///
+    /// # Errors
+    ///
+    /// A [`RecordError`] when the resource cannot be written as JSON, which
+    /// writing to memory does not do.
+    pub fn to_value(&self) -> Result<AuditEventValue, RecordError> {
+        self.json().map(AuditEventValue)
+    }
+
+    // NOTE: no specification governs the member order: our own design. The bytes pass
+    // through a serde_json::Value, as 0.18.0 wrote them, so a stored record keeps its order.
+    #[expect(
+        clippy::disallowed_types,
+        reason = "the record leaves as a JSON value, and its bytes keep that value's member order"
+    )]
+    fn json(&self) -> Result<serde_json::Value, RecordError> {
+        serde_json::to_value(&self.0).map_err(RecordError)
     }
 }
 
-/// The purposes of use of every agent in `agents`, each once, in the order
-/// the agents and their purposes first name it, for `AuditEvent.purposeOfEvent`.
+/// The purposes of use the user an exchange was made for names, each once,
+/// in the order they are first named, for `AuditEvent.purposeOfEvent`.
 ///
-/// The agents keep their own `purposeOfUse` (BALP 1.1.4 `agent:user`).
+/// They are compared as stated, before the escape writes them, so two the
+/// escape writes alike are both kept. The user's agent keeps its own
+/// `purposeOfUse` (BALP 1.1.4 `agent:user`).
 // NOTE: RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps agent.purposeOfUse to "NOT PRESENT" and
 // purposeOfEvent to EventIdentification.purposeOfUse, so a DICOM-form repository keeps only these.
-fn purposes_of_event(agents: &[AuditEventAgent]) -> Vec<CodeableConcept> {
-    let mut purposes: Vec<CodeableConcept> = Vec::new();
-    for purpose in agents.iter().flat_map(|agent| &agent.purpose_of_use) {
-        if !purposes.contains(purpose) {
-            purposes.push(purpose.clone());
+fn purposes_of_event<'a>(
+    stated: impl IntoIterator<Item = &'a PurposeOfUse>,
+) -> Vec<CodeableConcept> {
+    let mut seen: Vec<&PurposeOfUse> = Vec::new();
+    for stated in stated {
+        if !seen.contains(&stated) {
+            seen.push(stated);
         }
     }
-    purposes
+    seen.into_iter().map(purpose).collect()
 }
 
 /// The agents that name `user` (BALP 1.1.4 §3:5.7.5.4): the `agent:user`
@@ -217,8 +238,8 @@ fn purposes_of_event(agents: &[AuditEventAgent]) -> Vec<CodeableConcept> {
 fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
     let identified = |system: Option<&str>, value: &str| Reference {
         identifier: Some(Box::new(Identifier {
-            system: system.map(primitives::Uri::from),
-            value: Some(primitives::String::from(value)),
+            system: system.map(escaped),
+            value: Some(escaped(value)),
             ..Identifier::default()
         })),
         ..Reference::default()
@@ -230,16 +251,16 @@ fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
         r#type: Some(concept(&INFORMATION_RECIPIENT)),
         role: user.roles().iter().map(coded).collect(),
         who: Some(Reference {
-            display: user.name().map(primitives::String::from),
+            display: user.name().map(escaped),
             ..identified(user.issuer(), user.subject())
         }),
-        alt_id: user.alt_id().map(primitives::String::from),
+        alt_id: user.alt_id().map(escaped),
         requestor: primitives::Boolean::from(true),
         policy: user
             .token_id()
             .into_iter()
             .chain(user.policies().iter().map(String::as_str))
-            .map(primitives::Uri::from)
+            .map(escaped)
             .collect(),
         purpose_of_use: user.purposes().iter().map(purpose).collect(),
         ..AuditEventAgent::default()
@@ -260,9 +281,9 @@ fn organisation_agent(user: &User) -> Option<AuditEventAgent> {
     let organisation = user.organisation()?;
     Some(AuditEventAgent {
         who: Some(Reference {
-            r#type: Some(primitives::Uri::from("Organization")),
+            r#type: Some(escaped("Organization")),
             identifier: Some(Box::new(Identifier {
-                value: Some(primitives::String::from(organisation)),
+                value: Some(escaped(organisation)),
                 ..Identifier::default()
             })),
             ..Reference::default()
@@ -288,7 +309,7 @@ fn user_extensions(user: &User) -> Vec<Extension> {
         url: OTHER_ID_EXTENSION.to_owned(),
         value: Some(ExtensionValue::Identifier(Box::new(Identifier {
             r#type: Some(identifier_type(NATIONAL_PROVIDER_IDENTIFIER)),
-            value: Some(primitives::String::from(identifier)),
+            value: Some(escaped(identifier)),
             ..Identifier::default()
         }))),
         ..Extension::default()
@@ -297,8 +318,8 @@ fn user_extensions(user: &User) -> Vec<Extension> {
         url: OTHER_ID_EXTENSION.to_owned(),
         value: Some(ExtensionValue::Identifier(Box::new(Identifier {
             r#type: Some(identifier_type(PERSON_IDENTIFIER)),
-            system: person.system.as_deref().map(primitives::Uri::from),
-            value: Some(primitives::String::from(person.value.as_str())),
+            system: person.system.as_deref().map(escaped),
+            value: Some(escaped(person.value.as_str())),
             ..Identifier::default()
         }))),
         ..Extension::default()
@@ -314,8 +335,8 @@ fn user_extensions(user: &User) -> Vec<Extension> {
 fn identifier_type(code: &str) -> CodeableConcept {
     CodeableConcept {
         coding: vec![Coding {
-            system: Some(primitives::Uri::from(IDENTIFIER_TYPES)),
-            code: Some(primitives::Code::from(code)),
+            system: Some(escaped(IDENTIFIER_TYPES)),
+            code: Some(escaped(code)),
             ..Coding::default()
         }],
         ..CodeableConcept::default()
@@ -326,8 +347,8 @@ fn identifier_type(code: &str) -> CodeableConcept {
 fn coded(code: &Code) -> CodeableConcept {
     CodeableConcept {
         coding: vec![Coding {
-            system: code.system.as_deref().map(primitives::Uri::from),
-            code: Some(primitives::Code::from(code.code.as_str())),
+            system: code.system.as_deref().map(escaped),
+            code: Some(escaped(code.code.as_str())),
             ..Coding::default()
         }],
         ..CodeableConcept::default()
@@ -338,32 +359,42 @@ fn coded(code: &Code) -> CodeableConcept {
 fn purpose(purpose: &PurposeOfUse) -> CodeableConcept {
     CodeableConcept {
         coding: vec![Coding {
-            system: purpose.system.as_deref().map(primitives::Uri::from),
-            code: Some(primitives::Code::from(purpose.code.as_str())),
+            system: purpose.system.as_deref().map(escaped),
+            code: Some(escaped(purpose.code.as_str())),
             ..Coding::default()
         }],
         ..CodeableConcept::default()
     }
 }
 
+/// A [`Coded`] as a `Coding`.
+fn coding(code: &Coded) -> Coding {
+    Coding {
+        system: Some(escaped(&code.system)),
+        code: Some(escaped(&code.code)),
+        display: Some(escaped(&code.display)),
+        ..Coding::default()
+    }
+}
+
 fn concept(code: &Coded) -> CodeableConcept {
     CodeableConcept {
-        coding: vec![code.coding()],
+        coding: vec![coding(code)],
         ..CodeableConcept::default()
     }
 }
 
 fn display(text: &str) -> Reference {
     Reference {
-        display: Some(primitives::String::from(text)),
+        display: Some(escaped(text)),
         ..Reference::default()
     }
 }
 
 fn network_of(address: &NetworkAddress) -> AuditEventAgentNetwork {
     AuditEventAgentNetwork {
-        address: Some(primitives::String::from(address.address())),
-        r#type: Some(primitives::Code::from(address.type_code())),
+        address: Some(escaped(address.address())),
+        r#type: Some(escaped(address.type_code())),
         ..AuditEventAgentNetwork::default()
     }
 }
@@ -371,11 +402,9 @@ fn network_of(address: &NetworkAddress) -> AuditEventAgentNetwork {
 fn entity(entity: &Entity) -> AuditEventEntity {
     match entity {
         Entity::Query(request) => AuditEventEntity {
-            r#type: Some(SYSTEM_OBJECT.coding()),
-            role: Some(QUERY_ROLE.coding()),
-            query: Some(primitives::Base64Binary::from(
-                STANDARD.encode(request.expose_secret()),
-            )),
+            r#type: Some(coding(&SYSTEM_OBJECT)),
+            role: Some(coding(&QUERY_ROLE)),
+            query: Some(escaped(STANDARD.encode(request.expose_secret()))),
             ..AuditEventEntity::default()
         },
         Entity::Patient {
@@ -385,14 +414,14 @@ fn entity(entity: &Entity) -> AuditEventEntity {
         } => AuditEventEntity {
             what: Some(Reference {
                 identifier: Some(Box::new(Identifier {
-                    system: system.as_deref().map(primitives::Uri::from),
-                    value: Some(primitives::String::from(value.expose_secret())),
+                    system: system.as_deref().map(escaped),
+                    value: Some(escaped(value.expose_secret())),
                     ..Identifier::default()
                 })),
                 ..Reference::default()
             }),
-            r#type: Some(PERSON.coding()),
-            role: Some(PATIENT_ROLE.coding()),
+            r#type: Some(coding(&PERSON)),
+            role: Some(coding(&PATIENT_ROLE)),
             detail: namespace
                 .iter()
                 .map(|namespace| string_detail(PATIENT_NAMESPACE, namespace))
@@ -401,11 +430,11 @@ fn entity(entity: &Entity) -> AuditEventEntity {
         },
         Entity::PatientReference(reference) => AuditEventEntity {
             what: Some(Reference {
-                reference: Some(primitives::String::from(reference.expose_secret())),
+                reference: Some(escaped(reference.expose_secret())),
                 ..Reference::default()
             }),
-            r#type: Some(PERSON.coding()),
-            role: Some(PATIENT_ROLE.coding()),
+            r#type: Some(coding(&PERSON)),
+            role: Some(coding(&PATIENT_ROLE)),
             ..AuditEventEntity::default()
         },
         Entity::Resource {
@@ -417,16 +446,14 @@ fn entity(entity: &Entity) -> AuditEventEntity {
             query,
         } => AuditEventEntity {
             what: Some(Reference {
-                reference: reference.as_deref().map(primitives::String::from),
-                r#type: Some(primitives::Uri::from(*resource_type)),
+                reference: reference.as_deref().map(escaped),
+                r#type: Some(escaped(*resource_type)),
                 ..Reference::default()
             }),
-            r#type: Some(kind.coding()),
-            role: role.as_ref().map(Coded::coding),
-            name: name.map(primitives::String::from),
-            query: query
-                .as_deref()
-                .map(|text| primitives::Base64Binary::from(STANDARD.encode(text))),
+            r#type: Some(coding(kind)),
+            role: role.as_ref().map(coding),
+            name: name.map(escaped),
+            query: query.as_deref().map(|text| escaped(STANDARD.encode(text))),
             ..AuditEventEntity::default()
         },
         Entity::Described(described) => described_entity(described),
@@ -440,14 +467,14 @@ fn described_entity(described: &Described) -> AuditEventEntity {
             reference,
             resource_type,
         } => Reference {
-            reference: Some(primitives::String::from(reference.as_str())),
-            r#type: resource_type.as_deref().map(primitives::Uri::from),
+            reference: Some(escaped(reference.as_str())),
+            r#type: resource_type.as_deref().map(escaped),
             ..Reference::default()
         },
         What::Identifier { system, value } => Reference {
             identifier: Some(Box::new(Identifier {
-                system: system.as_deref().map(primitives::Uri::from),
-                value: Some(primitives::String::from(value.as_str())),
+                system: system.as_deref().map(escaped),
+                value: Some(escaped(value.as_str())),
                 ..Identifier::default()
             })),
             ..Reference::default()
@@ -455,13 +482,10 @@ fn described_entity(described: &Described) -> AuditEventEntity {
     });
     AuditEventEntity {
         what,
-        r#type: Some(described.kind.coding()),
-        role: described.role.as_ref().map(Coded::coding),
-        name: described.name.as_deref().map(primitives::String::from),
-        description: described
-            .description
-            .as_deref()
-            .map(primitives::String::from),
+        r#type: Some(coding(&described.kind)),
+        role: described.role.as_ref().map(coding),
+        name: described.name.as_deref().map(escaped),
+        description: described.description.as_deref().map(escaped),
         detail: described
             .details
             .iter()
@@ -478,25 +502,23 @@ fn string_detail(kind: &str, value: &str) -> AuditEventEntityDetail {
         id: None,
         extension: Vec::new(),
         modifier_extension: Vec::new(),
-        r#type: primitives::String::from(kind),
-        value: AuditEventEntityDetailValue::String(primitives::String::from(value)),
+        r#type: escaped(kind),
+        value: AuditEventEntityDetailValue::String(escaped(value)),
     }
 }
 
 /// The `Coding` a security label is written as.
 fn label(label: &SecurityLabel) -> Coding {
     Coding {
-        system: Some(primitives::Uri::from(label.system.as_str())),
-        version: label.version.as_deref().map(primitives::String::from),
-        code: Some(primitives::Code::from(label.code.as_str())),
+        system: Some(escaped(label.system.as_str())),
+        version: label.version.as_deref().map(escaped),
+        code: Some(escaped(label.code.as_str())),
         ..Coding::default()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use fhir_types::r4::audit_event::AuditEventAgent;
-
     use super::{purpose, purposes_of_event};
     use crate::user::PurposeOfUse;
 
@@ -507,16 +529,13 @@ mod tests {
         }
     }
 
-    fn carrying(codes: &[&str]) -> AuditEventAgent {
-        AuditEventAgent {
-            purpose_of_use: codes.iter().map(|code| purpose(&coded(code))).collect(),
-            ..AuditEventAgent::default()
-        }
+    fn carrying(codes: &[&str]) -> Vec<PurposeOfUse> {
+        codes.iter().map(|code| coded(code)).collect()
     }
 
     #[test]
-    fn a_purpose_two_agents_carry_appears_once_in_first_seen_order() {
-        let agents = [
+    fn a_purpose_named_twice_appears_once_in_first_seen_order() {
+        let stated = [
             carrying(&["BTG", "TREAT"]),
             carrying(&[]),
             carrying(&["TREAT", "ETREAT"]),
@@ -525,6 +544,14 @@ mod tests {
             .iter()
             .map(|code| purpose(&coded(code)))
             .collect();
-        assert_eq!(purposes_of_event(&agents), expected);
+        assert_eq!(purposes_of_event(stated.iter().flatten()), expected);
+    }
+
+    #[test]
+    fn two_purposes_the_escape_writes_alike_are_both_kept() {
+        let stated = [coded("TREAT\u{7}"), coded(r"TREAT\u{7}")];
+        let written = purposes_of_event(&stated);
+        assert_eq!(written.len(), 2);
+        assert_eq!(written[0], written[1]);
     }
 }
