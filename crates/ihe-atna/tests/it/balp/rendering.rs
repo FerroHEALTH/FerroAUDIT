@@ -1,0 +1,344 @@
+// SPDX-FileCopyrightText: Cadasto B.V.
+// SPDX-License-Identifier: BUSL-1.1
+
+//! The bytes an exchange is written as, held to the bytes `ihe-atna` 0.18.0
+//! wrote for the same exchange, under `rendering/`: each exchange fills
+//! every element a caller can, with text the escape rewrites in every value
+//! a caller supplies, so a value written around the escape changes the bytes.
+//! The written forms agree: the bytes, the JSON value, and the typed resource.
+
+use std::path::PathBuf;
+
+use ihe_atna::balp::{
+    APPLICATION, AuditEventResource, CUSTODIAN, Coded, DELETE, DESTINATION_ROLE, DOMAIN_RESOURCE,
+    Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress, OTHER, Observer,
+    Outcome, Peer, READ, REST, SEARCH, SOURCE_ROLE, SecurityLabel, What,
+};
+use ihe_atna::user::{Code, OnBehalfOf, PersonId, PurposeOfUse, User};
+use secrecy::{ExposeSecret as _, SecretString};
+use url::Url;
+
+/// Text with a C0 control, an escape sequence, a bidirectional control and a
+/// line separator, which the escape rewrites wherever it is written.
+fn hostile(name: &str) -> String {
+    format!("Qz7-{name}\u{0}\u{1b}[31m\u{202e}\u{2028}")
+}
+
+fn hostile_coded(name: &str) -> Coded {
+    Coded::new(
+        hostile(&format!("{name}-system")),
+        hostile(&format!("{name}-code")),
+        hostile(&format!("{name}-display")),
+    )
+}
+
+fn hostile_code(name: &str) -> Code {
+    Code {
+        system: Some(hostile(&format!("{name}-system"))),
+        code: hostile(&format!("{name}-code")),
+    }
+}
+
+fn hostile_label(name: &str) -> SecurityLabel {
+    SecurityLabel {
+        system: hostile(&format!("{name}-system")),
+        version: Some(hostile(&format!("{name}-version"))),
+        code: hostile(&format!("{name}-code")),
+    }
+}
+
+fn hostile_observer() -> Observer {
+    Observer {
+        source_id: hostile("source"),
+        site: Some(hostile("site")),
+        host: NetworkAddress::host(&hostile("host")),
+        source_types: vec![hostile_coded("source-type")],
+    }
+}
+
+/// A user whose every value is hostile, with every element a token can
+/// name, and two purposes the escape writes alike: the raw control
+/// character and the text the escape writes it as.
+fn hostile_user() -> User {
+    User::new(hostile("issuer"), hostile("subject"), hostile("client"))
+        .with_name(Some(hostile("name")))
+        .with_alt_id(Some(hostile("alt-id")))
+        .with_audience(Some(hostile("audience")))
+        .with_organisation(Some(hostile("organisation")))
+        .with_provider_identifier(Some(hostile("provider")))
+        .with_person_id(Some(PersonId {
+            system: Some(hostile("person-system")),
+            value: hostile("person"),
+        }))
+        .with_assurance(Some(hostile_code("assurance")))
+        .with_roles(vec![hostile_code("role-a"), hostile_code("role-b")])
+        .with_purposes(vec![
+            PurposeOfUse {
+                system: Some(hostile("purpose-system")),
+                code: "Qz7-purpose\u{7}".to_owned(),
+            },
+            PurposeOfUse {
+                system: Some(hostile("purpose-system")),
+                code: r"Qz7-purpose\u{7}".to_owned(),
+            },
+            PurposeOfUse {
+                system: Some(hostile("purpose-system")),
+                code: "Qz7-purpose\u{7}".to_owned(),
+            },
+            PurposeOfUse {
+                system: None,
+                code: hostile("purpose-bare"),
+            },
+        ])
+}
+
+/// Every entity form, each with hostile values.
+fn hostile_entities() -> Vec<Entity> {
+    vec![
+        Entity::Query(SecretString::from(hostile("query"))),
+        Entity::Patient {
+            system: Some(hostile("patient-system")),
+            value: SecretString::from(hostile("patient")),
+            namespace: Some(hostile("patient-namespace")),
+        },
+        Entity::PatientReference(SecretString::from(hostile("patient-reference"))),
+        Entity::Resource {
+            reference: Some(hostile("resource")),
+            resource_type: "Observation",
+            kind: hostile_coded("resource-kind"),
+            role: Some(hostile_coded("resource-role")),
+            name: Some("Qz7-resource-name"),
+            query: Some(hostile("resource-query")),
+        },
+        Entity::Described(Described {
+            what: Some(What::Reference {
+                reference: hostile("described-reference"),
+                resource_type: Some(hostile("described-type")),
+            }),
+            kind: hostile_coded("described-kind"),
+            role: Some(hostile_coded("described-role")),
+            name: Some(hostile("described-name")),
+            description: Some(hostile("described-description")),
+            details: vec![
+                Detail::new(hostile("detail-a"), hostile("detail-a-value")),
+                Detail::new(hostile("detail-b"), hostile("detail-b-value")),
+            ],
+            security_labels: vec![hostile_label("entity-label")],
+        }),
+        Entity::Described(Described {
+            what: Some(What::Identifier {
+                system: Some(hostile("identifier-system")),
+                value: hostile("identifier"),
+            }),
+            kind: OTHER,
+            role: None,
+            name: None,
+            description: None,
+            details: Vec::new(),
+            security_labels: Vec::new(),
+        }),
+    ]
+}
+
+/// A search the recording system sent for a user, under the BALP Query
+/// pattern, with an operation id among its subtypes.
+fn sent_search() -> Exchange {
+    Exchange {
+        kind: EventKind {
+            profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Query",
+            event_type: REST,
+            subtypes: vec![SEARCH, hostile_coded("operation")],
+            action: "E",
+            client: SOURCE_ROLE,
+            server: DESTINATION_ROLE,
+        },
+        recorded: jiff::Timestamp::from_second(1_767_225_600).expect("a timestamp"),
+        outcome: Outcome::Success,
+        outcome_description: Some(hostile("outcome")),
+        direction: Direction::Sent {
+            server: Peer {
+                who: hostile("server"),
+                network: NetworkAddress::host(&hostile("server-host")),
+            },
+        },
+        on_behalf: OnBehalfOf::User(
+            hostile_user()
+                .with_token_id(Some(hostile("token")))
+                .with_policies(vec![hostile("policy-a"), hostile("policy-b")]),
+        ),
+        entities: hostile_entities(),
+        security: vec![hostile_label("label-a"), hostile_label("label-b")],
+    }
+}
+
+/// A read the recording system served for a user whose token names its
+/// `jti` and no other policy, which claims the OAuth Comprehensive pattern.
+fn received_read() -> Exchange {
+    Exchange {
+        kind: EventKind {
+            profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Read",
+            event_type: REST,
+            subtypes: vec![READ],
+            action: "R",
+            client: DESTINATION_ROLE,
+            server: SOURCE_ROLE,
+        },
+        recorded: jiff::Timestamp::from_second(1_767_225_601).expect("a timestamp"),
+        outcome: Outcome::MinorFailure,
+        outcome_description: Some(hostile("outcome")),
+        direction: Direction::Received {
+            client: Peer {
+                who: hostile("client-peer"),
+                network: NetworkAddress::host("192.0.2.9"),
+            },
+            endpoint: NetworkAddress::uri(
+                &Url::parse("https://gateway.example.org/fhir").expect("a URL"),
+            ),
+        },
+        on_behalf: OnBehalfOf::User(hostile_user().with_token_id(Some(hostile("token")))),
+        entities: hostile_entities(),
+        security: Vec::new(),
+    }
+}
+
+/// A failed delete under no profile, whose client is the Application agent,
+/// so the user's application is named there alone.
+fn failed_delete() -> Exchange {
+    Exchange {
+        kind: EventKind {
+            profile: "",
+            event_type: REST,
+            subtypes: vec![DELETE],
+            action: "D",
+            client: APPLICATION,
+            server: CUSTODIAN,
+        },
+        recorded: jiff::Timestamp::from_second(1_767_225_602).expect("a timestamp"),
+        outcome: Outcome::SeriousFailure,
+        outcome_description: None,
+        direction: Direction::Sent {
+            server: Peer::server(
+                &Url::parse("https://u:p@fhir.example.org/r4?q#f").expect("a URL"),
+            ),
+        },
+        on_behalf: OnBehalfOf::User(
+            User::local(hostile("local-subject"))
+                .with_client_id(Some(hostile("client")))
+                .with_token_id(Some(hostile("token"))),
+        ),
+        entities: vec![Entity::Resource {
+            reference: None,
+            resource_type: "Patient",
+            kind: DOMAIN_RESOURCE,
+            role: None,
+            name: None,
+            query: None,
+        }],
+        security: vec![hostile_label("label")],
+    }
+}
+
+/// An exchange the system made on its own behalf, with nothing optional.
+fn system_minimal() -> Exchange {
+    Exchange {
+        kind: EventKind {
+            profile: "",
+            event_type: REST,
+            subtypes: Vec::new(),
+            action: "R",
+            client: SOURCE_ROLE,
+            server: DESTINATION_ROLE,
+        },
+        recorded: jiff::Timestamp::UNIX_EPOCH,
+        outcome: Outcome::MajorFailure,
+        outcome_description: None,
+        direction: Direction::Sent {
+            server: Peer {
+                who: "Qz7-server".to_owned(),
+                network: NetworkAddress::host("2001:db8::1"),
+            },
+        },
+        on_behalf: OnBehalfOf::System,
+        entities: Vec::new(),
+        security: Vec::new(),
+    }
+}
+
+fn plain_observer() -> Observer {
+    Observer {
+        source_id: "gateway.example.org".to_owned(),
+        site: None,
+        host: NetworkAddress::host("198.51.100.4"),
+        source_types: Vec::new(),
+    }
+}
+
+fn cases() -> [(&'static str, Exchange, Observer); 4] {
+    [
+        ("sent-search", sent_search(), hostile_observer()),
+        ("received-read", received_read(), hostile_observer()),
+        ("failed-delete", failed_delete(), hostile_observer()),
+        ("system-minimal", system_minimal(), plain_observer()),
+    ]
+}
+
+fn expected(name: &str) -> Vec<u8> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/it/balp/rendering")
+        .join(format!("{name}.json"));
+    std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+#[test]
+fn the_bytes_are_those_0_18_0_wrote() {
+    for (name, exchange, observer) in cases() {
+        let record = exchange.audit_event(&observer).expect("the record");
+        assert!(
+            record.into_bytes().expose_secret() == expected(name).as_slice(),
+            "{name}: the bytes differ from those 0.18.0 wrote"
+        );
+    }
+}
+
+#[test]
+#[expect(
+    clippy::disallowed_types,
+    reason = "the test seam: the record as a JSON value is written as bytes"
+)]
+fn the_value_writes_the_bytes_0_18_0_wrote() {
+    for (name, exchange, observer) in cases() {
+        let value: serde_json::Value = exchange
+            .audit_event_value(&observer)
+            .expect("the record")
+            .into_value();
+        assert!(
+            serde_json::to_vec(&value).expect("JSON") == expected(name),
+            "{name}: the value differs from the bytes 0.18.0 wrote"
+        );
+    }
+}
+
+#[test]
+fn the_typed_resource_writes_the_bytes_0_18_0_wrote() {
+    for (name, exchange, observer) in cases() {
+        let resource: AuditEventResource = exchange.audit_event_resource(&observer);
+        let record = resource.to_record().expect("the record");
+        assert!(
+            record.into_bytes().expose_secret() == expected(name).as_slice(),
+            "{name}: the typed resource differs from the bytes 0.18.0 wrote"
+        );
+    }
+}
+
+#[test]
+fn the_typed_resource_reads_back_as_itself() {
+    for (name, exchange, observer) in cases() {
+        let resource = exchange.audit_event_resource(&observer).into_resource();
+        let read: fhir_types::r4::audit_event::AuditEvent =
+            serde_json::from_slice(&expected(name)).expect("an AuditEvent");
+        assert!(
+            read == resource,
+            "{name}: the typed resource is not the one the bytes read as"
+        );
+    }
+}

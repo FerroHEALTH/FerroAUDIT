@@ -95,6 +95,10 @@ ihe-atna = { path = "crates/ihe-atna", version = "=0.18.0" }
 tempfile = "3.27.0"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt"] }
 wiremock = "0.6.5"
+# Bench-only: the statistics of the record benchmarks, the line FerroEHR and
+# FerroTERM bench with, without its plots. Verified on crates.io 2026-11-15
+# (0.8.2).
+criterion = { version = "0.8.2", default-features = false }
 
 # The reliability bar (no specification governs it: our own design), the
 # FerroHEALTH family's lint set as FerroBRIDGE, FerroFED and FerroUI carry it.

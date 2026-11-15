@@ -113,6 +113,9 @@ fn repository(tls: ClientConfig) -> Result<Repository, Box<dyn std::error::Error
   `within`.
 - `Exchange::audit_event_value`: the record as a JSON value, for a store
   that keeps JSON.
+- `Exchange::audit_event_resource`: the record as the typed FHIR R4
+  `AuditEvent`, already escaped, for a repository that serves it typed,
+  such as in an ITI-81 searchset, without reading the written record back.
 
 ## Retrieve (`retrieve`)
 

@@ -11,6 +11,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `Exchange::audit_event_resource` hands over the record as the typed FHIR
+  R4 `AuditEvent`, every string already escaped, behind the redacting
+  `AuditEventResource`. A repository that serves its records typed, as an
+  ITI-81 searchset Bundle does, takes it from there and no longer reads
+  the JSON value back: the bench `audit_event` measures 43.6 µs per record
+  for the value read back on 0.18.0 against 3.2 µs for the typed resource
+  (#233).
+
+### Changed
+
+- `ihe-atna` escapes each value as it builds the `AuditEvent`, in place of
+  walking the written JSON value, and writes the bytes and the JSON value
+  from the typed resource. The bytes and the value are those 0.18.0 wrote,
+  held by fixtures captured from 0.18.0 (#233).
+
 ## [0.18.0] - 2026-11-13
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.24 line, where the caller

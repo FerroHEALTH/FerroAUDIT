@@ -14,7 +14,8 @@
 //! ([`OnBehalfOf`]), and the entities the event concerned.
 //! [`Exchange::audit_event`] writes the `AuditEvent` with the
 //! [`Observer`] that records it, the system the client runs on, which the
-//! client does not know.
+//! client does not know; [`Exchange::audit_event_resource`] hands the same
+//! record over as the typed resource.
 //!
 //! BALP has its Audit Creator send the record over the ATNA ATX: FHIR Feed
 //! Option (BALP §1:52.1.1.1; ITI TF-1 §9.2.7.1 as the `RESTful` ATNA supplement
@@ -37,8 +38,7 @@ use std::net::IpAddr;
 pub mod recording;
 mod write;
 
-use fhir_types::r4::coding::Coding;
-use fhir_types::r4::primitives;
+use fhir_types::r4::audit_event::AuditEvent;
 use fhir_types::r4::schema::SCHEMAS;
 use jiff::Timestamp;
 use secrecy::{SecretSlice, SecretString};
@@ -82,15 +82,6 @@ impl Coded {
             system: Cow::Owned(system.into()),
             code: Cow::Owned(code.into()),
             display: Cow::Owned(display.into()),
-        }
-    }
-
-    fn coding(&self) -> Coding {
-        Coding {
-            system: Some(primitives::Uri::from(self.system.as_ref())),
-            code: Some(primitives::Code::from(self.code.as_ref())),
-            display: Some(primitives::String::from(self.display.as_ref())),
-            ..Coding::default()
         }
     }
 }
@@ -838,6 +829,36 @@ impl AuditRecord {
 impl fmt::Debug for AuditRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("AuditRecord").field(&REDACTED).finish()
+    }
+}
+
+/// One written `AuditEvent` as the typed FHIR R4 resource.
+///
+/// Every string of it is escaped as the written record's are: it is the
+/// resource [`AuditEventResource::to_record`] writes as bytes and
+/// [`AuditEventResource::to_value`] as a JSON value. It may name a patient,
+/// so `Debug` shows none of it.
+pub struct AuditEventResource(AuditEvent);
+
+impl AuditEventResource {
+    /// The resource.
+    #[must_use]
+    pub fn as_resource(&self) -> &AuditEvent {
+        &self.0
+    }
+
+    /// The resource, owned.
+    #[must_use]
+    pub fn into_resource(self) -> AuditEvent {
+        self.0
+    }
+}
+
+impl fmt::Debug for AuditEventResource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("AuditEventResource")
+            .field(&REDACTED)
+            .finish()
     }
 }
 
