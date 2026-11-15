@@ -11,6 +11,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-15
+
+`ehds-logging` drops the two Binding outcomes named after a Dutch act, so
+the access record's binding vocabulary names no country. A national rule is
+content a deployment supplies, and FerroEHR records the Wabvpz Art. 15f
+refusal its controller policy makes as a policy refusal. Removing the
+variants breaks the public API. Products pin `=0.19.0` and stop matching or
+constructing the two variants. `ihe-atna` changes nothing and moves with
+the workspace version.
+
+### Removed
+
+- Breaking: `ehds_logging::record::Binding::RefusedWabvpzRole` and
+  `Binding::RefusedWabvpzOrganisationType`, with their codes
+  `refused-wabvpz-role` and `refused-wabvpz-organisation-type`, leave the
+  enum, the BALP `AuditEvent` and the DICOM PS3.15 rendering. No alias
+  takes their place (#236).
+
+### Changed
+
+- `ehds-logging` requires `ihe-atna` `=0.19.0`, the version it releases
+  with (#236).
+
 ## [0.18.1] - 2026-11-15
 
 `ihe-atna` hands a repository the typed `AuditEvent` it builds, so a
