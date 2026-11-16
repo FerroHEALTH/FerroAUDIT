@@ -11,6 +11,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-16
+
+`ihe-atna` follows `ferrohealth-smart` to the 0.28 line, past 0.27, which
+describes a machines-only deployment for SMART Backend Services, and 0.28,
+which takes the client assertion's `aud` and `typ` from the security profile.
+Its FHIR Feed takes that line's `OutboundClient`, so the move breaks the
+public API even though no item of `ihe-atna` changes shape. Products pin
+`=0.22.0` and move their own `ferrohealth-smart` requirement to 0.28 in the
+same change, so they link one copy of it. `ehds-logging` requires `ihe-atna`
+`=0.22.0` and changes nothing else.
+
+### Changed
+
+- Breaking: `ihe-atna` requires `ferrohealth-smart` 0.28 (caret `0.28.0`)
+  in place of 0.26. `FeedRepository::new` and `FeedRepository::cleartext`
+  take the 0.28 `OutboundClient` (#243).
+- `ehds-logging` requires `ihe-atna` `=0.22.0`, the version it releases
+  with (#243).
+
 ## [0.21.0] - 2026-11-16
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.26 line, which builds on
