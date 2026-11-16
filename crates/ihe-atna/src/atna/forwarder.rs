@@ -22,7 +22,7 @@
 //! [`Forwarder::stop`] ends the loop, are closed with
 //! [`Connection::close`], so the frames written last are not lost to a
 //! reset (RFC 5425 §4.4).
-//! To a FHIR Feed repository (feature `smart`) it posts each stored record,
+//! To a FHIR Feed repository (feature `feed`) it posts each stored record,
 //! removes it on a `2xx`, retries the same way after a failure that may
 //! pass, and quarantines a record the repository refused, so the drain goes
 //! on.
@@ -37,7 +37,7 @@ use secrecy::SecretSlice;
 use tokio::sync::Notify;
 
 use super::chain;
-#[cfg(feature = "smart")]
+#[cfg(feature = "feed")]
 use super::feed::{FeedError, FeedRepository};
 #[cfg(feature = "atna")]
 use super::repository::{Connection, Repository};
@@ -196,7 +196,7 @@ enum Destination {
     #[cfg(feature = "atna")]
     Syslog(Repository),
     /// A FHIR Feed repository (ITI TF-2 §3.20.4.2).
-    #[cfg(feature = "smart")]
+    #[cfg(feature = "feed")]
     Feed(FeedRepository),
 }
 
@@ -236,10 +236,10 @@ impl Forwarder<Spool> {
     }
 
     /// The sender of the `AuditEvent` records in `spool` to the FHIR Feed
-    /// repository `feed`, retrying as its endpoint's `retry` table says: each
-    /// send is one round of the table's tries, and a failed round waits
-    /// `max_backoff` before the next.
-    #[cfg(feature = "smart")]
+    /// repository `feed`: each send is one round of its client's tries, and
+    /// a failed round waits the repository's `between_rounds` before the
+    /// next.
+    #[cfg(feature = "feed")]
     #[must_use]
     pub fn fhir_feed(spool: Spool, feed: FeedRepository) -> Arc<Self> {
         let retry = feed.between_rounds();
@@ -292,9 +292,9 @@ impl<O: Outbox> Forwarder<O> {
     }
 
     /// The sender of the `AuditEvent` records in the caller's `outbox` to the
-    /// FHIR Feed repository `feed`, retrying as its endpoint's `retry` table
-    /// says, as [`Forwarder::fhir_feed`] does.
-    #[cfg(feature = "smart")]
+    /// FHIR Feed repository `feed`, retrying as [`Forwarder::fhir_feed`]
+    /// does.
+    #[cfg(feature = "feed")]
     #[must_use]
     pub fn fhir_feed_from(outbox: O, feed: FeedRepository) -> Arc<Self> {
         let retry = feed.between_rounds();
@@ -364,7 +364,7 @@ impl<O: Outbox> Forwarder<O> {
         match &self.destination {
             #[cfg(feature = "atna")]
             Destination::Syslog(repository) => self.run_syslog(repository).await,
-            #[cfg(feature = "smart")]
+            #[cfg(feature = "feed")]
             Destination::Feed(feed) => self.run_feed(feed).await,
         }
     }
@@ -463,7 +463,7 @@ impl<O: Outbox> Forwarder<O> {
 
     // NOTE: the `RESTful` ATNA supplement §3.20.4.3.3 leaves a failure to the
     // client: a refusal is quarantined, every other failure is retried.
-    #[cfg(feature = "smart")]
+    #[cfg(feature = "feed")]
     async fn run_feed(&self, feed: &FeedRepository) {
         let mut backoff = Backoff::new(self.retry);
         loop {

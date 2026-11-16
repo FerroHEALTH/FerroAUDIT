@@ -50,7 +50,7 @@ redact = ["dep:url"]
 # transaction is audited as, and the spool of AuditEvent records. It builds
 # without the syslog sender, the DICOM message and the RFC 5425 TLS stack
 # (owner decision of 2026-10-20) and links no HTTP client: the ATX: FHIR Feed
-# that posts the records is feature `smart`.
+# that posts the records is feature `feed`.
 balp = [
   "dep:async-trait",
   "dep:base64",
@@ -76,24 +76,21 @@ retrieve = [
   "dep:percent-encoding",
   "dep:thiserror",
 ]
-# The ATX: FHIR Feed (`atna::feed`) and the forwarder to it, sent through
-# ferrohealth-smart's OutboundClient, the family's one outbound client, which
-# carries the endpoint's TLS, credential and retry; and the conversion of its
-# RetrySection into the forwarder's policy.
-smart = ["balp", "dep:ferrohealth-smart", "dep:http", "dep:reqwest"]
+# The ATX: FHIR Feed (`atna::feed`) and the forwarder to it, sent through the
+# caller's `FeedClient`, which carries the endpoint's TLS, credential and tries:
+# no HTTP client and no auth library.
+feed = ["balp", "dep:http", "dep:url"]
 
 [dependencies]
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 ferrohealth-secret = { workspace = true }
-ferrohealth-smart = { workspace = true, optional = true }
 fhir-search = { workspace = true, optional = true }
 fhir-types = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 percent-encoding = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 secrecy = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }

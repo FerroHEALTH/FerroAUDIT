@@ -26,7 +26,7 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::observer;
-use super::outbound::{client, retry, table};
+use super::outbound::{cleartext, feed, retry, table};
 use crate::atna::until;
 use crate::timing;
 
@@ -69,7 +69,7 @@ fn endpoint(server: &MockServer) -> EndpointSection {
 
 /// The repository at `server`'s `/arr/` base, over clear text for the test.
 fn repository(server: &MockServer) -> FeedRepository {
-    FeedRepository::cleartext(client(&endpoint(server))).expect("a repository")
+    cleartext(&endpoint(server)).expect("a repository")
 }
 
 /// One synthetic ITI-83 record naming the patient `value`.
@@ -195,7 +195,7 @@ async fn a_try_that_fails_within_a_round_is_tried_again_in_it() {
         retry: retry(2, "20ms", "1s"),
         ..endpoint(&server)
     };
-    let feed = FeedRepository::cleartext(client(&section)).expect("a repository");
+    let feed = cleartext(&section).expect("a repository");
     let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), feed);
     forwarder
         .submit(record("Qz7-feed-in-round"))
@@ -226,7 +226,7 @@ async fn a_record_outlives_every_retry_round_until_the_repository_takes_it() {
         retry: retry(2, "20ms", "200ms"),
         ..endpoint(&server)
     };
-    let feed = FeedRepository::cleartext(client(&section)).expect("a repository");
+    let feed = cleartext(&section).expect("a repository");
     let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), feed);
     let running = tokio::spawn(Arc::clone(&forwarder).run());
     forwarder
@@ -315,7 +315,7 @@ async fn a_repository_base_in_clear_text_or_with_a_query_is_refused() {
             url: SecretUrl::new(base),
             ..endpoint(&server)
         };
-        FeedRepository::new(client(&section)).err()
+        feed(&section).err()
     };
     assert_eq!(
         refused("http://arr.example.org/fhir/"),
@@ -333,7 +333,7 @@ async fn a_repository_base_in_clear_text_or_with_a_query_is_refused() {
         url: SecretUrl::new("https://arr.example.org/fhir"),
         ..endpoint(&server)
     };
-    let accepted = FeedRepository::new(client(&section)).expect("an https base");
+    let accepted = feed(&section).expect("an https base");
     assert_eq!(
         accepted.endpoint().as_str(),
         "https://arr.example.org/fhir/AuditEvent"

@@ -11,6 +11,40 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-17
+
+The FHIR Feed sends through a client the caller writes, so `ihe-atna`
+depends on no auth library and no HTTP client. A product's SMART crate and
+the audit crate now move on their own release lines. Before this release, a
+product had to link the exact `ferrohealth-smart` copy that `ihe-atna` was
+built on, and FerroSMART needed a `[patch.crates-io]` to unify the two.
+Products pin `=0.23.0` and write their `FeedClient` over their own outbound
+client in about twenty-five lines, as the `atna::feed` example shows.
+`ehds-logging` requires `ihe-atna` `=0.23.0` and changes nothing else.
+
+### Changed
+
+- Breaking: feature `smart` is now `feed`, and it links neither
+  `ferrohealth-smart` nor `reqwest`. `atna::feed::FeedClient` is the seam:
+  `authorizes` and one `post` of a prepared request (URL, media type, body), sent with the caller's
+  credential in one round of the caller's tries, which returns the status or
+  a `FeedSendError` (`Credentials` or `Transport`).
+  `FeedRepository::new` and `FeedRepository::cleartext` take the base URL,
+  an `Arc<dyn FeedClient>` and the wait between rounds, and a zero wait is
+  still `FeedConfigError::Retry` (#246).
+- Breaking: `FeedError::Credentials` and `FeedError::Transport` are now one
+  variant, `FeedError::Send`, which carries the client's `FeedSendError`.
+  `FeedRepository`'s `Debug` reads whether the client sends a credential from
+  `FeedClient::authorizes` (#246).
+- `ehds-logging` requires `ihe-atna` `=0.23.0`, the version it releases
+  with (#246).
+
+### Removed
+
+- Breaking: `TryFrom<ferrohealth_smart::config::endpoint::RetrySection> for
+  atna::retry::Retry`. Build the policy with `Retry::new(max_attempts,
+  initial_backoff, max_backoff)` from your own table (#246).
+
 ## [0.22.0] - 2026-11-16
 
 `ihe-atna` follows `ferrohealth-smart` to the 0.28 line, past 0.27, which

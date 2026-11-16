@@ -2,20 +2,24 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The FHIR Feed repository the tests reach: `ferrohealth-smart`'s
-//! `OutboundClient`, built from an endpoint table at a `wiremock` server
-//! as a product builds it from `[audit.fhir_feed.endpoint]`, over clear text.
+//! `OutboundClient` as the feed's `FeedClient`, the way a product writes it,
+//! built from an endpoint table at a `wiremock` server as a product builds it
+//! from `[audit.fhir_feed.endpoint]`, over clear text.
 
 use std::sync::Arc;
 
 use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::PresentedTls;
-use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::client::outbound::{OutboundClient, SendError};
 use ferrohealth_smart::config::TlsBuilder;
 use ferrohealth_smart::config::credentials::{CredentialsSection, OauthSection};
 use ferrohealth_smart::config::endpoint::{EndpointSection, RetrySection};
-use ihe_atna::atna::feed::FeedRepository;
+use http::header::CONTENT_TYPE;
+use http::{Method, StatusCode};
+use ihe_atna::atna::feed::{FeedClient, FeedConfigError, FeedRepository, FeedSendError};
 use secrecy::SecretString;
+use url::Url;
 use wiremock::MockServer;
 
 /// The test's reader of TLS material: a client that trusts no root, since
@@ -98,11 +102,65 @@ pub(crate) fn client(table: &EndpointSection) -> OutboundClient {
         .expect("the outbound client builds")
 }
 
+/// `ferrohealth-smart`'s outbound client as the FHIR Feed's client.
+struct Smart(OutboundClient);
+
+#[async_trait::async_trait]
+impl FeedClient for Smart {
+    fn authorizes(&self) -> bool {
+        self.0.authorization().is_some()
+    }
+
+    async fn post(
+        &self,
+        url: &Url,
+        content_type: &'static str,
+        body: &[u8],
+    ) -> Result<StatusCode, FeedSendError> {
+        let answer = self
+            .0
+            .send(&Method::POST, url, |request| {
+                request
+                    .header(CONTENT_TYPE, content_type)
+                    .body(body.to_vec())
+            })
+            .await
+            .map_err(|error| match error {
+                SendError::Transport(error) => {
+                    FeedSendError::Transport(Box::new(error.without_url()))
+                }
+                other => FeedSendError::Credentials(Box::new(other)),
+            })?;
+        Ok(answer.status())
+    }
+}
+
+/// The base, the client and the wait between rounds the endpoint table
+/// `table` gives a repository, as a product passes them.
+fn parts(table: &EndpointSection) -> (Url, Arc<dyn FeedClient>, std::time::Duration) {
+    let client = client(table);
+    let base = client.url().clone();
+    let between_rounds = std::time::Duration::from(client.retry().max_backoff);
+    (base, Arc::new(Smart(client)), between_rounds)
+}
+
+/// The repository the endpoint table `table` names, over `https` only.
+pub(crate) fn feed(table: &EndpointSection) -> Result<FeedRepository, FeedConfigError> {
+    let (base, client, between_rounds) = parts(table);
+    FeedRepository::new(&base, client, between_rounds)
+}
+
+/// The repository the endpoint table `table` names, clear text accepted.
+pub(crate) fn cleartext(table: &EndpointSection) -> Result<FeedRepository, FeedConfigError> {
+    let (base, client, between_rounds) = parts(table);
+    FeedRepository::cleartext(&base, client, between_rounds)
+}
+
 /// The repository at `server`, its calls carrying what `credentials` names.
 pub(crate) fn repository(server: &MockServer, credentials: CredentialsSection) -> FeedRepository {
     let table = EndpointSection {
         credentials,
         ..table(server)
     };
-    FeedRepository::cleartext(client(&table)).expect("a repository")
+    cleartext(&table).expect("a repository")
 }

@@ -14,35 +14,34 @@
 //!   cannot reach its repository (§3.20.4.1.1): one file per message on disk,
 //!   fsynced before it counts as stored, or a queue in memory for
 //!   development.
-//! - `feed` (feature `smart`): the ATX: FHIR Feed Option's Send Audit
+//! - `feed` (feature `feed`): the ATX: FHIR Feed Option's Send Audit
 //!   Resource Request, a FHIR `create` of one `AuditEvent` (the `RESTful` ATNA
-//!   supplement, ITI TF-2 §3.20.4.2), sent through `ferrohealth-smart`'s
-//!   outbound client.
-//! - `forwarder` (feature `atna` or `smart`): the sender that writes every
+//!   supplement, ITI TF-2 §3.20.4.2), sent through the caller's client.
+//! - `forwarder` (feature `atna` or `feed`): the sender that writes every
 //!   message to the spool, or a caller's own store, first and delivers it
 //!   from there, in order.
-//! - `retry` (feature `atna` or `smart`): the rounds the forwarder retries a
+//! - `retry` (feature `atna` or `feed`): the rounds the forwarder retries a
 //!   failed delivery in.
 //!
 //! The spool and the syslog frame compile under either `atna` or `balp`; the
 //! forwarder under a feature that gives it a destination; the syslog
 //! sender's message and TLS connection under `atna` alone; and the FHIR Feed
-//! under `smart`, which adds `balp`.
+//! under `feed`, which adds `balp`.
 //!
 //! A message names whatever its event names, a patient identifier included,
 //! so no part of this module logs a message or renders one in `Debug`.
 
 #[cfg(feature = "atna")]
 pub mod codes;
-#[cfg(feature = "smart")]
+#[cfg(feature = "feed")]
 pub mod feed;
-#[cfg(any(feature = "atna", feature = "smart"))]
+#[cfg(any(feature = "atna", feature = "feed"))]
 pub mod forwarder;
 #[cfg(feature = "atna")]
 pub mod message;
 #[cfg(feature = "atna")]
 pub mod repository;
-#[cfg(any(feature = "atna", feature = "smart"))]
+#[cfg(any(feature = "atna", feature = "feed"))]
 pub mod retry;
 pub mod spool;
 pub mod syslog;

@@ -53,7 +53,7 @@ impl Table {
         held(&self.removed).clone()
     }
 
-    #[cfg(feature = "smart")]
+    #[cfg(feature = "feed")]
     pub(crate) fn quarantined(&self) -> Vec<u64> {
         held(&self.quarantined).clone()
     }
@@ -147,7 +147,7 @@ async fn a_callers_store_is_delivered_oldest_first_and_emptied() {
 /// A record the FHIR Feed repository refused is moved aside in the caller's
 /// store and the drain goes on (the `RESTful` ATNA supplement §3.20.4.3.3
 /// leaves the failure to the client).
-#[cfg(feature = "smart")]
+#[cfg(feature = "feed")]
 #[tokio::test]
 async fn a_refused_record_is_moved_aside_in_the_callers_store() {
     use wiremock::matchers::method;
