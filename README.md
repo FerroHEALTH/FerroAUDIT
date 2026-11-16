@@ -81,7 +81,7 @@ version line. Each has its own README, which is its crates.io page.
 
 | Crate | Version | What it provides | Features |
 |---|---|---|---|
-| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `smart`, `retrieve`, `recording`, `redact` |
+| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `feed`, `retrieve`, `recording`, `redact` |
 | [`ehds-logging`](crates/ehds-logging/README.md) | [![crates.io](https://img.shields.io/crates/v/ehds-logging?logo=rust&label=crates.io)](https://crates.io/crates/ehds-logging) | The EHDS logging component of Regulation (EU) 2025/327: the Annex II 3.2 access record, the Art 14(1) categories and the map that classifies an access, retention and security labels, written as a BALP `AuditEvent` or a DICOM audit message | `balp`, `atna`, `schema` |
 
 ## What it provides
@@ -91,7 +91,7 @@ version line. Each has its own README, which is its crates.io page.
   Repository (feature `atna`).
 - **BALP audit events:** the FHIR R4 `AuditEvent` of every IHE FHIR
   transaction, posted over the ATX: FHIR Feed through
-  `ferrohealth-smart`'s outbound client (features `balp` and `smart`).
+  the caller's own HTTP client (features `balp` and `feed`).
 - **A store-and-forward spool** that keeps every record, one fsynced file
   per message, until the repository takes it, oldest first, with a
   quarantine for a record that cannot be read.
@@ -109,8 +109,8 @@ The crates need Rust 1.98 or newer (edition 2024). Pin the versions
 exactly, as every FerroHEALTH product does:
 
 ```sh
-cargo add ihe-atna@=0.22.0 --features balp
-cargo add ehds-logging@=0.22.0 --features balp
+cargo add ihe-atna@=0.23.0 --features balp
+cargo add ehds-logging@=0.23.0 --features balp
 ```
 
 The release plan refuses a tag while this page or a crate README pins

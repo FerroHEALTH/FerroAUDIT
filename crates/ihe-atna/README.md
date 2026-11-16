@@ -11,17 +11,17 @@ ITI-20's ATX: FHIR Feed, with a feature per layer.
 |---|---|---|
 | `atna` | Audit Trail and Node Authentication: the DICOM audit message over syslog with TLS, the spool and the forwarder | ITI-20 |
 | `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of an IHE FHIR transaction and its spool, without the syslog sender, its TLS stack or an HTTP client | ITI-20 |
-| `smart` | The ITI-20 FHIR Feed that sends the `AuditEvent`s through the same spool and forwarder, over `ferrohealth-smart`'s `OutboundClient` | ITI-20 |
+| `feed` | The ITI-20 FHIR Feed that sends the `AuditEvent`s through the same spool and forwarder, over the caller's `FeedClient` | ITI-20 |
 | `retrieve` | The retrieval an Audit Record Repository serves: the query string read into typed criteria, and the `searchset` Bundle and refusal `OperationOutcome` of the answer | ITI-81 |
 
 `recording` compiles `balp::recording` alone and `redact` compiles
 `redact::RedactedUrl` and `fhir_base` alone, for a profile crate that audits
 through its own model or logs URLs it does not audit.
 
-Under `smart` the FHIR Feed's TLS, timeouts, credential and retry are the
-repository's endpoint table, read into `ferrohealth-smart`'s
-`EndpointSection` and built into its `OutboundClient` by your reader of TLS
-material.
+Under `feed` the FHIR Feed sends through your implementation of
+`atna::feed::FeedClient`, written over your own HTTP client, which owns the
+TLS, the timeouts, the credential and its renewal, and the tries of one
+round. The crate links no HTTP client and no auth library.
 
 The crate depends on no application. The profiles are published at
 <https://profiles.ihe.net/ITI/>.
@@ -102,11 +102,12 @@ fn repository(tls: ClientConfig) -> Result<Repository, Box<dyn std::error::Error
   transaction before its answer is used, with `reserve` to take a record's
   place before the exchange is made.
 - `atna::feed::FeedRepository` with `Forwarder::fhir_feed` (feature
-  `smart`): the ATX: FHIR Feed's Send Audit Resource Request, a FHIR
-  `create` of each stored record at `[base]/AuditEvent`, built from
-  `ferrohealth-smart`'s `OutboundClient`, which carries the endpoint's
-  credential (Basic, or a client credentials token renewed once on a `401`,
-  RFC 6750 §3.1) and its `retry` table. A refused record is quarantined,
+  `feed`): the ATX: FHIR Feed's Send Audit Resource Request, a FHIR
+  `create` of each stored record at `[base]/AuditEvent`, sent through your
+  `FeedClient`, which carries the endpoint's credential (Basic, or a client
+  credentials token renewed once on a `401`, RFC 6750 §3.1) and the tries of
+  a round; the forwarder waits the repository's `between_rounds` after each
+  failed round. A refused record is quarantined,
   every other failure retried in rounds that never give it up; `cleartext`
   reaches an `http` base for an operator who accepts it.
 - `recording`: the bound on an audited exchange's record, `Late` and

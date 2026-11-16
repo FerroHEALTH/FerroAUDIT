@@ -108,23 +108,6 @@ impl Retry {
     }
 }
 
-#[cfg(feature = "smart")]
-impl TryFrom<ferrohealth_smart::config::endpoint::RetrySection> for Retry {
-    type Error = RetryError;
-
-    /// The `retry` table of an outbound endpoint as the forwarder's policy:
-    /// `max_attempts` bounds a round, never the delivery.
-    fn try_from(
-        section: ferrohealth_smart::config::endpoint::RetrySection,
-    ) -> Result<Self, Self::Error> {
-        Self::new(
-            section.max_attempts,
-            section.initial_backoff.into(),
-            section.max_backoff.into(),
-        )
-    }
-}
-
 /// Where a forwarder stands in its retry rounds.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Backoff {
@@ -261,33 +244,5 @@ mod tests {
     #[test]
     fn a_first_wait_past_the_longest_is_refused() {
         assert_eq!(Err(RetryError::BackoffPastBound), Retry::new(3, 2 * MS, MS));
-    }
-
-    #[cfg(feature = "smart")]
-    #[test]
-    fn a_retry_section_becomes_the_policy_field_by_field() {
-        use ferrohealth_smart::config::endpoint::RetrySection;
-
-        let section = RetrySection {
-            max_attempts: 4,
-            initial_backoff: "150ms".parse().expect("a duration"),
-            max_backoff: "7s".parse().expect("a duration"),
-        };
-        let policy = Retry::try_from(section).expect("a policy");
-        assert_eq!(4, policy.max_attempts());
-        assert_eq!(150 * MS, policy.initial_backoff());
-        assert_eq!(Duration::from_secs(7), policy.max_backoff());
-    }
-
-    #[cfg(feature = "smart")]
-    #[test]
-    fn a_retry_section_with_no_attempt_is_refused() {
-        use ferrohealth_smart::config::endpoint::RetrySection;
-
-        let section = RetrySection {
-            max_attempts: 0,
-            ..RetrySection::default()
-        };
-        assert_eq!(Err(RetryError::NoAttempt), Retry::try_from(section));
     }
 }

@@ -7,14 +7,14 @@
 //! user add to it, and where it carries the purposes of use.
 
 mod content;
-#[cfg(feature = "smart")]
+#[cfg(feature = "feed")]
 mod credentials;
 mod described;
 mod escaping;
-#[cfg(feature = "smart")]
+#[cfg(feature = "feed")]
 mod feed;
 mod hygiene;
-#[cfg(feature = "smart")]
+#[cfg(feature = "feed")]
 pub(crate) mod outbound;
 mod purposes;
 mod rendering;

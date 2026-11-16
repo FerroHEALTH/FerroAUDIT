@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use ferrohealth_smart::config::credentials::CredentialsSection;
 use ferrohealth_smart::config::endpoint::EndpointSection;
-use ihe_atna::atna::feed::{FeedConfigError, FeedError, FeedRepository};
+use ihe_atna::atna::feed::{FeedConfigError, FeedError, FeedSendError};
 use ihe_atna::atna::forwarder::Forwarder;
 use ihe_atna::atna::retry::RetryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool};
@@ -30,7 +30,9 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::observer;
-use super::outbound::{basic, client, grant, repository, retry, synthetic_password, table};
+use super::outbound::{
+    basic, cleartext, feed, grant, repository, retry, synthetic_password, table,
+};
 use crate::timing;
 
 /// One synthetic record of an exchange the system made on its own behalf.
@@ -180,7 +182,7 @@ async fn a_refused_grant_is_a_credentials_error_and_sends_nothing() {
     let feed = repository(&server, grant(&server));
     let refused = feed.send(&record()).await;
     assert!(
-        matches!(refused, Err(FeedError::Credentials(_))),
+        matches!(refused, Err(FeedError::Send(FeedSendError::Credentials(_)))),
         "{refused:?}"
     );
 }
@@ -230,12 +232,8 @@ async fn the_cleartext_constructor_reaches_http_and_new_refuses_it() {
         credentials: basic("Qz7-audit-user", &password),
         ..table(&server)
     };
-    assert_eq!(
-        FeedRepository::new(client(&with_basic)).err(),
-        Some(FeedConfigError::Cleartext)
-    );
-    let accepted =
-        FeedRepository::cleartext(client(&with_basic)).expect("an http base accepted by name");
+    assert_eq!(feed(&with_basic).err(), Some(FeedConfigError::Cleartext));
+    let accepted = cleartext(&with_basic).expect("an http base accepted by name");
     assert_eq!(
         accepted.endpoint().as_str(),
         format!("{}/arr/AuditEvent", server.uri())
@@ -256,7 +254,7 @@ async fn an_endpoint_without_a_wait_between_rounds_is_refused() {
         ..table(&server)
     };
     assert_eq!(
-        FeedRepository::cleartext(client(&immediate)).err(),
+        cleartext(&immediate).err(),
         Some(FeedConfigError::Retry(RetryError::NoBackoff))
     );
 }
