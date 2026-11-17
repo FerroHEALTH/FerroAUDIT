@@ -4,7 +4,7 @@
 # FerroAUDIT brand
 
 FerroAUDIT is a shared library of the FerroHEALTH family, not a product. The
-family's brand rule gives the shared libraries (FerroAUTH, FerroAUDIT,
+family's brand rule gives the shared libraries (FerroAUDIT,
 FerroUI) no hue and no stroke of their own and shows them in the parent's
 steel. The lockups here follow that rule: the family pulse drawn in one
 steel stroke, and the wordmark set as FerroHEALTH's is, "Ferro" in iron and
