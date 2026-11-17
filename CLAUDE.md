@@ -9,8 +9,8 @@ the ATNA Record Audit Event sender (ITI-20) and the Basic Audit Log Patterns
 workspace with two library crates on one version line, both published to
 crates.io: `ihe-atna` (Rust path `ihe_atna`) and `ehds-logging`, the EHDS
 logging component (Regulation (EU) 2025/327), whose access record travels as
-a BALP `AuditEvent` through `ihe-atna`. FerroAUTH holds the family's shared
-SMART crate in the same way.
+a BALP `AuditEvent` through `ihe-atna`. FerroSMART publishes the family's shared
+SMART crates in the same way, beside its authorization server.
 
 FerroAUDIT in prose, `ihe-atna` in identifiers. The repository, the crate
 name and its licence are the owner's decision of 2026-10-20
