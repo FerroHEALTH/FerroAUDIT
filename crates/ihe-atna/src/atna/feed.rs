@@ -9,7 +9,10 @@
 //!
 //! [`FeedRepository::send`] posts one stored record to `[base]/AuditEvent` as
 //! FHIR JSON (ITI TF-2 Appendix Z.6; FHIR R4 `create`,
-//! <http://hl7.org/fhir/R4/http.html#create>). A `2xx` is the repository's
+//! <http://hl7.org/fhir/R4/http.html#create>), and
+//! [`FeedRepository::send_batch`] posts several as one Bundle of type `batch`
+//! to `[base]` (Send Audit Bundle, §3.20.4.4), each judged by its entry of the
+//! `batch-response` (§3.20.4.5). A `2xx` is the repository's
 //! success (§3.20.4.3.2). §3.20.4.3.3 leaves a failure to the client: a
 //! `4xx` other than `401`, `408` and `429` is [`FeedError::Rejected`], which
 //! no retry of the same record changes; a `401` is
