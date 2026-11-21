@@ -202,7 +202,7 @@ async fn the_bounds_count_the_quarantine() {
         let spool = Spool::open(&path, bounds).expect("the spool opens");
         spool.push(framed("doomed")).await.expect("stored");
     }
-    std::fs::write(path.join(named(0)), b"garbage").expect("a corrupt message");
+    std::fs::write(path.join(segment(0)), segment_of(&[b"garbage"])).expect("a corrupt message");
     let spool = Spool::open(&path, bounds).expect("the spool reopens");
     assert_eq!(drain(&spool).await, Vec::<String>::new());
     spool

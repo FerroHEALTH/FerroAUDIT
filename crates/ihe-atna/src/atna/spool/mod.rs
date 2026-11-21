@@ -55,7 +55,6 @@ mod inspect;
 pub mod reserve;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -65,9 +64,8 @@ use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinError;
 
 use disk::{
-    Frame, check_private, create_private, file, io, probe, read_frame, remove_segment,
-    scan_quarantine, scan_segments, sync_directory, truncate_segment, write_quarantined,
-    write_segment, write_sent,
+    Frame, check_private, create_private, probe, read_frame, remove_segment, scan_quarantine,
+    scan_segments, sync_directory, truncate_segment, write_quarantined, write_segment, write_sent,
 };
 use in_flight::InFlight;
 
@@ -405,10 +403,11 @@ impl Spool {
             };
             if let Some(remainder) = loaded.remainder {
                 let sequence = first.saturating_add(segment.len());
-                if !quarantined.contains_key(&sequence) {
+                if let std::collections::btree_map::Entry::Vacant(kept) =
+                    quarantined.entry(sequence)
+                {
                     write_quarantined(&held, sequence, &remainder)?;
-                    quarantined
-                        .insert(sequence, u64::try_from(remainder.len()).unwrap_or(u64::MAX));
+                    kept.insert(u64::try_from(remainder.len()).unwrap_or(u64::MAX));
                 }
                 truncate_segment(directory, first, &segment.frames)?;
                 tracing::error!(target: crate::atna::targets::SPOOL,
