@@ -311,7 +311,7 @@ fn batch_response(statuses: &[&str]) -> ResponseTemplate {
 }
 
 /// ITI TF-2 §3.20.4.4.2: the records waiting are posted to the FHIR base as
-/// one Bundle of type batch, each entry a POST of an AuditEvent, and each is
+/// one Bundle of type batch, each entry a POST of an `AuditEvent`, and each is
 /// counted delivered by its entry of the batch-response (§3.20.4.5.2).
 #[tokio::test]
 #[expect(
