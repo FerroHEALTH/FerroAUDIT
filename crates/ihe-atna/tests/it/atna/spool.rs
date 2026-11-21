@@ -41,9 +41,26 @@ async fn drain(spool: &Spool) -> Vec<String> {
     texts
 }
 
-/// The name of message `sequence` on disk.
+/// The name of message `sequence` in the quarantine.
 fn named(sequence: u64) -> String {
     format!("{sequence:020}.msg")
+}
+
+/// The name of the segment whose first message is `first`.
+pub(crate) fn segment(first: u64) -> String {
+    format!("{first:020}.seg")
+}
+
+/// `messages` framed as a segment: each its length and its CRC-32, each four
+/// bytes big-endian, then the message.
+pub(crate) fn segment_of(messages: &[&[u8]]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for message in messages {
+        bytes.extend_from_slice(&u32::try_from(message.len()).expect("small").to_be_bytes());
+        bytes.extend_from_slice(&crc32fast::hash(message).to_be_bytes());
+        bytes.extend_from_slice(message);
+    }
+    bytes
 }
 
 #[tokio::test]
@@ -123,12 +140,15 @@ async fn a_message_that_is_no_frame_is_quarantined_and_the_next_one_given_up() {
             spool.push(framed(text)).await.expect("stored");
         }
     }
-    std::fs::write(path.join(named(0)), b"torn bytes").expect("a corrupt message");
+    std::fs::write(path.join(segment(0)), segment_of(&[b"torn bytes"])).expect("a corrupt message");
     let spool = Spool::open(&path, ROOMY).expect("the spool reopens");
 
     assert_eq!(vec!["second"], drain(&spool).await, "the drain goes on");
     assert!(path.join(QUARANTINE).join(named(0)).is_file());
-    assert!(!path.join(named(0)).exists());
+    assert!(
+        !path.join(segment(0)).exists(),
+        "a settled segment is removed"
+    );
     assert_eq!(
         Depth {
             messages: 1,
@@ -160,8 +180,11 @@ async fn a_message_that_cannot_be_read_is_quarantined() {
     for text in ["unreadable", "readable"] {
         spool.push(framed(text)).await.expect("stored");
     }
-    std::fs::set_permissions(path.join(named(0)), std::fs::Permissions::from_mode(0o000))
-        .expect("chmod");
+    std::fs::set_permissions(
+        path.join(segment(0)),
+        std::fs::Permissions::from_mode(0o000),
+    )
+    .expect("chmod");
     assert_eq!(vec!["readable"], drain(&spool).await);
     assert_eq!(1, spool.depth().quarantined);
 }
@@ -179,7 +202,7 @@ async fn the_bounds_count_the_quarantine() {
         let spool = Spool::open(&path, bounds).expect("the spool opens");
         spool.push(framed("doomed")).await.expect("stored");
     }
-    std::fs::write(path.join(named(0)), b"garbage").expect("a corrupt message");
+    std::fs::write(path.join(segment(0)), segment_of(&[b"garbage"])).expect("a corrupt message");
     let spool = Spool::open(&path, bounds).expect("the spool reopens");
     assert_eq!(drain(&spool).await, Vec::<String>::new());
     spool
@@ -388,5 +411,75 @@ fn inspecting_refuses_what_opening_refuses_by_mode() {
     assert!(
         matches!(&refused, Err(SpoolError::Unwritable(closed)) if *closed == parent),
         "{refused:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_segment_ending_in_a_frame_that_cannot_be_read_keeps_the_frames_before_it() {
+    let directory = tempfile::tempdir().expect("a directory");
+    let path = directory.path().join("spool");
+    drop(Spool::open(&path, ROOMY).expect("the spool opens"));
+    let (first, second) = (framed("first"), framed("second"));
+    let mut bytes = segment_of(&[first.expose_secret(), second.expose_secret()]);
+    let mut torn = segment_of(&[framed("third").expose_secret()]);
+    torn.truncate(torn.len() - 3);
+    bytes.extend_from_slice(&torn);
+    std::fs::write(path.join(segment(0)), &bytes).expect("a torn segment");
+
+    let spool = Spool::open(&path, ROOMY).expect("the spool reopens");
+    assert_eq!(1, spool.depth().quarantined, "the torn tail is quarantined");
+    assert!(
+        path.join(QUARANTINE).join(named(2)).is_file(),
+        "under the sequence it would take"
+    );
+    assert_eq!(
+        vec!["first", "second"],
+        drain(&spool).await,
+        "the whole frames are kept"
+    );
+    drop(spool);
+    let reopened = Spool::open(&path, ROOMY).expect("the spool reopens again");
+    assert_eq!(
+        Depth {
+            messages: 1,
+            bytes: u64::try_from(torn.len()).expect("small"),
+            quarantined: 1,
+        },
+        reopened.depth(),
+        "the tail is quarantined once"
+    );
+}
+
+#[tokio::test]
+async fn a_message_settled_before_a_crash_its_sidecar_did_not_record_is_sent_again() {
+    let directory = tempfile::tempdir().expect("a directory");
+    let path = directory.path().join("spool");
+    drop(Spool::open(&path, ROOMY).expect("the spool opens"));
+    let texts = [framed("first"), framed("second"), framed("third")];
+    let bodies: Vec<&[u8]> = texts.iter().map(ExposeSecret::expose_secret).collect();
+    std::fs::write(path.join(segment(0)), segment_of(&bodies)).expect("a segment");
+
+    let spool = Spool::open(&path, ROOMY).expect("the spool reopens");
+    let oldest = spool.oldest().await.expect("it reads").expect("one");
+    spool.remove(oldest.sequence).await.expect("delivered");
+    drop(spool);
+    let recorded = Spool::open(&path, ROOMY).expect("the spool reopens");
+    assert_eq!(
+        2,
+        recorded.depth().messages,
+        "the delivery the sidecar records holds"
+    );
+    drop(recorded);
+
+    std::fs::remove_file(path.join("00000000000000000000.sent")).expect("the sidecar is lost");
+    let crashed = Spool::open(&path, ROOMY).expect("the spool reopens");
+    assert_eq!(
+        vec!["first", "second", "third"],
+        drain(&crashed).await,
+        "what no sidecar records is sent again, at least once"
+    );
+    assert!(
+        !path.join(segment(0)).exists(),
+        "a settled segment is removed"
     );
 }

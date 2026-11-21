@@ -219,8 +219,9 @@ async fn a_spooled_message_that_cannot_be_sent_is_quarantined_and_the_rest_deliv
             spool.push(framed(text)).await.expect("stored");
         }
     }
-    let first = path.join(format!("{:020}.msg", 0));
-    std::fs::write(&first, b"not a syslog frame").expect("a corrupt message");
+    let first = path.join(super::spool::segment(0));
+    std::fs::write(&first, super::spool::segment_of(&[b"not a syslog frame"]))
+        .expect("a corrupt message");
 
     let repository = Repository::unencrypted_for_development(&url, TIMEOUTS).expect("a repository");
     let spool = Spool::open(&path, BOUNDS).expect("the spool reopens");

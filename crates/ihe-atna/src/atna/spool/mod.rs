@@ -17,13 +17,19 @@
 //! logged, so a slow disk neither loses nor repeats a message. Messages
 //! leave in the order they were stored.
 //!
-//! On disk ([`Spool::open`]), each message is one file named by its sequence
-//! number. It is written to a temporary file, flushed to the device, renamed,
-//! and the directory is flushed too, so a stored message survives a crash or
-//! a restart. The messages that queue while one write is in flight are
-//! written together as one batch, each file flushed on its own and the
-//! directory once for the batch, and each counts as stored once its batch is
-//! durable. On Unix the directory must give its owner alone access, and
+//! On disk ([`Spool::open`]), the messages that queue while one write is in
+//! flight are written together as one batch: one segment file named by the
+//! sequence number of its first message, each message framed by its length
+//! and its CRC-32. The segment is written to a temporary file, flushed to the
+//! device once, renamed, and the directory is flushed once, so a batch costs
+//! two flushes however many messages it holds, and each message counts as
+//! stored once its batch is durable and survives a crash or a restart. A
+//! sidecar beside a segment counts its messages delivered or quarantined
+//! from the first, written without a flush, so a crash sends again what it
+//! had not recorded: each message is delivered at least once. A segment whose
+//! messages are all settled is removed. A segment that ends in a frame that
+//! cannot be read (its length runs past the end or its CRC fails) keeps the
+//! frames before it, and the bytes from that frame on go to the quarantine. On Unix the directory must give its owner alone access, and
 //! every file is created readable by its owner alone, because a message
 //! names a patient. In memory ([`Spool::in_memory`]), the messages live as
 //! long as the process, for a development deployment.
@@ -48,8 +54,7 @@ pub(super) mod in_flight;
 mod inspect;
 pub mod reserve;
 
-use std::collections::{BTreeMap, VecDeque};
-use std::fs;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -59,12 +64,19 @@ use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinError;
 
 use disk::{
-    check_private, create_private, file, io, probe, scan, settle, sync_directory, write_partial,
+    Frame, check_private, create_private, probe, read_frame, remove_segment, scan_quarantine,
+    scan_segments, sync_directory, truncate_segment, write_quarantined, write_segment, write_sent,
 };
 use in_flight::InFlight;
 
-/// The extension of a stored message.
+/// The extension of a message held in the quarantine.
 const STORED: &str = "msg";
+
+/// The extension of a segment, the messages of one batch.
+const SEGMENT: &str = "seg";
+
+/// The extension of a segment's sidecar, the count of its messages settled.
+const SENT: &str = "sent";
 
 /// The extension of a message being written.
 const PARTIAL: &str = "partial";
@@ -254,6 +266,9 @@ struct Inner {
     /// The directory flushes the writes have made.
     #[cfg(test)]
     syncs: u64,
+    /// The segment flushes the writes have made.
+    #[cfg(test)]
+    segment_syncs: u64,
 }
 
 /// A message waiting for the batch that writes it, with its place under the
@@ -309,6 +324,24 @@ impl Drop for Place {
     }
 }
 
+/// One segment on disk: where its messages lie, and which are settled.
+struct Segment {
+    /// Its frames, in order; message `first + i` is frame `i`.
+    frames: Vec<Frame>,
+    /// How many frames, from the first, are delivered or quarantined, as the
+    /// sidecar records.
+    prefix: u64,
+    /// The frames past the prefix that are settled.
+    settled: BTreeSet<u64>,
+}
+
+impl Segment {
+    /// The number of its frames.
+    fn len(&self) -> u64 {
+        u64::try_from(self.frames.len()).unwrap_or(u64::MAX)
+    }
+}
+
 /// Locks `mutex`, taking over the state a holder that panicked left.
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -320,6 +353,7 @@ enum Store {
         content: Content,
         sizes: BTreeMap<u64, u64>,
         quarantined: BTreeMap<u64, u64>,
+        segments: BTreeMap<u64, Segment>,
     },
     Memory {
         queue: VecDeque<(u64, SecretSlice<u8>)>,
@@ -358,8 +392,43 @@ impl Spool {
         create_private(&held)?;
         check_private(&held)?;
         probe(directory)?;
-        let sizes = scan(directory, Some(&held))?;
-        let quarantined = scan(&held, None)?;
+        let mut quarantined = scan_quarantine(&held)?;
+        let mut sizes = BTreeMap::new();
+        let mut segments = BTreeMap::new();
+        for (first, loaded) in scan_segments(directory, &held)? {
+            let segment = Segment {
+                frames: loaded.frames,
+                prefix: loaded.settled,
+                settled: BTreeSet::new(),
+            };
+            if let Some(remainder) = loaded.remainder {
+                let sequence = first.saturating_add(segment.len());
+                if let std::collections::btree_map::Entry::Vacant(kept) =
+                    quarantined.entry(sequence)
+                {
+                    write_quarantined(&held, sequence, &remainder)?;
+                    kept.insert(u64::try_from(remainder.len()).unwrap_or(u64::MAX));
+                }
+                truncate_segment(directory, first, &segment.frames)?;
+                tracing::error!(target: crate::atna::targets::SPOOL,
+                    sequence,
+                    "a spool segment ends in a frame that cannot be read; the bytes from it on were moved to the quarantine"
+                );
+            }
+            if segment.prefix >= segment.len() {
+                remove_segment(directory, first)?;
+                continue;
+            }
+            for index in segment.prefix..segment.len() {
+                let frame = usize::try_from(index)
+                    .ok()
+                    .and_then(|index| segment.frames.get(index));
+                if let Some(frame) = frame {
+                    sizes.insert(first.saturating_add(index), u64::from(frame.len));
+                }
+            }
+            segments.insert(first, segment);
+        }
         let depth = Depth {
             messages: sizes.len().saturating_add(quarantined.len()),
             bytes: sizes
@@ -368,17 +437,19 @@ impl Spool {
                 .fold(0, |sum, size| sum.saturating_add(*size)),
             quarantined: quarantined.len(),
         };
-        let next = sizes
-            .keys()
-            .chain(quarantined.keys())
+        let next = segments
+            .iter()
+            .map(|(first, segment)| first.saturating_add(segment.len()))
+            .chain(quarantined.keys().map(|last| last.saturating_add(1)))
             .max()
-            .map_or(0, |last| last.saturating_add(1));
+            .unwrap_or(0);
         Ok(Self::with(
             Store::Disk {
                 directory: directory.to_owned(),
                 content,
                 sizes,
                 quarantined,
+                segments,
             },
             bounds,
             depth,
@@ -416,6 +487,8 @@ impl Spool {
                 next,
                 #[cfg(test)]
                 syncs: 0,
+                #[cfg(test)]
+                segment_syncs: 0,
             })),
             shown,
             waiting: Arc::new(Mutex::new(VecDeque::new())),
@@ -613,6 +686,22 @@ impl Spool {
         self.blocking(Inner::oldest).await
     }
 
+    /// Up to `max` of the oldest messages that can be delivered, in order,
+    /// still stored: the oldest, and those stored after it that read, each
+    /// a message of the spool's [`Content`].
+    ///
+    /// A message on the way that cannot be read, or is no message of the
+    /// spool's content, is moved to the quarantine, as [`Spool::oldest`]
+    /// does.
+    ///
+    /// # Errors
+    ///
+    /// [`SpoolError::Io`] when a message can neither be read nor moved to
+    /// the quarantine.
+    pub async fn oldest_batch(&self, max: usize) -> Result<Vec<Stored>, SpoolError> {
+        self.blocking(move |inner| inner.oldest_batch(max)).await
+    }
+
     /// Moves the message `sequence`, which the repository refused, to the
     /// quarantine, where it stays counted, so the drain goes on.
     ///
@@ -683,13 +772,12 @@ impl Inner {
     /// Stores `messages` in their order as one batch, each with its own
     /// outcome: its sequence number once it is durable, or why it is not.
     ///
-    /// On disk each message is written to its partial file and flushed, every
-    /// one written is renamed, and the directory is flushed once for them
-    /// all. When that flush fails, each renamed message is flushed again on
-    /// its own, so each one's outcome is its own flush.
+    /// On disk the messages the bounds admit are one segment, flushed once,
+    /// renamed, and the directory flushed once; they are stored together or
+    /// not at all.
     fn push_batch(&mut self, messages: Vec<SecretSlice<u8>>) -> Vec<Result<u64, SpoolError>> {
         let mut outcomes = Vec::with_capacity(messages.len());
-        let mut renamed = Vec::new();
+        let mut admitted: Vec<(usize, u64, SecretSlice<u8>)> = Vec::new();
         let mut ahead = Depth::default();
         for message in messages {
             let size = u64::try_from(message.expose_secret().len()).unwrap_or(u64::MAX);
@@ -697,47 +785,59 @@ impl Inner {
                 outcomes.push(Err(full));
                 continue;
             }
-            let sequence = self.next;
-            self.next = sequence.saturating_add(1);
-            match &mut self.store {
-                Store::Disk { directory, .. } => {
-                    let written = write_partial(directory, sequence, &message)
-                        .and_then(|()| settle(directory, sequence));
-                    match written {
-                        Ok(()) => {
-                            renamed.push((outcomes.len(), sequence, size));
-                            ahead.messages = ahead.messages.saturating_add(1);
-                            ahead.bytes = ahead.bytes.saturating_add(size);
-                            outcomes.push(Ok(sequence));
-                        }
-                        Err(error) => outcomes.push(Err(error)),
-                    }
+            ahead.messages = ahead.messages.saturating_add(1);
+            ahead.bytes = ahead.bytes.saturating_add(size);
+            admitted.push((outcomes.len(), size, message));
+            outcomes.push(Ok(0));
+        }
+        if admitted.is_empty() {
+            return outcomes;
+        }
+        let first = self.next;
+        self.next = first.saturating_add(u64::try_from(admitted.len()).unwrap_or(u64::MAX));
+        let stored = match &self.store {
+            Store::Memory { .. } => Ok(None),
+            Store::Disk { directory, .. } => {
+                let directory = directory.clone();
+                let bodies: Vec<&[u8]> = admitted
+                    .iter()
+                    .map(|(_, _, message)| message.expose_secret())
+                    .collect();
+                self.count_segment_sync();
+                write_segment(&directory, first, &bodies)
+                    .and_then(|frames| self.sync(&directory).map(|()| Some(frames)))
+            }
+        };
+        match stored {
+            Ok(frames) => {
+                if let (Some(frames), Store::Disk { segments, .. }) = (frames, &mut self.store) {
+                    segments.insert(
+                        first,
+                        Segment {
+                            frames,
+                            prefix: 0,
+                            settled: BTreeSet::new(),
+                        },
+                    );
                 }
-                Store::Memory { queue, .. } => {
-                    queue.push_back((sequence, message));
+                let mut sequence = first;
+                for (at, size, message) in admitted {
+                    if let Store::Memory { queue, .. } = &mut self.store {
+                        queue.push_back((sequence, message));
+                    }
                     self.count(sequence, size);
-                    outcomes.push(Ok(sequence));
+                    if let Some(outcome) = outcomes.get_mut(at) {
+                        *outcome = Ok(sequence);
+                    }
+                    sequence = sequence.saturating_add(1);
                 }
             }
-        }
-        if renamed.is_empty() {
-            return outcomes;
-        }
-        let Store::Disk { directory, .. } = &self.store else {
-            return outcomes;
-        };
-        let directory = directory.clone();
-        let flushed = self.sync(&directory);
-        for (at, sequence, size) in renamed {
-            let durable = match &flushed {
-                Ok(()) => Ok(()),
-                Err(_batch) => self.sync(&directory),
-            };
-            match durable {
-                Ok(()) => self.count(sequence, size),
-                Err(error) => {
+            Err(error) => {
+                let mut error = Some(error);
+                for (at, _, _) in admitted {
+                    let failed = error.take().unwrap_or(SpoolError::Unfinished);
                     if let Some(outcome) = outcomes.get_mut(at) {
-                        *outcome = Err(error);
+                        *outcome = Err(failed);
                     }
                 }
             }
@@ -761,68 +861,161 @@ impl Inner {
         sync_directory(directory)
     }
 
+    /// Counts a segment's flush under test.
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unused_self,
+            reason = "the flushes are counted only under test"
+        )
+    )]
+    fn count_segment_sync(&mut self) {
+        #[cfg(test)]
+        {
+            self.segment_syncs = self.segment_syncs.saturating_add(1);
+        }
+    }
+
+    /// The segment that holds message `sequence`, and the message's frame.
+    fn locate(&self, sequence: u64) -> Option<(u64, Frame)> {
+        let Store::Disk { segments, .. } = &self.store else {
+            return None;
+        };
+        let (first, segment) = segments.range(..=sequence).next_back()?;
+        let index = usize::try_from(sequence.checked_sub(*first)?).ok()?;
+        segment.frames.get(index).map(|frame| (*first, *frame))
+    }
+
     fn oldest(&mut self) -> Result<Option<Stored>, SpoolError> {
+        self.oldest_after(None)
+    }
+
+    /// The oldest message after `after`, or the oldest of all, that can be
+    /// delivered; every one on the way that cannot is quarantined.
+    fn oldest_after(&mut self, after: Option<u64>) -> Result<Option<Stored>, SpoolError> {
+        let later = |sequence: &u64| after.is_none_or(|after| *sequence > after);
         loop {
             let (directory, content, sequence) = match &self.store {
                 Store::Memory { queue, .. } => {
-                    return Ok(queue.front().map(|(sequence, message)| Stored {
-                        sequence: *sequence,
-                        message: SecretSlice::from(message.expose_secret().to_vec()),
-                    }));
+                    return Ok(queue.iter().find(|(sequence, _)| later(sequence)).map(
+                        |(sequence, message)| Stored {
+                            sequence: *sequence,
+                            message: SecretSlice::from(message.expose_secret().to_vec()),
+                        },
+                    ));
                 }
                 Store::Disk {
                     directory,
                     content,
                     sizes,
                     ..
-                } => match sizes.keys().next() {
-                    None => return Ok(None),
-                    Some(sequence) => (directory.clone(), *content, *sequence),
-                },
+                } => {
+                    let from = after.map_or(0, |after| after.saturating_add(1));
+                    match sizes.range(from..).next() {
+                        None => return Ok(None),
+                        Some((sequence, _)) => (directory.clone(), *content, *sequence),
+                    }
+                }
             };
-            match fs::read(file(&directory, sequence, STORED)) {
+            let Some((first, frame)) = self.locate(sequence) else {
+                tracing::error!(target: crate::atna::targets::SPOOL, sequence, "a spooled audit message is gone from the spool");
+                self.forget(sequence)?;
+                continue;
+            };
+            match read_frame(&directory, first, frame) {
                 Ok(message) if content.holds(&message) => {
                     return Ok(Some(Stored {
                         sequence,
                         message: SecretSlice::from(message),
                     }));
                 }
-                Ok(_) => self.quarantine(&directory, sequence, content.mismatch())?,
+                Ok(message) => {
+                    self.quarantine(&directory, sequence, &message, content.mismatch())?;
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                     tracing::error!(target: crate::atna::targets::SPOOL, sequence, "a spooled audit message is gone from the spool");
-                    self.forget(sequence);
+                    self.forget(sequence)?;
                 }
                 Err(error) => {
                     tracing::error!(target: crate::atna::targets::SPOOL, sequence, error = %error, "a spooled audit message cannot be read");
-                    self.quarantine(&directory, sequence, "it cannot be read")?;
+                    self.quarantine(&directory, sequence, &[], "it cannot be read")?;
                 }
             }
         }
     }
 
-    /// Drops message `sequence`, whose file is gone, from the count.
-    fn forget(&mut self, sequence: u64) {
+    fn oldest_batch(&mut self, max: usize) -> Result<Vec<Stored>, SpoolError> {
+        let mut batch = Vec::new();
+        let mut after = None;
+        while batch.len() < max {
+            let Some(stored) = self.oldest_after(after)? else {
+                break;
+            };
+            after = Some(stored.sequence);
+            batch.push(stored);
+        }
+        Ok(batch)
+    }
+
+    /// Drops message `sequence`, which can no longer be read, from the
+    /// count.
+    fn forget(&mut self, sequence: u64) -> Result<(), SpoolError> {
         if let Store::Disk { sizes, .. } = &mut self.store
             && let Some(size) = sizes.remove(&sequence)
         {
             self.depth.messages = self.depth.messages.saturating_sub(1);
             self.depth.bytes = self.depth.bytes.saturating_sub(size);
         }
+        self.settle(sequence)
     }
 
-    /// Moves message `sequence` to the quarantine, where it stays counted.
+    /// Records message `sequence` as delivered or quarantined in its
+    /// segment, and removes the segment once all of its messages are.
+    fn settle(&mut self, sequence: u64) -> Result<(), SpoolError> {
+        let Store::Disk {
+            directory,
+            segments,
+            ..
+        } = &mut self.store
+        else {
+            return Ok(());
+        };
+        let Some((first, segment)) = segments.range_mut(..=sequence).next_back() else {
+            return Ok(());
+        };
+        let first = *first;
+        let Some(index) = sequence.checked_sub(first) else {
+            return Ok(());
+        };
+        if index >= segment.len() || index < segment.prefix {
+            return Ok(());
+        }
+        segment.settled.insert(index);
+        let before = segment.prefix;
+        while segment.settled.remove(&segment.prefix) {
+            segment.prefix = segment.prefix.saturating_add(1);
+        }
+        if segment.prefix >= segment.len() {
+            segments.remove(&first);
+            return remove_segment(directory, first);
+        }
+        if segment.prefix > before {
+            write_sent(directory, first, segment.prefix)?;
+        }
+        Ok(())
+    }
+
+    /// Writes message `sequence`, `message`, to the quarantine, where it
+    /// stays counted, and settles it in its segment.
     fn quarantine(
         &mut self,
         directory: &Path,
         sequence: u64,
+        message: &[u8],
         why: &'static str,
     ) -> Result<(), SpoolError> {
         let held = directory.join(QUARANTINE);
-        let from = file(directory, sequence, STORED);
-        let to = file(&held, sequence, STORED);
-        fs::rename(&from, &to).map_err(io("moved to the quarantine", &from))?;
-        sync_directory(directory)?;
-        sync_directory(&held)?;
+        write_quarantined(&held, sequence, message)?;
         if let Store::Disk {
             sizes, quarantined, ..
         } = &mut self.store
@@ -831,6 +1024,7 @@ impl Inner {
             quarantined.insert(sequence, size);
             self.depth.quarantined = self.depth.quarantined.saturating_add(1);
         }
+        self.settle(sequence)?;
         tracing::error!(target: crate::atna::targets::SPOOL,
             sequence,
             reason = why,
@@ -848,7 +1042,18 @@ impl Inner {
                     return Ok(());
                 }
                 let directory = directory.clone();
-                self.quarantine(&directory, sequence, "the audit repository refused it")
+                let message = match self.locate(sequence) {
+                    Some((first, frame)) => {
+                        read_frame(&directory, first, frame).unwrap_or_default()
+                    }
+                    None => Vec::new(),
+                };
+                self.quarantine(
+                    &directory,
+                    sequence,
+                    &message,
+                    "the audit repository refused it",
+                )
             }
             Store::Memory { queue, held } => {
                 let Some(position) = queue.iter().position(|(kept, _)| *kept == sequence) else {
@@ -870,15 +1075,10 @@ impl Inner {
 
     fn remove(&mut self, sequence: u64) -> Result<(), SpoolError> {
         let size = match &mut self.store {
-            Store::Disk {
-                directory, sizes, ..
-            } => {
-                let Some(size) = sizes.get(&sequence).copied() else {
+            Store::Disk { sizes, .. } => {
+                let Some(size) = sizes.remove(&sequence) else {
                     return Ok(());
                 };
-                let path = file(directory, sequence, STORED);
-                fs::remove_file(&path).map_err(io("removed", &path))?;
-                sizes.remove(&sequence);
                 size
             }
             Store::Memory { queue, .. } => {
@@ -892,6 +1092,6 @@ impl Inner {
         };
         self.depth.messages = self.depth.messages.saturating_sub(1);
         self.depth.bytes = self.depth.bytes.saturating_sub(size);
-        Ok(())
+        self.settle(sequence)
     }
 }

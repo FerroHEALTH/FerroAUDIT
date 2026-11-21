@@ -5,7 +5,9 @@
 //! as FHIR JSON (the `RESTful` ATNA supplement, ITI TF-2 §3.20.4.2), stays
 //! spooled while the repository cannot take it (§3.20.4.1.1, which the
 //! forwarder applies to the feed too), and a record the repository refuses is
-//! quarantined so the drain goes on (§3.20.4.3.3).
+//! quarantined so the drain goes on (§3.20.4.3.3). Records waiting together
+//! go as one batch Bundle (§3.20.4.4), each judged by its entry of the
+//! batch-response (§3.20.4.5).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -22,7 +24,7 @@ use ihe_atna::balp::{
 };
 use secrecy::{ExposeSecret as _, SecretSlice, SecretString};
 use url::Url;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{header, method, path, path_regex};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::observer;
@@ -262,6 +264,7 @@ async fn a_record_outlives_every_retry_round_until_the_repository_takes_it() {
 async fn a_refused_record_is_quarantined_and_the_drain_goes_on() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
+        .and(path("/arr/AuditEvent"))
         .respond_with(ResponseTemplate::new(400))
         .up_to_n_times(1)
         .mount(&server)
@@ -290,6 +293,124 @@ async fn a_refused_record_is_quarantined_and_the_drain_goes_on() {
             .expect("the quarantine")
             .count()
     );
+}
+
+/// A batch-response with one status per entry, in order.
+fn batch_response(statuses: &[&str]) -> ResponseTemplate {
+    let entries: Vec<String> = statuses
+        .iter()
+        .map(|status| format!(r#"{{"response":{{"status":"{status}"}}}}"#))
+        .collect();
+    ResponseTemplate::new(200).set_body_raw(
+        format!(
+            r#"{{"resourceType":"Bundle","type":"batch-response","entry":[{}]}}"#,
+            entries.join(",")
+        ),
+        "application/fhir+json",
+    )
+}
+
+/// ITI TF-2 §3.20.4.4.2: the records waiting are posted to the FHIR base as
+/// one Bundle of type batch, each entry a POST of an `AuditEvent`, and each is
+/// counted delivered by its entry of the batch-response (§3.20.4.5.2).
+#[tokio::test]
+#[expect(
+    clippy::disallowed_types,
+    reason = "the test seam: the posted Bundle is read as a JSON value"
+)]
+async fn the_records_waiting_go_as_one_batch_bundle() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex("^/arr/?$"))
+        .and(header("content-type", "application/fhir+json"))
+        .respond_with(batch_response(&[
+            "201 Created",
+            "201 Created",
+            "201 Created",
+        ]))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), repository(&server));
+    for value in ["Qz7-batch-1", "Qz7-batch-2", "Qz7-batch-3"] {
+        forwarder.submit(record(value)).await.expect("stored");
+    }
+    let running = tokio::spawn(Arc::clone(&forwarder).run());
+    let status = until(&forwarder, timing::deadline(REQUEST), |status| {
+        status.delivered == 3
+    })
+    .await;
+    running.abort();
+    assert_eq!(3, status.delivered, "each record by its entry");
+    assert_eq!(0, status.depth.messages);
+    let received = server.received_requests().await.expect("requests");
+    assert_eq!(1, received.len(), "one Bundle");
+    let bundle: serde_json::Value = serde_json::from_slice(&received[0].body).expect("JSON");
+    assert_eq!("Bundle", bundle["resourceType"], "a Bundle");
+    assert_eq!("batch", bundle["type"], "of type batch");
+    let entries = bundle["entry"].as_array().expect("entries");
+    assert_eq!(3, entries.len(), "one entry per record");
+    for entry in entries {
+        assert_eq!("POST", entry["request"]["method"], "each a POST");
+        assert_eq!(
+            "AuditEvent", entry["resource"]["resourceType"],
+            "of an AuditEvent"
+        );
+    }
+}
+
+/// ITI TF-2 §3.20.4.5.3: a partial success leaves each failed entry to the
+/// client: a refused one is quarantined, the others are delivered.
+#[tokio::test]
+async fn an_entry_the_batch_response_refuses_is_quarantined_and_the_rest_delivered() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex("^/arr/?$"))
+        .respond_with(batch_response(&["201 Created", "400 Bad Request"]))
+        .mount(&server)
+        .await;
+    let directory = tempfile::tempdir().expect("a directory");
+    let spool_dir = directory.path().join("feed-spool");
+    let spool = Spool::open_for(&spool_dir, BOUNDS, Content::AuditEvents).expect("a spool");
+    let forwarder = Forwarder::fhir_feed(spool, repository(&server));
+    for value in ["Qz7-batch-4", "Qz7-batch-5"] {
+        forwarder.submit(record(value)).await.expect("stored");
+    }
+    let running = tokio::spawn(Arc::clone(&forwarder).run());
+    let status = until(&forwarder, timing::deadline(REQUEST), |status| {
+        status.delivered == 1 && status.depth.quarantined == 1
+    })
+    .await;
+    running.abort();
+    assert_eq!(1, status.delivered, "the accepted entry is delivered");
+    assert_eq!(1, status.depth.quarantined, "the refused entry is held");
+}
+
+/// A repository that refuses the Bundle as a whole is sent each record on
+/// its own (ITI TF-2 §3.20.4.2), so a repository without the batch
+/// interaction still takes them.
+#[tokio::test]
+async fn a_bundle_refused_as_a_whole_is_sent_record_by_record() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex("^/arr/?$"))
+        .respond_with(ResponseTemplate::new(405))
+        .mount(&server)
+        .await;
+    answering(&server, 201).await;
+    let forwarder = Forwarder::fhir_feed(Spool::in_memory(BOUNDS), repository(&server));
+    for value in ["Qz7-batch-6", "Qz7-batch-7"] {
+        forwarder.submit(record(value)).await.expect("stored");
+    }
+    let running = tokio::spawn(Arc::clone(&forwarder).run());
+    let status = until(
+        &forwarder,
+        timing::deadline(REQUEST.saturating_mul(3)),
+        |status| status.delivered == 2,
+    )
+    .await;
+    running.abort();
+    assert_eq!(2, status.delivered, "each record is created on its own");
 }
 
 #[tokio::test]

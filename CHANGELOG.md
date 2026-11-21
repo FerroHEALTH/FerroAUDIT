@@ -11,6 +11,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: a spool on disk stores the messages that queue behind one write
+  as one segment file, each message framed by its length and its CRC-32,
+  flushed once with one flush of the directory, so a batch costs two
+  flushes however many messages it holds; before, each message was its own
+  file with its own flush, which capped a sender near one message per flush
+  (#254). A sidecar beside a segment counts the messages delivered or
+  quarantined without a flush, so a crash sends again what it had not
+  counted. A segment that ends in a frame that cannot be read keeps the
+  frames before it and moves the bytes from that frame on to the
+  quarantine. A spool directory a previous release wrote holds `.msg` files,
+  which this release refuses as foreign: deliver or move them first.
+- Breaking: the FHIR Feed forwarder sends the records waiting, up to
+  `forwarder::BATCH` (100), as one Bundle of type `batch` to the FHIR base
+  (ITI TF-2 §3.20.4.4, Send Audit Bundle), and judges each record by its
+  entry of the `batch-response` (§3.20.4.5): a success is delivered, a
+  refusal quarantined, any other failure retried. A Bundle the repository
+  refuses as a whole is sent again record by record, and a single record
+  still goes as a create. `FeedClient::post` returns a `FeedAnswer`, the
+  status and the body, in place of the status alone, so a product's client
+  reads the body too (#254).
+
 ## [0.23.0] - 2026-11-17
 
 The FHIR Feed sends through a client the caller writes, so `ihe-atna`

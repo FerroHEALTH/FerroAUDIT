@@ -310,6 +310,11 @@ pub(in crate::atna) mod tests {
             lock(&spool.inner).syncs,
             "the pushes queued behind one write share one directory flush"
         );
+        assert_eq!(
+            1,
+            lock(&spool.inner).segment_syncs,
+            "the pushes queued behind one write share one segment and its one flush"
+        );
         for sequence in 0..PUSHES {
             let stored = spool.oldest().await.expect("it reads").expect("one");
             assert_eq!(
