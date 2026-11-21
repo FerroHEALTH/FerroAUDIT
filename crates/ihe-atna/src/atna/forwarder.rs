@@ -519,7 +519,7 @@ impl<O: Outbox> Forwarder<O> {
                 Err(FeedError::Rejected { .. }) => {
                     let mut one_by_one = Vec::with_capacity(records.len());
                     for record in &records {
-                        let sent = feed.send(*record).await;
+                        let sent = feed.send(record).await;
                         let retry = matches!(
                             sent,
                             Err(FeedError::Send(_)

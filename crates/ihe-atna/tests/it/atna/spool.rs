@@ -456,7 +456,7 @@ async fn a_message_settled_before_a_crash_its_sidecar_did_not_record_is_sent_aga
     let path = directory.path().join("spool");
     drop(Spool::open(&path, ROOMY).expect("the spool opens"));
     let texts = [framed("first"), framed("second"), framed("third")];
-    let bodies: Vec<&[u8]> = texts.iter().map(|text| text.expose_secret()).collect();
+    let bodies: Vec<&[u8]> = texts.iter().map(ExposeSecret::expose_secret).collect();
     std::fs::write(path.join(segment(0)), segment_of(&bodies)).expect("a segment");
 
     let spool = Spool::open(&path, ROOMY).expect("the spool reopens");
