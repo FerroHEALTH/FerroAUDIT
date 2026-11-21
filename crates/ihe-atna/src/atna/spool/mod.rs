@@ -687,6 +687,22 @@ impl Spool {
         self.blocking(Inner::oldest).await
     }
 
+    /// Up to `max` of the oldest messages that can be delivered, in order,
+    /// still stored: the oldest, and those stored after it that read, each
+    /// a message of the spool's [`Content`].
+    ///
+    /// A message on the way that cannot be read, or is no message of the
+    /// spool's content, is moved to the quarantine, as [`Spool::oldest`]
+    /// does.
+    ///
+    /// # Errors
+    ///
+    /// [`SpoolError::Io`] when a message can neither be read nor moved to
+    /// the quarantine.
+    pub async fn oldest_batch(&self, max: usize) -> Result<Vec<Stored>, SpoolError> {
+        self.blocking(move |inner| inner.oldest_batch(max)).await
+    }
+
     /// Moves the message `sequence`, which the repository refused, to the
     /// quarantine, where it stays counted, so the drain goes on.
     ///
@@ -872,23 +888,35 @@ impl Inner {
     }
 
     fn oldest(&mut self) -> Result<Option<Stored>, SpoolError> {
+        self.oldest_after(None)
+    }
+
+    /// The oldest message after `after`, or the oldest of all, that can be
+    /// delivered; every one on the way that cannot is quarantined.
+    fn oldest_after(&mut self, after: Option<u64>) -> Result<Option<Stored>, SpoolError> {
+        let later = |sequence: &u64| after.is_none_or(|after| *sequence > after);
         loop {
             let (directory, content, sequence) = match &self.store {
                 Store::Memory { queue, .. } => {
-                    return Ok(queue.front().map(|(sequence, message)| Stored {
-                        sequence: *sequence,
-                        message: SecretSlice::from(message.expose_secret().to_vec()),
-                    }));
+                    return Ok(queue.iter().find(|(sequence, _)| later(sequence)).map(
+                        |(sequence, message)| Stored {
+                            sequence: *sequence,
+                            message: SecretSlice::from(message.expose_secret().to_vec()),
+                        },
+                    ));
                 }
                 Store::Disk {
                     directory,
                     content,
                     sizes,
                     ..
-                } => match sizes.keys().next() {
-                    None => return Ok(None),
-                    Some(sequence) => (directory.clone(), *content, *sequence),
-                },
+                } => {
+                    let from = after.map_or(0, |after| after.saturating_add(1));
+                    match sizes.range(from..).next() {
+                        None => return Ok(None),
+                        Some((sequence, _)) => (directory.clone(), *content, *sequence),
+                    }
+                }
             };
             let Some((first, frame)) = self.locate(sequence) else {
                 tracing::error!(target: crate::atna::targets::SPOOL, sequence, "a spooled audit message is gone from the spool");
@@ -915,6 +943,19 @@ impl Inner {
                 }
             }
         }
+    }
+
+    fn oldest_batch(&mut self, max: usize) -> Result<Vec<Stored>, SpoolError> {
+        let mut batch = Vec::new();
+        let mut after = None;
+        while batch.len() < max {
+            let Some(stored) = self.oldest_after(after)? else {
+                break;
+            };
+            after = Some(stored.sequence);
+            batch.push(stored);
+        }
+        Ok(batch)
     }
 
     /// Drops message `sequence`, which can no longer be read, from the

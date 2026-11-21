@@ -45,8 +45,8 @@
 //! use ferrohealth_smart::client::outbound::{OutboundClient, SendError};
 //! use ferrohealth_smart::config::TlsBuilder;
 //! use ferrohealth_smart::config::endpoint::EndpointSection;
-//! use http::{Method, StatusCode, header::CONTENT_TYPE};
-//! use ihe_atna::atna::feed::{FeedClient, FeedRepository, FeedSendError};
+//! use http::{Method, header::CONTENT_TYPE};
+//! use ihe_atna::atna::feed::{FeedAnswer, FeedClient, FeedRepository, FeedSendError};
 //! use ihe_atna::atna::forwarder::Forwarder;
 //! use ihe_atna::atna::spool::{Bounds, Content, Spool};
 //! use ihe_atna::balp::{
@@ -70,7 +70,7 @@
 //!         url: &Url,
 //!         content_type: &'static str,
 //!         body: &[u8],
-//!     ) -> Result<StatusCode, FeedSendError> {
+//!     ) -> Result<FeedAnswer, FeedSendError> {
 //!         let answer = self
 //!             .0
 //!             .send(&Method::POST, url, |request| {
@@ -81,7 +81,12 @@
 //!                 SendError::Transport(error) => FeedSendError::Transport(Box::new(error.without_url())),
 //!                 other => FeedSendError::Credentials(Box::new(other)),
 //!             })?;
-//!         Ok(answer.status())
+//!         let status = answer.status();
+//!         let body = answer
+//!             .bytes()
+//!             .await
+//!             .map_err(|error| FeedSendError::Transport(Box::new(error.without_url())))?;
+//!         Ok(FeedAnswer::new(status, body.to_vec()))
 //!     }
 //! }
 //!
@@ -165,18 +170,49 @@ pub trait FeedClient: Send + Sync {
 
     /// Posts `body` as `content_type` to `url` with the repository's
     /// credential, in one round of the client's tries, and returns the last
-    /// answer's status.
+    /// answer's status and body.
     ///
     /// # Errors
     ///
     /// [`FeedSendError::Credentials`] when no credential could be had, and
-    /// [`FeedSendError::Transport`] when no answer arrived.
+    /// [`FeedSendError::Transport`] when no answer, or no whole body,
+    /// arrived.
     async fn post(
         &self,
         url: &Url,
         content_type: &'static str,
         body: &[u8],
-    ) -> Result<StatusCode, FeedSendError>;
+    ) -> Result<FeedAnswer, FeedSendError>;
+}
+
+/// A repository's answer: its status and its body. `Debug` shows the status
+/// and the body's length, never the body.
+pub struct FeedAnswer {
+    status: StatusCode,
+    body: Vec<u8>,
+}
+
+impl FeedAnswer {
+    /// The answer of `status` with `body`.
+    #[must_use]
+    pub fn new(status: StatusCode, body: Vec<u8>) -> Self {
+        Self { status, body }
+    }
+
+    /// The status.
+    #[must_use]
+    pub fn status(&self) -> StatusCode {
+        self.status
+    }
+}
+
+impl fmt::Debug for FeedAnswer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FeedAnswer")
+            .field("status", &self.status)
+            .field("body", &self.body.len())
+            .finish()
+    }
 }
 
 /// Why a [`FeedClient`] sent no request or had no answer.
@@ -245,6 +281,7 @@ pub enum FeedError {
 /// client sends a credential, never the client itself.
 #[derive(Clone)]
 pub struct FeedRepository {
+    base: Url,
     endpoint: Url,
     client: Arc<dyn FeedClient>,
     between_rounds: Retry,
@@ -301,6 +338,7 @@ impl FeedRepository {
         // round's own tries are the caller's client's.
         let between_rounds = Retry::new(1, between_rounds, between_rounds)?;
         Ok(Self {
+            base: base.clone(),
             endpoint,
             client,
             between_rounds,
@@ -326,13 +364,79 @@ impl FeedRepository {
     ///
     /// A [`FeedError`] for every last answer but a `2xx`, and for no answer.
     pub async fn send(&self, record: &SecretSlice<u8>) -> Result<(), FeedError> {
-        let status = self
+        let answer = self
             .client
             .post(&self.endpoint, FHIR_JSON, record.expose_secret())
             .await
             .map_err(FeedError::Send)?;
-        outcome(status)
+        outcome(answer.status)
     }
+
+    /// Posts `records`, each one `AuditEvent` as FHIR JSON, as one Bundle of
+    /// type `batch` to the FHIR base (ITI TF-2 §3.20.4.4.2), in one round of
+    /// the client's tries, and returns each record's outcome from its entry
+    /// of the `batch-response` (§3.20.4.5.2), in order.
+    ///
+    /// # Errors
+    ///
+    /// A [`FeedError`] when the Bundle as a whole is not accepted: no answer,
+    /// a status that is no `2xx`, or a body that is no `batch-response` with
+    /// one entry per record. [`FeedError::Rejected`] then names a refusal of
+    /// the Bundle itself, which a caller can follow by sending each record on
+    /// its own.
+    pub async fn send_batch(
+        &self,
+        records: &[&SecretSlice<u8>],
+    ) -> Result<Vec<Result<(), FeedError>>, FeedError> {
+        let mut body = br#"{"resourceType":"Bundle","type":"batch","entry":["#.to_vec();
+        for (index, record) in records.iter().enumerate() {
+            if index > 0 {
+                body.push(b',');
+            }
+            body.extend_from_slice(br#"{"resource":"#);
+            body.extend_from_slice(record.expose_secret());
+            body.extend_from_slice(br#","request":{"method":"POST","url":"AuditEvent"}}"#);
+        }
+        body.extend_from_slice(b"]}");
+        let body = SecretSlice::from(body);
+        let answer = self
+            .client
+            .post(&self.base, FHIR_JSON, body.expose_secret())
+            .await
+            .map_err(FeedError::Send)?;
+        outcome(answer.status)?;
+        let entries = batch_response(&answer.body).ok_or(FeedError::Unavailable {
+            status: answer.status,
+        })?;
+        if entries.len() != records.len() {
+            return Err(FeedError::Unavailable {
+                status: answer.status,
+            });
+        }
+        Ok(entries.into_iter().map(outcome).collect())
+    }
+}
+
+/// The status of each entry of a `batch-response` Bundle (ITI TF-2
+/// §3.20.4.5.2: each entry's response carries the HTTP status of its
+/// request), or `None` for a body that is no such Bundle.
+fn batch_response(body: &[u8]) -> Option<Vec<StatusCode>> {
+    // NOTE: no specification governs this: our own design; a body that is no Bundle is
+    // answered by the caller as a repository that did not take the batch, never dropped.
+    let bundle: fhir_types::r4::bundle::Bundle = serde_json::from_slice(body).ok()?;
+    if bundle.r#type.value.as_deref() != Some("batch-response") {
+        return None;
+    }
+    bundle
+        .entry
+        .iter()
+        .map(|entry| {
+            let status = entry.response.as_ref()?.status.value.as_deref()?;
+            // NOTE: FHIR R4 Bundle.entry.response.status starts with the 3-digit HTTP code.
+            let code = status.get(..3)?;
+            StatusCode::from_bytes(code.as_bytes()).ok()
+        })
+        .collect()
 }
 
 /// What the repository's answer `status` means for the record.

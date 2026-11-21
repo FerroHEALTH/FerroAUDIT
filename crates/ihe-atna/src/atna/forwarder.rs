@@ -45,6 +45,11 @@ use super::retry::{Backoff, Retry};
 use super::spool::reserve::Reservation;
 use super::spool::{Depth, Spool, SpoolError, Stored};
 
+/// The most records a FHIR Feed forwarder sends in one Bundle (no
+/// specification governs the size: our own design).
+#[cfg(feature = "feed")]
+pub const BATCH: usize = 100;
+
 /// What the forwarder reports of itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Status {
@@ -82,6 +87,18 @@ pub trait Outbox: Send + Sync + fmt::Debug {
     /// An [`OutboxError`] when the store cannot be read; the forwarder backs
     /// off and asks again.
     async fn oldest(&self) -> Result<Option<Stored>, OutboxError>;
+
+    /// Up to `max` of the oldest messages awaiting delivery, in order, which
+    /// a FHIR Feed forwarder sends as one Bundle. A store that reads one at a
+    /// time keeps this default, the oldest alone.
+    ///
+    /// # Errors
+    ///
+    /// An [`OutboxError`] when the store cannot be read.
+    async fn oldest_batch(&self, max: usize) -> Result<Vec<Stored>, OutboxError> {
+        let _one_at_a_time = max;
+        Ok(self.oldest().await?.into_iter().collect())
+    }
 
     /// Returns once a message may have been stored since the last
     /// [`Outbox::oldest`] found none, or after a while, so the forwarder asks
@@ -127,6 +144,10 @@ impl<O: Outbox + ?Sized> Outbox for Arc<O> {
         O::oldest(self).await
     }
 
+    async fn oldest_batch(&self, max: usize) -> Result<Vec<Stored>, OutboxError> {
+        O::oldest_batch(self, max).await
+    }
+
     async fn stored(&self) {
         O::stored(self).await;
     }
@@ -156,6 +177,12 @@ impl<O: Outbox + ?Sized> Outbox for Arc<O> {
 impl Outbox for Spool {
     async fn oldest(&self) -> Result<Option<Stored>, OutboxError> {
         Spool::oldest(self)
+            .await
+            .map_err(|error| OutboxError(Box::new(error)))
+    }
+
+    async fn oldest_batch(&self, max: usize) -> Result<Vec<Stored>, OutboxError> {
+        Spool::oldest_batch(self, max)
             .await
             .map_err(|error| OutboxError(Box::new(error)))
     }
@@ -461,44 +488,108 @@ impl<O: Outbox> Forwarder<O> {
         }
     }
 
-    // NOTE: the `RESTful` ATNA supplement §3.20.4.3.3 leaves a failure to the
-    // client: a refusal is quarantined, every other failure is retried.
+    // NOTE: ITI TF-2 §3.20.4.5.3 leaves each failed entry to the client: a refusal is
+    // quarantined, every other failure is retried, as §3.20.4.3.3 has for one record.
     #[cfg(feature = "feed")]
     async fn run_feed(&self, feed: &FeedRepository) {
         let mut backoff = Backoff::new(self.retry);
         loop {
-            let next = tokio::select! {
+            let batch = tokio::select! {
                 biased;
                 () = self.stopped() => break,
-                next = self.next(&mut backoff) => next,
+                batch = self.next_batch(&mut backoff) => batch,
             };
-            let Some(stored) = next else {
+            if batch.is_empty() {
                 continue;
+            }
+            let records: Vec<&SecretSlice<u8>> =
+                batch.iter().map(|stored| &stored.message).collect();
+            // NOTE: ITI TF-2 §3.20.4.2 creates one record; a batch of one is sent so.
+            let sent = match records.as_slice() {
+                [one] => match feed.send(one).await {
+                    Err(error @ FeedError::Rejected { .. }) => Ok(vec![Err(error)]),
+                    other => other.map(|()| vec![Ok(())]),
+                },
+                _ => feed.send_batch(&records).await,
             };
-            match feed.send(&stored.message).await {
-                Ok(()) => self.delivered(stored.sequence, &mut backoff).await,
-                Err(FeedError::Rejected { status }) => {
-                    self.reachable.store(true, Ordering::Relaxed);
-                    tracing::error!(target: crate::atna::targets::FORWARDER,
-                        sequence = stored.sequence,
-                        status = status.as_u16(),
-                        "the audit repository refused an AuditEvent; it is quarantined"
-                    );
-                    if let Err(error) = self.outbox.quarantine(stored.sequence).await {
-                        tracing::warn!(target: crate::atna::targets::FORWARDER,
-                            error = %chain(&error),
-                            "a refused audit message could not be quarantined"
+            let outcomes = match sent {
+                Ok(outcomes) => outcomes,
+                // NOTE: ITI TF-2 §3.20.4.4.3 has a repository answer a whole Bundle; one it
+                // refuses as a whole is sent again record by record (§3.20.4.2).
+                Err(FeedError::Rejected { .. }) => {
+                    let mut one_by_one = Vec::with_capacity(records.len());
+                    for record in &records {
+                        let sent = feed.send(*record).await;
+                        let retry = matches!(
+                            sent,
+                            Err(FeedError::Send(_)
+                                | FeedError::Unauthorized
+                                | FeedError::Unavailable { .. })
                         );
-                        self.back_off(&mut backoff).await;
+                        one_by_one.push(sent);
+                        if retry {
+                            break;
+                        }
                     }
+                    one_by_one
                 }
                 Err(error) => {
                     tracing::warn!(target: crate::atna::targets::FORWARDER,
                         error = %chain(&error),
-                        "an AuditEvent could not be delivered; it stays spooled"
+                        records = records.len(),
+                        "a Bundle of AuditEvents could not be delivered; they stay spooled"
                     );
                     self.back_off(&mut backoff).await;
+                    continue;
                 }
+            };
+            for (stored, outcome) in batch.iter().zip(outcomes) {
+                match outcome {
+                    Ok(()) => self.delivered(stored.sequence, &mut backoff).await,
+                    Err(FeedError::Rejected { status }) => {
+                        self.reachable.store(true, Ordering::Relaxed);
+                        tracing::error!(target: crate::atna::targets::FORWARDER,
+                            sequence = stored.sequence,
+                            status = status.as_u16(),
+                            "the audit repository refused an AuditEvent; it is quarantined"
+                        );
+                        if let Err(error) = self.outbox.quarantine(stored.sequence).await {
+                            tracing::warn!(target: crate::atna::targets::FORWARDER,
+                                error = %chain(&error),
+                                "a refused audit message could not be quarantined"
+                            );
+                            self.back_off(&mut backoff).await;
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!(target: crate::atna::targets::FORWARDER,
+                            error = %chain(&error),
+                            "an AuditEvent could not be delivered; it stays spooled"
+                        );
+                        self.back_off(&mut backoff).await;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The oldest stored messages, at most [`BATCH`], after waiting for one
+    /// while the spool is empty; none after a wake-up or after a failure to
+    /// read the spool, which has backed off.
+    #[cfg(feature = "feed")]
+    async fn next_batch(&self, backoff: &mut Backoff) -> Vec<Stored> {
+        match self.outbox.oldest_batch(BATCH).await {
+            Ok(batch) if batch.is_empty() => {
+                self.outbox.stored().await;
+                batch
+            }
+            Ok(batch) => batch,
+            Err(error) => {
+                tracing::warn!(target: crate::atna::targets::FORWARDER, error = %chain(&error), "the audit spool could not be read");
+                self.back_off(backoff).await;
+                Vec::new()
             }
         }
     }
