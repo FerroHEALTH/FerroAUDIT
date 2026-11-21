@@ -11,6 +11,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-21
+
+A product's audited transactions are no longer capped by one disk flush per
+record: the spool stores a batch as one segment flushed once, and the FHIR
+Feed sends the records waiting as one batch Bundle. Products move their
+`FeedClient` to return a `FeedAnswer`, the status and the body, in about
+five lines, as the `atna::feed` example shows. `ehds-logging` requires
+`ihe-atna` `=0.24.0` and changes nothing else.
+
 ### Changed
 
 - Breaking: a spool on disk stores the messages that queue behind one write
