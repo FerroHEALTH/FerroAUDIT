@@ -160,7 +160,12 @@ impl Inner {
         while segment.settled.remove(&segment.prefix) {
             segment.prefix = segment.prefix.saturating_add(1);
         }
-        if segment.prefix >= segment.len() && active != Some(first) {
+        if segment.prefix >= segment.len() && active == Some(first) {
+            // NOTE: no specification governs this: our own design; only the writer
+            // removes the segment it appends to, so it never appends to a removed file.
+            self.retire
+                .store(true, std::sync::atomic::Ordering::Release);
+        } else if segment.prefix >= segment.len() {
             let sealed = segment.sealed;
             segments.remove(&first);
             return remove_segment(directory, first, sealed);

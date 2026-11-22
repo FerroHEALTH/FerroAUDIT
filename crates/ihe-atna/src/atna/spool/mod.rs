@@ -270,6 +270,7 @@ pub struct Spool {
     tickets: Arc<AtomicU64>,
     wake: Arc<Condvar>,
     closed: Arc<AtomicBool>,
+    retire: Arc<AtomicBool>,
     #[cfg(test)]
     flush: Arc<Mutex<Option<writer::Flush>>>,
     #[cfg(test)]
@@ -298,6 +299,9 @@ struct Inner {
     next: u64,
     /// The first message of the segment the writer appends to.
     active: Option<u64>,
+    /// Set when every message of the active segment is settled, so the
+    /// writer removes it.
+    retire: Arc<AtomicBool>,
     /// The directory flushes the writes have made.
     #[cfg(test)]
     syncs: u64,
@@ -535,6 +539,7 @@ impl Spool {
 
     fn with(store: Store, bounds: Bounds, depth: Depth, next: u64) -> Self {
         let durable = matches!(store, Store::Disk { .. });
+        let retire = Arc::new(AtomicBool::new(false));
         let shown = Arc::new(Mutex::new(Ledger {
             depth,
             ..Ledger::default()
@@ -547,6 +552,7 @@ impl Spool {
                 shown: Arc::clone(&shown),
                 next,
                 active: None,
+                retire: Arc::clone(&retire),
                 #[cfg(test)]
                 syncs: 0,
                 #[cfg(test)]
@@ -557,6 +563,7 @@ impl Spool {
             tickets: Arc::new(AtomicU64::new(0)),
             wake: Arc::new(Condvar::new()),
             closed: Arc::new(AtomicBool::new(false)),
+            retire,
             #[cfg(test)]
             flush: Arc::new(Mutex::new(None)),
             #[cfg(test)]
@@ -691,6 +698,7 @@ impl Spool {
             inner: Arc::clone(&self.inner),
             arrived: Arc::clone(&self.arrived),
             closed: Arc::clone(&self.closed),
+            retire: Arc::clone(&self.retire),
             #[cfg(test)]
             flush: Arc::clone(&self.flush),
             #[cfg(test)]
@@ -733,14 +741,18 @@ impl Spool {
         step: impl FnOnce(&mut Inner) -> Result<T, SpoolError> + Send + 'static,
     ) -> Result<T, SpoolError> {
         let inner = Arc::clone(&self.inner);
-        tokio::task::spawn_blocking(move || {
+        let done = tokio::task::spawn_blocking(move || {
             let mut inner = lock(&inner);
             let done = step(&mut inner);
             inner.publish();
             done
         })
         .await
-        .map_err(SpoolError::Task)?
+        .map_err(SpoolError::Task)?;
+        if self.retire.load(Ordering::Acquire) {
+            self.wake.notify_one();
+        }
+        done
     }
 
     /// The oldest message that can be delivered, still stored.

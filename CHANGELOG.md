@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- A delivered record no longer stays on disk in the active spool segment
+  until the segment rolls: once every message of the active segment is
+  delivered or quarantined, the writer removes it and its sidecar, and the
+  next batch opens a new segment. Since 0.24.2 a quiet spool kept delivered
+  records, each naming a patient, on disk indefinitely (#267).
+
 ## [0.24.2] - 2026-11-22
 
 An audited transaction no longer pays a file, a task and two flushes for
