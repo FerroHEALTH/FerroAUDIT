@@ -373,5 +373,78 @@ fn a_withdrawable_record_holds_the_message_and_the_record_refused() {
                 "{name} {outcome:?}: the refusal is the record with the outcome serious failure"
             );
         }
+/// Reads one JSON value and fails unless every object's keys are strictly
+/// ascending by byte, the order `serde_json::Value` writes without
+/// `preserve_order`, read with no `Value` so no build feature reaches it.
+struct Ascending;
+
+impl<'de> serde::de::DeserializeSeed<'de> for Ascending {
+    type Value = ();
+
+    fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+        deserializer.deserialize_any(self)
+    }
+}
+
+impl<'de> serde::de::Visitor<'de> for Ascending {
+    type Value = ();
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("any JSON value")
+    }
+
+    fn visit_bool<E>(self, _: bool) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_i64<E>(self, _: i64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_u64<E>(self, _: u64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_f64<E>(self, _: f64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_str<E>(self, _: &str) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_unit<E>(self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+        while seq.next_element_seed(Ascending)?.is_some() {}
+        Ok(())
+    }
+
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+        let mut last: Option<String> = None;
+        while let Some(key) = map.next_key::<String>()? {
+            if let Some(last) = &last
+                && last.as_bytes() >= key.as_bytes()
+            {
+                return Err(serde::de::Error::custom(format!("{key} follows {last}")));
+            }
+            map.next_value_seed(Ascending)?;
+            last = Some(key);
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn every_object_of_the_bytes_holds_its_keys_in_ascending_order() {
+    for (name, exchange, observer) in cases() {
+        let record = exchange.audit_event(&observer).expect("the record");
+        let bytes = record.into_bytes();
+        let mut reader = serde_json::Deserializer::from_slice(bytes.expose_secret());
+        serde::de::DeserializeSeed::deserialize(Ascending, &mut reader)
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        reader.end().expect("one value");
     }
 }
