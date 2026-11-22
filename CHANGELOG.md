@@ -11,6 +11,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-11-22
+
+A caller that refuses its exchange when its audit records are late can
+now keep the trail and its client in agreement: records still queued at the
+spool's write timeout are withdrawn and the records of the refusal take
+their place. The release is compatible with 0.24.0: products move their pin
+to `=0.24.1`. `ehds-logging` requires `ihe-atna` `=0.24.1` and changes
+nothing else.
+
 ### Added
 
 - `Reservation::push_or_withdraw` fills a reservation with records, each a
