@@ -373,6 +373,9 @@ fn a_withdrawable_record_holds_the_message_and_the_record_refused() {
                 "{name} {outcome:?}: the refusal is the record with the outcome serious failure"
             );
         }
+    }
+}
+
 /// Reads one JSON value and fails unless every object's keys are strictly
 /// ascending by byte, the order `serde_json::Value` writes without
 /// `preserve_order`, read with no `Value` so no build feature reaches it.
