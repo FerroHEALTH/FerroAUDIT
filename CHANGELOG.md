@@ -11,6 +11,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `ihe-atna` writes a BALP record's bytes straight from the typed
+  `AuditEvent`, with no `serde_json::Value` between: one record built and
+  written costs 5.4 µs and 110 allocations, down from 11.4 µs and 367. The
+  bytes are unchanged, held by the 0.18.0 fixtures and by a test that every
+  object keeps its keys in ascending order whatever serde_json's features
+  (#270).
+
 ## [0.24.3] - 2026-11-22
 
 A delivered audit record leaves the disk again as soon as it is delivered:
