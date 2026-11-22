@@ -22,7 +22,7 @@ use secrecy::{ExposeSecret, SecretSlice};
 use super::{
     APPLICATION, AuditEventResource, AuditEventValue, AuditRecord, Coded, Described, Direction,
     Entity, Exchange, INFORMATION_RECIPIENT, NetworkAddress, OAUTH_COMPREHENSIVE, Observer,
-    PATIENT_NAMESPACE, PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT,
+    Outcome, PATIENT_NAMESPACE, PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT,
     SecurityLabel, What,
 };
 use crate::user::{Code, PurposeOfUse, User};
@@ -55,6 +55,38 @@ impl Exchange {
     /// writing to memory does not do.
     pub fn audit_event(&self, observer: &Observer) -> Result<AuditRecord, RecordError> {
         self.audit_event_resource(observer).to_record()
+    }
+
+    /// The `AuditEvent` of this exchange as `observer` records it, with the
+    /// record of the exchange refused, for
+    /// [`Reservation::push_or_withdraw`](crate::atna::spool::reserve::Reservation::push_or_withdraw).
+    ///
+    /// The refusal is the same record with the outcome serious failure
+    /// (`8`). It is kept as its typed resource and written only when the
+    /// message is withdrawn; its length is known now, since only the outcome
+    /// code differs, so the spool reserves the larger of the two in advance.
+    ///
+    /// # Errors
+    ///
+    /// A [`RecordError`] when the resource cannot be written as JSON, which
+    /// writing to memory does not do.
+    pub fn withdrawable(
+        &self,
+        observer: &Observer,
+    ) -> Result<crate::atna::spool::withdraw::Withdrawable, RecordError> {
+        let mut resource = self.resource(observer);
+        let message = serde_json::to_vec(&resource).map_err(RecordError)?;
+        let refused = Outcome::SeriousFailure.code();
+        let size = message
+            .len()
+            .saturating_sub(self.outcome.code().len())
+            .saturating_add(refused.len());
+        resource.outcome = Some(escaped(refused));
+        Ok(crate::atna::spool::withdraw::Withdrawable::typed(
+            SecretSlice::from(message),
+            AuditEventResource(resource),
+            u64::try_from(size).unwrap_or(u64::MAX),
+        ))
     }
 
     /// The `AuditEvent` of this exchange as `observer` records it, as the
