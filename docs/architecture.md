@@ -145,7 +145,14 @@ ones. A message past a bound is refused at once, so the caller can fail the
 exchange it audits; nothing is dropped silently. Storing one message is
 bounded in time (`Bounds::write_timeout`): a late write is refused as
 `SpoolError::Late`, runs on, and the message it stores is delivered like any
-other.
+other. A caller that refuses its exchange when the record is late fills its
+reservation with `Reservation::push_or_withdraw`, the message and the record
+of its refusal (#258). At the bound, a message still queued is withdrawn and
+the refusal takes its place in the queue, answered as
+`SpoolError::Withdrawn`, so the exchange is recorded once, as refused; a
+message whose batch is already being written is waited for, and the caller
+answers what the write did. The trail and the client then agree. No
+specification governs the timing: our own design.
 
 On disk each message is one file, written to a temporary name, flushed,
 renamed, and the directory flushed, so a stored message survives a crash.

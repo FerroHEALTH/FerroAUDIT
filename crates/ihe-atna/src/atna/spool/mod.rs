@@ -14,8 +14,11 @@
 //! write before it included, is refused with [`SpoolError::Late`] and is not
 //! counted. That write goes on, or still waits its turn, and once it ends
 //! the message is stored and delivered like any other, or its failure is
-//! logged, so a slow disk neither loses nor repeats a message. Messages
-//! leave in the order they were stored.
+//! logged, so a slow disk neither loses nor repeats a message. A caller
+//! that refuses its exchange when its record is late uses
+//! [`reserve::Reservation::push_or_withdraw`] instead: a message still
+//! queued at the bound is withdrawn and the record of the refusal queued in
+//! its place. Messages leave in the order they were stored.
 //!
 //! On disk ([`Spool::open`]), the messages that queue while one write is in
 //! flight are written together as one batch: one segment file named by the
@@ -53,9 +56,11 @@ mod disk;
 pub(super) mod in_flight;
 mod inspect;
 pub mod reserve;
+mod withdraw;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -188,6 +193,16 @@ pub enum SpoolError {
         /// The bound it missed.
         bound: Duration,
     },
+    /// The message was not stored within [`Bounds::write_timeout`] and was
+    /// still queued, so it was withdrawn and the record of its refusal
+    /// queued in its place ([`reserve::Reservation::push_or_withdraw`]).
+    #[error(
+        "the audit spool did not store the message within {bound:?}; it was withdrawn and the record of its refusal queued in its place"
+    )]
+    Withdrawn {
+        /// The bound it missed.
+        bound: Duration,
+    },
     /// The task that touched the disk did not finish.
     #[error("the audit spool task did not finish")]
     Task(#[source] JoinError),
@@ -241,6 +256,7 @@ pub struct Spool {
     inner: Arc<Mutex<Inner>>,
     shown: Arc<Mutex<Ledger>>,
     waiting: Arc<Mutex<VecDeque<Waiting>>>,
+    tickets: Arc<AtomicU64>,
     turn: Arc<tokio::sync::Mutex<()>>,
     arrived: Arc<Notify>,
     bounds: Bounds,
@@ -274,6 +290,8 @@ struct Inner {
 /// A message waiting for the batch that writes it, with its place under the
 /// bounds and the caller waiting for its sequence number.
 struct Waiting {
+    /// What a caller finds it by while it is queued.
+    ticket: u64,
     message: SecretSlice<u8>,
     place: Place,
     done: oneshot::Sender<Result<u64, SpoolError>>,
@@ -492,6 +510,7 @@ impl Spool {
             })),
             shown,
             waiting: Arc::new(Mutex::new(VecDeque::new())),
+            tickets: Arc::new(AtomicU64::new(0)),
             turn: Arc::new(tokio::sync::Mutex::new(())),
             arrived: Arc::new(Notify::new()),
             bounds,
@@ -579,53 +598,77 @@ impl Spool {
     // NOTE: ITI TF-2 §3.20.4.1.1 has a record stored locally and sent when the sender
     // is able, so a queued record its exchange gave up on is still written, never dropped.
     async fn store(&self, message: SecretSlice<u8>, place: Place) -> Result<(), SpoolError> {
-        let (done, outcome) = oneshot::channel();
-        lock(&self.waiting).push_back(Waiting {
-            message,
-            place,
-            done,
-        });
-        let turn = Arc::clone(&self.turn);
-        let waiting = Arc::clone(&self.waiting);
-        let inner = Arc::clone(&self.inner);
-        let arrived = Arc::clone(&self.arrived);
+        let (_ticket, outcome) = self.enqueue(message, place);
+        let turn = self.write_turn();
         let write = InFlight::new(tokio::spawn(async move {
-            let turn = turn.lock_owned().await;
-            let batch: Vec<Waiting> = lock(&waiting).drain(..).collect();
-            if !batch.is_empty() {
-                tokio::task::spawn_blocking(move || {
-                    let mut messages = Vec::with_capacity(batch.len());
-                    let mut places = Vec::with_capacity(batch.len());
-                    let mut answers = Vec::with_capacity(batch.len());
-                    for waiting in batch {
-                        messages.push(waiting.message);
-                        places.push(waiting.place);
-                        answers.push(waiting.done);
-                    }
-                    let stored = {
-                        let mut inner = lock(&inner);
-                        let stored = inner.push_batch(messages);
-                        inner.publish_giving_back(places);
-                        stored
-                    };
-                    drop(turn);
-                    if stored.iter().any(Result::is_ok) {
-                        arrived.notify_one();
-                    }
-                    for (done, stored) in answers.into_iter().zip(stored) {
-                        // NOTE: no specification governs this: our own design; a caller that
-                        // stopped waiting has its task log the outcome, so none is lost here.
-                        let _unread: Result<(), _> = done.send(stored);
-                    }
-                })
-                .await
-                .map_err(SpoolError::Task)?;
-            }
+            turn.await?;
             outcome
                 .await
                 .map_err(|_unfinished| SpoolError::Unfinished)?
         }));
         write.await.map_err(SpoolError::Task)?.map(|_sequence| ())
+    }
+
+    /// Queues `message` in its `place` for the next batch, returning the
+    /// ticket it is found by and the receiver of its outcome.
+    fn enqueue(
+        &self,
+        message: SecretSlice<u8>,
+        place: Place,
+    ) -> (u64, oneshot::Receiver<Result<u64, SpoolError>>) {
+        let (done, outcome) = oneshot::channel();
+        let mut waiting = lock(&self.waiting);
+        let ticket = self.tickets.fetch_add(1, Ordering::Relaxed);
+        waiting.push_back(Waiting {
+            ticket,
+            message,
+            place,
+            done,
+        });
+        (ticket, outcome)
+    }
+
+    /// One turn at the disk: once every write before it has ended, it writes
+    /// every message queued by then as one batch and answers each.
+    fn write_turn(&self) -> impl Future<Output = Result<(), SpoolError>> + Send + 'static {
+        let turn = Arc::clone(&self.turn);
+        let waiting = Arc::clone(&self.waiting);
+        let inner = Arc::clone(&self.inner);
+        let arrived = Arc::clone(&self.arrived);
+        async move {
+            let turn = turn.lock_owned().await;
+            let batch: Vec<Waiting> = lock(&waiting).drain(..).collect();
+            if batch.is_empty() {
+                return Ok(());
+            }
+            tokio::task::spawn_blocking(move || {
+                let mut messages = Vec::with_capacity(batch.len());
+                let mut places = Vec::with_capacity(batch.len());
+                let mut answers = Vec::with_capacity(batch.len());
+                for waiting in batch {
+                    messages.push(waiting.message);
+                    places.push(waiting.place);
+                    answers.push(waiting.done);
+                }
+                let stored = {
+                    let mut inner = lock(&inner);
+                    let stored = inner.push_batch(messages);
+                    inner.publish_giving_back(places);
+                    stored
+                };
+                drop(turn);
+                if stored.iter().any(Result::is_ok) {
+                    arrived.notify_one();
+                }
+                for (done, stored) in answers.into_iter().zip(stored) {
+                    // NOTE: no specification governs this: our own design; a caller that
+                    // stopped waiting has its task log the outcome, so none is lost here.
+                    let _unread: Result<(), _> = done.send(stored);
+                }
+            })
+            .await
+            .map_err(SpoolError::Task)
+        }
     }
 
     /// Gives a message of `size` bytes its place under the bounds, counting
