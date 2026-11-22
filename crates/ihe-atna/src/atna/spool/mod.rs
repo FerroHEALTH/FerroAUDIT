@@ -56,7 +56,7 @@ mod disk;
 pub(super) mod in_flight;
 mod inspect;
 pub mod reserve;
-mod withdraw;
+pub mod withdraw;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -598,7 +598,7 @@ impl Spool {
     // NOTE: ITI TF-2 §3.20.4.1.1 has a record stored locally and sent when the sender
     // is able, so a queued record its exchange gave up on is still written, never dropped.
     async fn store(&self, message: SecretSlice<u8>, place: Place) -> Result<(), SpoolError> {
-        let (_ticket, outcome) = self.enqueue(message, place);
+        let outcome = self.enqueue(message, place);
         let turn = self.write_turn();
         let write = InFlight::new(tokio::spawn(async move {
             turn.await?;
@@ -610,12 +610,12 @@ impl Spool {
     }
 
     /// Queues `message` in its `place` for the next batch, returning the
-    /// ticket it is found by and the receiver of its outcome.
+    /// receiver of its outcome.
     fn enqueue(
         &self,
         message: SecretSlice<u8>,
         place: Place,
-    ) -> (u64, oneshot::Receiver<Result<u64, SpoolError>>) {
+    ) -> oneshot::Receiver<Result<u64, SpoolError>> {
         let (done, outcome) = oneshot::channel();
         let mut waiting = lock(&self.waiting);
         let ticket = self.tickets.fetch_add(1, Ordering::Relaxed);
@@ -625,7 +625,7 @@ impl Spool {
             place,
             done,
         });
-        (ticket, outcome)
+        outcome
     }
 
     /// One turn at the disk: once every write before it has ended, it writes
