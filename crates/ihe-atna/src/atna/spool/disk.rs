@@ -3,14 +3,17 @@
 
 //! The files of a spool on disk, readable by their owner alone.
 //!
-//! The messages a batch stores are one segment, named by the sequence number
-//! of its first message: each message framed by its length and its CRC-32,
-//! written as a partial file, flushed to the device once, then renamed. A
-//! sidecar beside a segment holds how many of its messages, from the first,
-//! are delivered or quarantined; it is written without a flush, so a crash
-//! leaves it behind and the next run sends those messages again. A message
-//! moved to the quarantine is a file of its own there. No specification
-//! governs the layout: our own design.
+//! The messages are appended to one active segment, `<first>.open`, named by
+//! the sequence number of its first message: each message framed by its
+//! length and its CRC-32, each batch one append flushed to the device once.
+//! A full segment is sealed: an index of its frames is written beside it,
+//! flushed and renamed, then the segment is renamed `<first>.seg`, so an
+//! open reads the index and not the messages. A sidecar beside a segment
+//! holds how many of its messages, from the first, are delivered or
+//! quarantined; it is written without a flush, so a crash leaves it behind
+//! and the next run sends those messages again. A message moved to the
+//! quarantine is a file of its own there. No specification governs the
+//! layout: our own design.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -18,7 +21,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 
-use super::{PARTIAL, SEGMENT, SENT, STORED, SpoolError};
+use super::{INDEX, OPEN, PARTIAL, SEGMENT, SENT, STORED, SpoolError};
 
 /// The bytes ahead of each message in a segment: its length and its CRC-32,
 /// each four bytes big-endian.
@@ -35,6 +38,9 @@ pub(super) struct Frame {
     pub crc: u32,
 }
 
+/// The bytes of an index entry: a frame's offset, length and CRC-32.
+const ENTRY: usize = 16;
+
 /// One segment as an open reads it.
 #[derive(Debug)]
 pub(super) struct Loaded {
@@ -45,17 +51,24 @@ pub(super) struct Loaded {
     /// The bytes after the last whole frame, which no frame can be read
     /// from: a frame whose length runs past the end or whose CRC fails.
     pub remainder: Option<Vec<u8>>,
+    /// Whether it is sealed (`.seg`); an active segment (`.open`) a crash
+    /// left is sealed by the open.
+    pub sealed: bool,
 }
 
 /// The segments in `directory`, by the sequence number of their first
-/// message; a partial write a crash left is removed, a sidecar without its
-/// segment is removed, and `skip`, the quarantine, is passed over.
+/// message; a partial write a crash left is removed, a sidecar or an index
+/// without its segment is removed, and `skip`, the quarantine, is passed
+/// over. A sealed segment is read through its index when the index holds
+/// and agrees with the segment's length, and in full otherwise.
 pub(super) fn scan_segments(
     directory: &Path,
     skip: &Path,
 ) -> Result<BTreeMap<u64, Loaded>, SpoolError> {
     let mut segments = BTreeMap::new();
     let mut sidecars = BTreeMap::new();
+    let mut indexes = BTreeMap::new();
+    let mut sealed = BTreeMap::new();
     for entry in fs::read_dir(directory).map_err(io("read", directory))? {
         let entry = entry.map_err(io("read", directory))?;
         let path = entry.path();
@@ -64,6 +77,10 @@ pub(super) fn scan_segments(
         }
         match numbered(&path) {
             (Some(SEGMENT), Some(first)) => {
+                let len = entry.metadata().map_err(io("read", &path))?.len();
+                sealed.insert(first, (path, len));
+            }
+            (Some(OPEN), Some(first)) => {
                 let bytes = fs::read(&path).map_err(io("read", &path))?;
                 let (frames, remainder) = parse(&bytes);
                 segments.insert(
@@ -72,8 +89,12 @@ pub(super) fn scan_segments(
                         frames,
                         settled: 0,
                         remainder,
+                        sealed: false,
                     },
                 );
+            }
+            (Some(INDEX), Some(first)) => {
+                indexes.insert(first, path);
             }
             (Some(SENT), Some(first)) => {
                 sidecars.insert(first, path);
@@ -91,6 +112,32 @@ pub(super) fn scan_segments(
             }
         }
     }
+    for (first, (path, len)) in sealed {
+        let listed = indexes.get(&first).and_then(|index| read_index(index, len));
+        let loaded = if let Some(frames) = listed {
+            Loaded {
+                frames,
+                settled: 0,
+                remainder: None,
+                sealed: true,
+            }
+        } else {
+            let bytes = fs::read(&path).map_err(io("read", &path))?;
+            let (frames, remainder) = parse(&bytes);
+            Loaded {
+                frames,
+                settled: 0,
+                remainder,
+                sealed: true,
+            }
+        };
+        segments.insert(first, loaded);
+    }
+    for (first, path) in indexes {
+        if segments.get(&first).is_none_or(|loaded| !loaded.sealed) {
+            fs::remove_file(&path).map_err(io("removed", &path))?;
+        }
+    }
     for (first, path) in sidecars {
         match segments.get_mut(&first) {
             Some(loaded) => {
@@ -105,6 +152,84 @@ pub(super) fn scan_segments(
         }
     }
     Ok(segments)
+}
+
+/// The frames the index at `path` lists, when it reads, its CRC holds and
+/// its last frame ends at `len`, the length of its segment.
+fn read_index(path: &Path, len: u64) -> Option<Vec<Frame>> {
+    let bytes = fs::read(path).ok()?;
+    let body_len = bytes.len().checked_sub(4)?;
+    let (body, trailer) = bytes.split_at(body_len);
+    let crc = u32::from_be_bytes(trailer.try_into().ok()?);
+    if crc32fast::hash(body) != crc || body.len() % ENTRY != 0 {
+        return None;
+    }
+    let frames: Vec<Frame> = body
+        .as_chunks::<ENTRY>()
+        .0
+        .iter()
+        .map(|entry| {
+            let (offset, rest) = entry.split_at(8);
+            let (frame_len, frame_crc) = rest.split_at(4);
+            Some(Frame {
+                offset: u64::from_be_bytes(offset.try_into().ok()?),
+                len: u32::from_be_bytes(frame_len.try_into().ok()?),
+                crc: u32::from_be_bytes(frame_crc.try_into().ok()?),
+            })
+        })
+        .collect::<Option<_>>()?;
+    let end = frames
+        .last()
+        .map_or(0, |frame| frame.offset.saturating_add(u64::from(frame.len)));
+    (end == len).then_some(frames)
+}
+
+/// Writes the index of the segment whose first message is `first`, its
+/// `frames`: written as a partial file, flushed to the device, and renamed.
+pub(super) fn write_index(
+    directory: &Path,
+    first: u64,
+    frames: &[Frame],
+) -> Result<(), SpoolError> {
+    let partial = file(directory, first, PARTIAL);
+    let mut bytes = Vec::with_capacity(frames.len().saturating_mul(ENTRY).saturating_add(4));
+    for frame in frames {
+        bytes.extend_from_slice(&frame.offset.to_be_bytes());
+        bytes.extend_from_slice(&frame.len.to_be_bytes());
+        bytes.extend_from_slice(&frame.crc.to_be_bytes());
+    }
+    let crc = crc32fast::hash(&bytes);
+    bytes.extend_from_slice(&crc.to_be_bytes());
+    let mut handle = private_file(&partial)?;
+    let written = handle
+        .write_all(&bytes)
+        .and_then(|()| handle.sync_data())
+        .map_err(io("written", &partial));
+    drop(handle);
+    if let Err(error) = written {
+        // NOTE: no specification governs this: our own design; a partial file
+        // is removed by the next open, and a missing index reads the segment.
+        let _kept: std::io::Result<()> = fs::remove_file(&partial);
+        return Err(error);
+    }
+    let index = file(directory, first, INDEX);
+    fs::rename(&partial, &index).map_err(io("written", &index))
+}
+
+/// Whether `remainder`, the bytes after a segment's last whole frame, is a
+/// torn append: a header or a message cut short by the end of the file, as
+/// a crash before the append's flush leaves it, never a complete frame
+/// whose CRC fails.
+pub(super) fn torn(remainder: &[u8]) -> bool {
+    let Some(header) = remainder.get(..HEADER) else {
+        return true;
+    };
+    let (len, _crc) = header.split_at(4);
+    let Ok(len) = <[u8; 4]>::try_from(len) else {
+        return true;
+    };
+    let len = usize::try_from(u32::from_be_bytes(len)).unwrap_or(usize::MAX);
+    HEADER.saturating_add(len) > remainder.len()
 }
 
 /// The messages in the quarantine `directory`, by sequence number, with
@@ -178,55 +303,100 @@ fn frame_at(bytes: &[u8], at: usize) -> Option<(Frame, usize)> {
     (crc32fast::hash(message) == crc).then_some((frame, end))
 }
 
-/// Writes `messages` as the segment whose first message is `first`: framed
-/// into a partial file, flushed to the device once, and renamed. The rename
-/// is durable once the directory is flushed after it. A partial file a
-/// failed write leaves is removed.
-pub(super) fn write_segment(
-    directory: &Path,
-    first: u64,
+/// Creates the active segment whose first message is `first`, readable by
+/// its owner alone; it is durable once the directory is flushed after it.
+pub(super) fn create_active(directory: &Path, first: u64) -> Result<File, SpoolError> {
+    private_file(&file(directory, first, OPEN))
+}
+
+/// Appends `messages`, framed, to `active`, which holds `len` bytes, and
+/// flushes them to the device with `flush`; returns their frames. A failed
+/// append cuts the file back to `len`, and an error says whether that held.
+pub(super) fn append(
+    active: &mut File,
+    path: &Path,
+    len: u64,
     messages: &[&[u8]],
-) -> Result<Vec<Frame>, SpoolError> {
-    let partial = file(directory, first, PARTIAL);
+    flush: &mut dyn FnMut(&File) -> std::io::Result<()>,
+) -> Result<Vec<Frame>, AppendError> {
     let mut frames = Vec::with_capacity(messages.len());
     let mut bytes = Vec::new();
     for message in messages {
-        let len = u32::try_from(message.len()).map_err(|_too_large| SpoolError::Io {
-            action: "written",
-            path: partial.clone(),
-            source: std::io::Error::from(std::io::ErrorKind::FileTooLarge),
-        })?;
+        let Ok(frame_len) = u32::try_from(message.len()) else {
+            return Err(AppendError {
+                error: SpoolError::Io {
+                    action: "written",
+                    path: path.to_owned(),
+                    source: std::io::Error::from(std::io::ErrorKind::FileTooLarge),
+                },
+                kept: true,
+            });
+        };
         let crc = crc32fast::hash(message);
-        bytes.extend_from_slice(&len.to_be_bytes());
+        bytes.extend_from_slice(&frame_len.to_be_bytes());
         bytes.extend_from_slice(&crc.to_be_bytes());
+        let offset = len.saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
         frames.push(Frame {
-            offset: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
-            len,
+            offset,
+            len: frame_len,
             crc,
         });
         bytes.extend_from_slice(message);
     }
-    let mut handle = private_file(&partial)?;
-    let written = handle
-        .write_all(&bytes)
-        .and_then(|()| handle.sync_data())
-        .map_err(io("written", &partial));
-    drop(handle);
-    if let Err(error) = written {
-        // NOTE: no specification governs this: our own design; a partial file
-        // never counts as stored, and the next open removes one left here.
-        let _kept: std::io::Result<()> = fs::remove_file(&partial);
-        return Err(error);
+    let written = active
+        .seek(SeekFrom::Start(len))
+        .and_then(|_at| active.write_all(&bytes))
+        .and_then(|()| flush(active));
+    match written {
+        Ok(()) => Ok(frames),
+        Err(source) => {
+            let kept = active
+                .set_len(len)
+                .and_then(|()| active.sync_data())
+                .is_ok();
+            Err(AppendError {
+                error: SpoolError::Io {
+                    action: "written",
+                    path: path.to_owned(),
+                    source,
+                },
+                kept,
+            })
+        }
     }
-    let stored = file(directory, first, SEGMENT);
-    fs::rename(&partial, &stored).map_err(io("written", &stored))?;
-    Ok(frames)
+}
+
+/// An append that failed, and whether its segment was cut back to the
+/// length it had, so the next append may follow it.
+#[derive(Debug)]
+pub(super) struct AppendError {
+    /// Why it failed.
+    pub error: SpoolError,
+    /// Whether the segment holds exactly what it held before.
+    pub kept: bool,
+}
+
+/// Renames the active segment whose first message is `first` to its sealed
+/// name; the rename is durable once the directory is flushed after it.
+pub(super) fn seal(directory: &Path, first: u64) -> Result<(), SpoolError> {
+    let sealed = file(directory, first, SEGMENT);
+    fs::rename(file(directory, first, OPEN), &sealed).map_err(io("written", &sealed))
+}
+
+/// The extension of a segment, sealed or active.
+pub(super) fn segment_extension(sealed: bool) -> &'static str {
+    if sealed { SEGMENT } else { OPEN }
 }
 
 /// Reads the message `frame` names in the segment whose first message is
 /// `first`, and checks its CRC.
-pub(super) fn read_frame(directory: &Path, first: u64, frame: Frame) -> std::io::Result<Vec<u8>> {
-    let mut handle = File::open(file(directory, first, SEGMENT))?;
+pub(super) fn read_frame(
+    directory: &Path,
+    first: u64,
+    sealed: bool,
+    frame: Frame,
+) -> std::io::Result<Vec<u8>> {
+    let mut handle = File::open(file(directory, first, segment_extension(sealed)))?;
     handle.seek(SeekFrom::Start(frame.offset))?;
     let mut message = vec![0_u8; usize::try_from(frame.len).unwrap_or(usize::MAX)];
     handle.read_exact(&mut message)?;
@@ -242,9 +412,10 @@ pub(super) fn read_frame(directory: &Path, first: u64, frame: Frame) -> std::io:
 pub(super) fn truncate_segment(
     directory: &Path,
     first: u64,
+    sealed: bool,
     frames: &[Frame],
 ) -> Result<(), SpoolError> {
-    let path = file(directory, first, SEGMENT);
+    let path = file(directory, first, segment_extension(sealed));
     let end = frames
         .last()
         .map_or(0, |frame| frame.offset.saturating_add(u64::from(frame.len)));
@@ -262,17 +433,21 @@ pub(super) fn write_sent(directory: &Path, first: u64, settled: u64) -> Result<(
     fs::write(&path, settled.to_string()).map_err(io("written", &path))
 }
 
-/// Removes the segment whose first message is `first`, and its sidecar.
-pub(super) fn remove_segment(directory: &Path, first: u64) -> Result<(), SpoolError> {
-    let path = file(directory, first, SEGMENT);
+/// Removes the segment whose first message is `first`, its sidecar and its
+/// index.
+pub(super) fn remove_segment(directory: &Path, first: u64, sealed: bool) -> Result<(), SpoolError> {
+    let path = file(directory, first, segment_extension(sealed));
     fs::remove_file(&path).map_err(io("removed", &path))?;
-    let sent = file(directory, first, SENT);
-    match fs::remove_file(&sent) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(io("removed", &sent)(error))
+    for extension in [SENT, INDEX] {
+        let beside = file(directory, first, extension);
+        match fs::remove_file(&beside) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(io("removed", &beside)(error));
+            }
+            _ => {}
         }
-        _ => Ok(()),
     }
+    Ok(())
 }
 
 /// Writes `message` as message `sequence` of the quarantine `directory`,
@@ -315,7 +490,7 @@ pub(super) fn first_foreign(
         }
         let own = match numbered(&path) {
             (Some(PARTIAL), Some(_)) => true,
-            (Some(SEGMENT | SENT), Some(_)) => skip.is_some(),
+            (Some(SEGMENT | OPEN | INDEX | SENT), Some(_)) => skip.is_some(),
             (Some(STORED), Some(_)) => skip.is_none(),
             _ => false,
         };

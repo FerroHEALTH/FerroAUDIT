@@ -46,10 +46,11 @@ The crate depends on no application. The profiles are published at
   bounds the TLS handshake and each write and flush.
 - `spool::Spool`: the bounded store a sender that cannot reach its
   repository keeps the records in (§3.20.4.1.1), in a directory private to
-  its owner, or a queue in memory. The messages that queue behind one write
-  are stored as one segment file, each framed by its length and its CRC-32,
-  flushed once with one flush of the directory, so a batch costs two
-  flushes however many messages it holds; a sidecar counts the messages
+  its owner, or a queue in memory. One writer thread appends the messages
+  that queue behind one flush to the active segment as the next batch, each
+  framed by its length and its CRC-32, with one flush per batch; a segment
+  of 4,096 messages or 8 MiB is sealed with an index of its frames, so an
+  open reads indexes instead of messages. A sidecar counts the messages
   delivered, and a crash sends again what it had not counted. A message that
   cannot be read or is no whole frame, and the bytes of a segment from a
   frame that fails its CRC on, move to its `quarantine` subdirectory, so the
