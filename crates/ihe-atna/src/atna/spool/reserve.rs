@@ -32,7 +32,10 @@ impl Reservation {
     /// it admits.
     ///
     /// A message no larger than the place always fits under the bounds; a
-    /// larger one needs room for its excess.
+    /// larger one needs room for its excess. A late message is stored once
+    /// its write ends, so a caller that refuses its exchange on
+    /// [`SpoolError::Late`] fills the place with
+    /// [`Reservation::push_or_withdraw`] instead.
     ///
     /// # Errors
     ///
@@ -44,6 +47,35 @@ impl Reservation {
         let size = u64::try_from(message.expose_secret().len()).unwrap_or(u64::MAX);
         let place = self.spool.resize(self.place, size)?;
         self.spool.push_in(message, place).await
+    }
+
+    /// Stores `message` in this place, or, when its write is late, records
+    /// `refusal` in its place: for a caller that refuses its exchange when
+    /// its record is late, so the trail and the client agree.
+    ///
+    /// The place is made to hold the larger of the two. A message still
+    /// queued at [`Bounds::write_timeout`](super::Bounds::write_timeout) is
+    /// withdrawn and `refusal` is queued in its place, so the exchange is
+    /// recorded once, as refused. A message whose batch is already being
+    /// written by then is waited for, however long the write takes, and the
+    /// answer is what the write did.
+    ///
+    /// # Errors
+    ///
+    /// [`SpoolError::Full`] when the larger of the two exceeds the place and
+    /// the bounds have no room for the excess, [`SpoolError::Withdrawn`]
+    /// when the message was withdrawn, and [`SpoolError::Io`] when its batch
+    /// could not be written.
+    pub async fn push_or_withdraw(
+        self,
+        message: SecretSlice<u8>,
+        refusal: SecretSlice<u8>,
+    ) -> Result<(), SpoolError> {
+        let size = u64::try_from(message.expose_secret().len())
+            .unwrap_or(u64::MAX)
+            .max(u64::try_from(refusal.expose_secret().len()).unwrap_or(u64::MAX));
+        let place = self.spool.resize(self.place, size)?;
+        self.spool.store_or_withdraw(message, refusal, place).await
     }
 }
 
