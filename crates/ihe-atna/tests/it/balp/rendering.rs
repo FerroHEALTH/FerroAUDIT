@@ -343,6 +343,39 @@ fn the_typed_resource_reads_back_as_itself() {
     }
 }
 
+#[test]
+fn a_withdrawable_record_holds_the_message_and_the_record_refused() {
+    for (name, exchange, observer) in cases() {
+        for outcome in [
+            Outcome::Success,
+            Outcome::MinorFailure,
+            Outcome::SeriousFailure,
+            Outcome::MajorFailure,
+        ] {
+            let exchange = Exchange {
+                outcome,
+                ..exchange.clone()
+            };
+            let refused = Exchange {
+                outcome: Outcome::SeriousFailure,
+                ..exchange.clone()
+            };
+            let pair = exchange.withdrawable(&observer).expect("the records");
+            let message = exchange.audit_event(&observer).expect("the record");
+            assert!(
+                pair.message().expose_secret() == message.into_bytes().expose_secret(),
+                "{name} {outcome:?}: the message is the record of the exchange"
+            );
+            let refusal = pair.into_refusal().expect("the refusal fits its place");
+            let expected = refused.audit_event(&observer).expect("the record");
+            assert!(
+                refusal.expose_secret() == expected.into_bytes().expose_secret(),
+                "{name} {outcome:?}: the refusal is the record with the outcome serious failure"
+            );
+        }
+    }
+}
+
 /// Reads one JSON value and fails unless every object's keys are strictly
 /// ascending by byte, the order `serde_json::Value` writes without
 /// `preserve_order`, read with no `Value` so no build feature reaches it.

@@ -636,10 +636,7 @@ mod tests {
         let withdrawn = spool
             .reserve(64)
             .expect("room")
-            .push_or_withdraw(vec![Withdrawable {
-                message: naming_the_patient(),
-                refusal: message(1),
-            }])
+            .push_or_withdraw(vec![Withdrawable::new(naming_the_patient(), message(1))])
             .await;
         assert!(
             matches!(withdrawn, Err(SpoolError::Withdrawn { .. })),

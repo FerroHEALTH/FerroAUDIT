@@ -11,8 +11,31 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-22
+
+A product that withdraws a late spool write no longer writes the record of
+the refused exchange in advance: `Exchange::withdrawable` writes the record
+once and writes the refusal only when the message is withdrawn, and a BALP
+record's bytes are written straight from the typed resource. One audited
+exchange's two records cost 5.3 µs and 112 allocations in place of 22.8 µs
+and 734. The written bytes are unchanged. Products that build a
+`Withdrawable` (FerroPIX) call `exchange.withdrawable(&observer)` in place
+of two written records, in about five lines. `ehds-logging` requires
+`ihe-atna` `=0.25.0` and changes nothing else.
+
 ### Changed
 
+- Breaking: the fields of `atna::spool::withdraw::Withdrawable` are
+  private. `Withdrawable::new(message, refusal)` takes two written records,
+  such as syslog frames, and `Exchange::withdrawable(&observer)` takes a
+  BALP exchange: it writes the message and keeps the refusal, the same
+  record with the outcome serious failure (`8`), as its typed resource of a
+  known length, written only when the message is withdrawn. The spool
+  writes each refusal before it locks its queue, and a refusal that cannot
+  be written within its message's place leaves the message queued, so the
+  caller waits for its write and the access is recorded once.
+  `Withdrawable::message` and `Withdrawable::into_refusal` read the two
+  (#272).
 - `ihe-atna` writes a BALP record's bytes straight from the typed
   `AuditEvent`, with no `serde_json::Value` between: one record built and
   written costs 5.4 µs and 110 allocations, down from 11.4 µs and 367. The
