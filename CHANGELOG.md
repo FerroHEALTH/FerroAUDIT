@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-11-22
+
+An audited transaction no longer pays a file, a task and two flushes for
+its record: a spool appends each batch to one segment from one writer
+thread, and opens a large backlog through segment indexes. The release is
+compatible with 0.24.1: products move their pin to `=0.24.2`.
+`ehds-logging` requires `ihe-atna` `=0.24.2` and changes nothing else.
+
 ### Changed
 
 - A spool on disk has one writer thread that appends each batch to an
