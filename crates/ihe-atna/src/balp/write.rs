@@ -182,7 +182,9 @@ impl AuditEventResource {
     /// A [`RecordError`] when the resource cannot be written as JSON, which
     /// writing to memory does not do.
     pub fn to_record(&self) -> Result<AuditRecord, RecordError> {
-        serde_json::to_vec(&self.json()?)
+        // NOTE: no specification governs the member order: our own design. fhir-types writes
+        // every object's keys sorted, the order 0.18.0 wrote through a value, in every build.
+        serde_json::to_vec(&self.0)
             .map(|json| AuditRecord(SecretSlice::from(json)))
             .map_err(RecordError)
     }
@@ -198,11 +200,9 @@ impl AuditEventResource {
         self.json().map(AuditEventValue)
     }
 
-    // NOTE: no specification governs the member order: our own design. The bytes pass
-    // through a serde_json::Value, as 0.18.0 wrote them, so a stored record keeps its order.
     #[expect(
         clippy::disallowed_types,
-        reason = "the record leaves as a JSON value, and its bytes keep that value's member order"
+        reason = "the record leaves as a JSON value through AuditEventValue"
     )]
     fn json(&self) -> Result<serde_json::Value, RecordError> {
         serde_json::to_value(&self.0).map_err(RecordError)
