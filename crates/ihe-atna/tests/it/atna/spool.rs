@@ -51,6 +51,15 @@ pub(crate) fn segment(first: u64) -> String {
     format!("{first:020}.seg")
 }
 
+/// Stores each of `texts` in a segment of its own, as one process each
+/// would: each open seals the segment the process before it left.
+pub(crate) async fn stored_apart(path: &std::path::Path, bounds: Bounds, texts: &[&str]) {
+    for text in texts {
+        let spool = Spool::open(path, bounds).expect("the spool opens");
+        spool.push(framed(text)).await.expect("stored");
+    }
+}
+
 /// `messages` framed as a segment: each its length and its CRC-32, each four
 /// bytes big-endian, then the message.
 pub(crate) fn segment_of(messages: &[&[u8]]) -> Vec<u8> {
@@ -134,12 +143,7 @@ async fn a_message_past_either_bound_is_refused_and_nothing_is_dropped() {
 async fn a_message_that_is_no_frame_is_quarantined_and_the_next_one_given_up() {
     let directory = tempfile::tempdir().expect("a directory");
     let path = directory.path().join("spool");
-    {
-        let spool = Spool::open(&path, ROOMY).expect("the spool opens");
-        for text in ["first", "second"] {
-            spool.push(framed(text)).await.expect("stored");
-        }
-    }
+    stored_apart(&path, ROOMY, &["first", "second"]).await;
     std::fs::write(path.join(segment(0)), segment_of(&[b"torn bytes"])).expect("a corrupt message");
     let spool = Spool::open(&path, ROOMY).expect("the spool reopens");
 
@@ -176,10 +180,8 @@ async fn a_message_that_cannot_be_read_is_quarantined() {
 
     let directory = tempfile::tempdir().expect("a directory");
     let path = directory.path().join("spool");
-    let spool = Spool::open(&path, ROOMY).expect("the spool opens");
-    for text in ["unreadable", "readable"] {
-        spool.push(framed(text)).await.expect("stored");
-    }
+    stored_apart(&path, ROOMY, &["unreadable", "readable"]).await;
+    let spool = Spool::open(&path, ROOMY).expect("the spool reopens");
     std::fs::set_permissions(
         path.join(segment(0)),
         std::fs::Permissions::from_mode(0o000),

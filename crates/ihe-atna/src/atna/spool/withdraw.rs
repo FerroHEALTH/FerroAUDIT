@@ -66,15 +66,7 @@ impl Spool {
     ) -> Result<(), SpoolError> {
         let bound = self.bounds.write_timeout;
         let mut queued = self.enqueue_all(records, places);
-        let turn = self.write_turn();
-        drop(tokio::spawn(async move {
-            if let Err(error) = turn.await {
-                tracing::error!(target: crate::atna::targets::SPOOL,
-                    error = %super::super::chain(&error),
-                    "the task writing a batch of audit messages did not end"
-                );
-            }
-        }));
+        self.write();
         let mut answers: Vec<Option<Result<(), SpoolError>>> =
             std::iter::repeat_with(|| None).take(queued.len()).collect();
         let Some(deadline) = tokio::time::Instant::now().checked_add(bound) else {
@@ -195,7 +187,6 @@ fn answered(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     use secrecy::{ExposeSecret as _, SecretSlice};
@@ -258,7 +249,7 @@ mod tests {
         let _logging = tracing::subscriber::set_default(logs.subscriber());
         let directory = tempfile::tempdir().expect("a directory");
         let spool = spool(&directory);
-        let turn = Arc::clone(&spool.turn).lock_owned().await;
+        let turn = Stall::queue(&spool);
 
         let asked = Instant::now();
         let withdrawn = spool
@@ -274,7 +265,7 @@ mod tests {
         assert_eq!(Depth::default(), spool.depth(), "nothing is stored yet");
         assert_eq!(1, spool.queued(), "the refusal holds the place");
 
-        drop(turn);
+        turn.release();
         holding(&spool, 1).await;
         assert_eq!(1, spool.depth().messages, "one record of the exchange");
         assert_eq!(0, spool.queued());
@@ -337,7 +328,7 @@ mod tests {
     async fn several_messages_still_queued_are_withdrawn_together() {
         let directory = tempfile::tempdir().expect("a directory");
         let spool = spool(&directory);
-        let turn = Arc::clone(&spool.turn).lock_owned().await;
+        let turn = Stall::queue(&spool);
 
         let three = (0..3)
             .map(|_| Withdrawable {
@@ -356,7 +347,7 @@ mod tests {
         );
         assert_eq!(3, spool.queued(), "each refusal holds its message's place");
 
-        drop(turn);
+        turn.release();
         holding(&spool, 3).await;
         for _ in 0..3 {
             let stored = spool.oldest().await.expect("it reads").expect("one");

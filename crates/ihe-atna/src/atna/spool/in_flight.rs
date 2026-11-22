@@ -1,81 +1,28 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! A write to the spool its caller may stop waiting for.
+//! A write to the spool its caller stopped waiting for.
 //!
-//! The write is a task of its own that waits for its turn and then runs on a
-//! blocking thread, so a caller that gives up on it, queued or writing,
-//! leaves it running: once it ends, the message it stored is delivered like
-//! any other, and a write that failed is logged by its error, never by its
-//! message.
-
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-use tokio::task::{JoinError, JoinHandle};
+//! The writer goes on with a message whose caller gave up on it, queued or
+//! writing: once the write ends, the message it stored is delivered like any
+//! other, and the outcome is logged by its error, never by its message.
 
 use super::SpoolError;
 
-/// A write in flight, ending with the sequence number it stored.
-///
-/// Dropped before it ends, because its caller stopped waiting, it leaves a
-/// task that logs how the write ended.
-pub(super) struct InFlight(Option<JoinHandle<Result<u64, SpoolError>>>);
-
-impl InFlight {
-    /// The write `write` runs.
-    pub(super) fn new(write: JoinHandle<Result<u64, SpoolError>>) -> Self {
-        Self(Some(write))
-    }
-}
-
-impl Future for InFlight {
-    type Output = Result<Result<u64, SpoolError>, JoinError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let Some(write) = self.0.as_mut() else {
-            return Poll::Pending;
-        };
-        let ended = std::task::ready!(Pin::new(write).poll(cx));
-        self.0 = None;
-        Poll::Ready(ended)
-    }
-}
-
-impl Drop for InFlight {
-    fn drop(&mut self) {
-        if let Some(write) = self.0.take() {
-            abandoned(write);
-        }
-    }
-}
-
+/// Logs how the write of a message whose caller stopped waiting ended.
 // NOTE: ITI TF-2 §3.20.4.1.1 has a record stored locally sent when the sender is
 // able, so a write its exchange stopped waiting for is delivered, never discarded.
-fn abandoned(write: JoinHandle<Result<u64, SpoolError>>) {
-    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-        tracing::error!(target: crate::atna::targets::SPOOL,
-            "an audit message write was given up outside a runtime; a message it stores is delivered"
-        );
-        return;
-    };
-    drop(runtime.spawn(async move {
-        match write.await {
-            Ok(Ok(sequence)) => tracing::warn!(target: crate::atna::targets::SPOOL,
-                sequence,
-                "an audit message was stored after its exchange stopped waiting for it; it is delivered like any other"
-            ),
-            Ok(Err(error)) => tracing::error!(target: crate::atna::targets::SPOOL,
-                error = %super::super::chain(&error),
-                "an audit message its exchange stopped waiting for could not be stored"
-            ),
-            Err(error) => tracing::error!(target: crate::atna::targets::SPOOL,
-                error = %error,
-                "the task storing an audit message its exchange stopped waiting for did not end"
-            ),
-        }
-    }));
+pub(super) fn abandoned(outcome: Result<u64, SpoolError>) {
+    match outcome {
+        Ok(sequence) => tracing::warn!(target: crate::atna::targets::SPOOL,
+            sequence,
+            "an audit message was stored after its exchange stopped waiting for it; it is delivered like any other"
+        ),
+        Err(error) => tracing::error!(target: crate::atna::targets::SPOOL,
+            error = %super::super::chain(&error),
+            "an audit message its exchange stopped waiting for could not be stored"
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -107,9 +54,19 @@ pub(in crate::atna) mod tests {
     }
 
     impl Stall {
-        /// Stalls every write to `spool`.
+        /// Stalls every write to `spool` once its batch has left the queue.
         pub(in crate::atna) fn of(spool: &Spool) -> Self {
-            let inner = Arc::clone(&spool.inner);
+            Self::holding(Arc::clone(&spool.inner))
+        }
+
+        /// Keeps every message queued for `spool`, as a write still running
+        /// before them would.
+        pub(in crate::atna) fn queue(spool: &Spool) -> Self {
+            Self::holding(Arc::clone(&spool.gate))
+        }
+
+        /// Holds `inner` on another thread until released.
+        fn holding<T: Send + 'static>(inner: Arc<Mutex<T>>) -> Self {
             let (held, holding) = mpsc::channel();
             let (release, released) = mpsc::channel::<()>();
             let holder = std::thread::spawn(move || {
@@ -284,7 +241,7 @@ pub(in crate::atna) mod tests {
             write_timeout: SLACK + SLACK,
         };
         let spool = Spool::open(&directory.path().join("spool"), bounds).expect("it opens");
-        let turn = Arc::clone(&spool.turn).lock_owned().await;
+        let turn = Stall::queue(&spool);
         let pushes: Vec<_> = (0..PUSHES)
             .map(|_| {
                 let spool = spool.clone();
@@ -298,7 +255,7 @@ pub(in crate::atna) mod tests {
         assert_eq!(PUSHES, lock(&spool.waiting).len(), "every push is queued");
         assert_eq!(Depth::default(), spool.depth(), "none is stored yet");
 
-        drop(turn);
+        turn.release();
         for push in pushes {
             push.await
                 .expect("the push ends")

@@ -156,11 +156,20 @@ already being written is waited for, and the caller answers what the write
 did. The trail and the client then agree. No specification governs the
 timing: our own design.
 
-On disk each message is one file, written to a temporary name, flushed,
-renamed, and the directory flushed, so a stored message survives a crash.
-The messages that queue while one write is in flight are written as one
-batch: each file is flushed on its own, the directory once for the batch, and
-each caller is answered once its batch is durable (#201). On
+On disk one writer thread owns the active segment, `<first>.open`, named by
+the sequence number of its first message, each message framed by its length
+and its CRC-32. The messages that queue while one flush runs are appended as
+the next batch with one flush of the segment, and each caller is answered
+once its batch is durable, so batching follows the load and adds no wait at
+a low rate (#201, #264). A segment that reaches 4,096 messages or 8 MiB is
+sealed: an index of its frames is written and flushed beside it, then the
+segment is renamed `<first>.seg`. An open reads the indexes and only the one
+active segment a crash left, which it seals, so a backlog of a million
+records opens in seconds (#263); an append the crash cut short was never
+acknowledged and is cut off, and a complete frame whose CRC fails goes to
+the quarantine. A sidecar counts each segment's messages delivered, so a
+crash sends again what it had not counted. When the spool is dropped the
+writer writes what is still queued before it ends. On
 Unix the directory must be private to its owner and every file is created
 readable by its owner alone. A message that cannot be read, or that is not of
 the spool's content, moves to `quarantine/` when the drain reaches it, logged

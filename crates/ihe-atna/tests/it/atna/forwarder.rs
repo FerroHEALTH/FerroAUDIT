@@ -213,12 +213,7 @@ async fn a_spooled_message_that_cannot_be_sent_is_quarantined_and_the_rest_deliv
     let (url, kept, _) = repository(true).await;
     let directory = tempfile::tempdir().expect("a directory");
     let path = directory.path().join("spool");
-    {
-        let spool = Spool::open(&path, BOUNDS).expect("the spool opens");
-        for text in ["first", "second", "third"] {
-            spool.push(framed(text)).await.expect("stored");
-        }
-    }
+    super::spool::stored_apart(&path, BOUNDS, &["first", "second", "third"]).await;
     let first = path.join(super::spool::segment(0));
     std::fs::write(&first, super::spool::segment_of(&[b"not a syslog frame"]))
         .expect("a corrupt message");

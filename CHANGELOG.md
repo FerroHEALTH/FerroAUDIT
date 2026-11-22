@@ -11,6 +11,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- A spool on disk has one writer thread that appends each batch to an
+  active segment with one flush, in place of a task, a blocking-pool hop, a
+  new file, a rename and a directory flush per batch. The messages that queue
+  during a flush form the next batch, so batches follow the load and add no
+  wait at a low rate. At 5,000 records per second a segment now holds about
+  3,600 records where it held 3.5, and a record costs about a third of the
+  CPU; at 10,000 per second the store keeps up where it fell seconds behind.
+  A segment of 4,096 messages or 8 MiB is sealed with an index of its
+  frames, and an open reads the indexes and seals the one active segment a
+  crash left, so a spool of a million records opens in about 3 s where it
+  read every segment (#264, #263). An append a crash cut short was never
+  acknowledged and is cut off; a complete frame whose CRC fails still goes to
+  the quarantine. Dropping a spool writes what is still queued before it
+  returns. A spool written by an older release opens unchanged; a spool
+  written by this release holds `.open` and `.idx` files an older release
+  refuses as foreign, so roll a product back only with an empty spool.
+
 ## [0.24.1] - 2026-11-22
 
 A caller that refuses its exchange when its audit records are late can

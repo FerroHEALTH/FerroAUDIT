@@ -20,19 +20,22 @@
 //! queued at the bound is withdrawn and the record of the refusal queued in
 //! its place. Messages leave in the order they were stored.
 //!
-//! On disk ([`Spool::open`]), the messages that queue while one write is in
-//! flight are written together as one batch: one segment file named by the
-//! sequence number of its first message, each message framed by its length
-//! and its CRC-32. The segment is written to a temporary file, flushed to the
-//! device once, renamed, and the directory is flushed once, so a batch costs
-//! two flushes however many messages it holds, and each message counts as
-//! stored once its batch is durable and survives a crash or a restart. A
-//! sidecar beside a segment counts its messages delivered or quarantined
-//! from the first, written without a flush, so a crash sends again what it
-//! had not recorded: each message is delivered at least once. A segment whose
-//! messages are all settled is removed. A segment that ends in a frame that
-//! cannot be read (its length runs past the end or its CRC fails) keeps the
-//! frames before it, and the bytes from that frame on go to the quarantine. On Unix the directory must give its owner alone access, and
+//! On disk ([`Spool::open`]), one writer thread owns the active segment, a
+//! file named by the sequence number of its first message, each message
+//! framed by its length and its CRC-32. The messages that queue while one
+//! write is in flight are appended together as one batch and flushed to the
+//! device once, so a batch costs one flush however many messages it holds,
+//! and each message counts as stored once its batch is durable and survives
+//! a crash or a restart. A segment that reaches 4,096 messages or 8 MiB is
+//! sealed with an index of its frames, so an open reads indexes instead of
+//! every message. A sidecar beside a segment counts its messages delivered
+//! or quarantined from the first, written without a flush, so a crash sends
+//! again what it had not recorded: each message is delivered at least once.
+//! A sealed segment whose messages are all settled is removed. An active
+//! segment a crash left is sealed by the next open, an append it cut short,
+//! never acknowledged, cut off. A segment that ends in a complete frame
+//! whose CRC fails keeps the frames before it, and the bytes from that frame
+//! on go to the quarantine. On Unix the directory must give its owner alone access, and
 //! every file is created readable by its owner alone, because a message
 //! names a patient. In memory ([`Spool::in_memory`]), the messages live as
 //! long as the process, for a development deployment.
@@ -53,15 +56,17 @@
 //! governs them.
 
 mod disk;
+mod drain;
 pub(super) mod in_flight;
 mod inspect;
 pub mod reserve;
 pub mod withdraw;
+mod writer;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretSlice};
@@ -69,16 +74,22 @@ use tokio::sync::{Notify, oneshot};
 use tokio::task::JoinError;
 
 use disk::{
-    Frame, check_private, create_private, probe, read_frame, remove_segment, scan_quarantine,
-    scan_segments, sync_directory, truncate_segment, write_quarantined, write_segment, write_sent,
+    Frame, check_private, create_private, probe, remove_segment, scan_quarantine, scan_segments,
+    seal, sync_directory, torn, truncate_segment, write_index, write_quarantined,
 };
-use in_flight::InFlight;
+use writer::{Shared, Writer};
 
 /// The extension of a message held in the quarantine.
 const STORED: &str = "msg";
 
-/// The extension of a segment, the messages of one batch.
+/// The extension of a sealed segment.
 const SEGMENT: &str = "seg";
+
+/// The extension of the active segment, which batches are appended to.
+const OPEN: &str = "open";
+
+/// The extension of a sealed segment's index of its frames.
+const INDEX: &str = "idx";
 
 /// The extension of a segment's sidecar, the count of its messages settled.
 const SENT: &str = "sent";
@@ -257,7 +268,13 @@ pub struct Spool {
     shown: Arc<Mutex<Ledger>>,
     waiting: Arc<Mutex<VecDeque<Waiting>>>,
     tickets: Arc<AtomicU64>,
-    turn: Arc<tokio::sync::Mutex<()>>,
+    wake: Arc<Condvar>,
+    closed: Arc<AtomicBool>,
+    #[cfg(test)]
+    flush: Arc<Mutex<Option<writer::Flush>>>,
+    #[cfg(test)]
+    gate: Arc<Mutex<()>>,
+    writer: Option<Arc<Writer>>,
     arrived: Arc<Notify>,
     bounds: Bounds,
     durable: bool,
@@ -279,6 +296,8 @@ struct Inner {
     depth: Depth,
     shown: Arc<Mutex<Ledger>>,
     next: u64,
+    /// The first message of the segment the writer appends to.
+    active: Option<u64>,
     /// The directory flushes the writes have made.
     #[cfg(test)]
     syncs: u64,
@@ -351,6 +370,8 @@ struct Segment {
     prefix: u64,
     /// The frames past the prefix that are settled.
     settled: BTreeSet<u64>,
+    /// Whether it is sealed: renamed `.seg`, taking no more messages.
+    sealed: bool,
 }
 
 impl Segment {
@@ -413,28 +434,45 @@ impl Spool {
         let mut quarantined = scan_quarantine(&held)?;
         let mut sizes = BTreeMap::new();
         let mut segments = BTreeMap::new();
+        let mut sealed_any = false;
         for (first, loaded) in scan_segments(directory, &held)? {
-            let segment = Segment {
+            let mut segment = Segment {
                 frames: loaded.frames,
                 prefix: loaded.settled,
                 settled: BTreeSet::new(),
+                sealed: loaded.sealed,
             };
             if let Some(remainder) = loaded.remainder {
                 let sequence = first.saturating_add(segment.len());
-                if let std::collections::btree_map::Entry::Vacant(kept) =
-                    quarantined.entry(sequence)
-                {
-                    write_quarantined(&held, sequence, &remainder)?;
-                    kept.insert(u64::try_from(remainder.len()).unwrap_or(u64::MAX));
+                if !segment.sealed && torn(&remainder) {
+                    tracing::warn!(target: crate::atna::targets::SPOOL,
+                        sequence,
+                        "the active spool segment ends in an append a crash cut short, never acknowledged; it was cut off"
+                    );
+                } else {
+                    if let std::collections::btree_map::Entry::Vacant(kept) =
+                        quarantined.entry(sequence)
+                    {
+                        write_quarantined(&held, sequence, &remainder)?;
+                        kept.insert(u64::try_from(remainder.len()).unwrap_or(u64::MAX));
+                    }
+                    tracing::error!(target: crate::atna::targets::SPOOL,
+                        sequence,
+                        "a spool segment ends in a frame that cannot be read; the bytes from it on were moved to the quarantine"
+                    );
                 }
-                truncate_segment(directory, first, &segment.frames)?;
-                tracing::error!(target: crate::atna::targets::SPOOL,
-                    sequence,
-                    "a spool segment ends in a frame that cannot be read; the bytes from it on were moved to the quarantine"
-                );
+                truncate_segment(directory, first, segment.sealed, &segment.frames)?;
+            }
+            if !segment.sealed {
+                if !segment.frames.is_empty() {
+                    write_index(directory, first, &segment.frames)?;
+                }
+                seal(directory, first)?;
+                segment.sealed = true;
+                sealed_any = true;
             }
             if segment.prefix >= segment.len() {
-                remove_segment(directory, first)?;
+                remove_segment(directory, first, true)?;
                 continue;
             }
             for index in segment.prefix..segment.len() {
@@ -446,6 +484,9 @@ impl Spool {
                 }
             }
             segments.insert(first, segment);
+        }
+        if sealed_any {
+            sync_directory(directory)?;
         }
         let depth = Depth {
             messages: sizes.len().saturating_add(quarantined.len()),
@@ -461,7 +502,7 @@ impl Spool {
             .chain(quarantined.keys().map(|last| last.saturating_add(1)))
             .max()
             .unwrap_or(0);
-        Ok(Self::with(
+        let mut spool = Self::with(
             Store::Disk {
                 directory: directory.to_owned(),
                 content,
@@ -472,7 +513,9 @@ impl Spool {
             bounds,
             depth,
             next,
-        ))
+        );
+        spool.writer = Some(Arc::new(Writer::start(spool.shared(), directory)?));
+        Ok(spool)
     }
 
     /// A spool in memory, lost when the process ends: for a development
@@ -503,6 +546,7 @@ impl Spool {
                 depth,
                 shown: Arc::clone(&shown),
                 next,
+                active: None,
                 #[cfg(test)]
                 syncs: 0,
                 #[cfg(test)]
@@ -511,7 +555,13 @@ impl Spool {
             shown,
             waiting: Arc::new(Mutex::new(VecDeque::new())),
             tickets: Arc::new(AtomicU64::new(0)),
-            turn: Arc::new(tokio::sync::Mutex::new(())),
+            wake: Arc::new(Condvar::new()),
+            closed: Arc::new(AtomicBool::new(false)),
+            #[cfg(test)]
+            flush: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            gate: Arc::new(Mutex::new(())),
+            writer: None,
             arrived: Arc::new(Notify::new()),
             bounds,
             durable,
@@ -586,27 +636,22 @@ impl Spool {
         self.arrived.notified().await;
     }
 
-    /// Stores `message` once every write before it has ended, so a stalled
-    /// write holds one blocking thread however many messages wait behind it.
+    /// Stores `message` once every write before it has ended.
     ///
-    /// The message joins the queue, and the write is its own task from the
-    /// start, waiting for its turn there. The task that has the turn writes
-    /// every message queued by then as one batch, so a message whose task
-    /// gets the turn after its batch was written only reads its outcome. A
-    /// caller that stops waiting while the message is still queued leaves it
-    /// queued, and it is written once the writes before it end.
+    /// The message joins the queue and wakes the writer, which takes every
+    /// message queued by the time it reaches the queue as one batch. A caller
+    /// that stops waiting while the message is still queued leaves it
+    /// queued, and it is written once the writes before it end. A spool in
+    /// memory has no writer: the caller writes the queue itself.
     // NOTE: ITI TF-2 §3.20.4.1.1 has a record stored locally and sent when the sender
     // is able, so a queued record its exchange gave up on is still written, never dropped.
     async fn store(&self, message: SecretSlice<u8>, place: Place) -> Result<(), SpoolError> {
         let outcome = self.enqueue(message, place);
-        let turn = self.write_turn();
-        let write = InFlight::new(tokio::spawn(async move {
-            turn.await?;
-            outcome
-                .await
-                .map_err(|_unfinished| SpoolError::Unfinished)?
-        }));
-        write.await.map_err(SpoolError::Task)?.map(|_sequence| ())
+        self.write();
+        outcome
+            .await
+            .map_err(|_unfinished| SpoolError::Unfinished)?
+            .map(|_sequence| ())
     }
 
     /// Queues `message` in its `place` for the next batch, returning the
@@ -628,46 +673,28 @@ impl Spool {
         outcome
     }
 
-    /// One turn at the disk: once every write before it has ended, it writes
-    /// every message queued by then as one batch and answers each.
-    fn write_turn(&self) -> impl Future<Output = Result<(), SpoolError>> + Send + 'static {
-        let turn = Arc::clone(&self.turn);
-        let waiting = Arc::clone(&self.waiting);
-        let inner = Arc::clone(&self.inner);
-        let arrived = Arc::clone(&self.arrived);
-        async move {
-            let turn = turn.lock_owned().await;
-            let batch: Vec<Waiting> = lock(&waiting).drain(..).collect();
-            if batch.is_empty() {
-                return Ok(());
-            }
-            tokio::task::spawn_blocking(move || {
-                let mut messages = Vec::with_capacity(batch.len());
-                let mut places = Vec::with_capacity(batch.len());
-                let mut answers = Vec::with_capacity(batch.len());
-                for waiting in batch {
-                    messages.push(waiting.message);
-                    places.push(waiting.place);
-                    answers.push(waiting.done);
-                }
-                let stored = {
-                    let mut inner = lock(&inner);
-                    let stored = inner.push_batch(messages);
-                    inner.publish_giving_back(places);
-                    stored
-                };
-                drop(turn);
-                if stored.iter().any(Result::is_ok) {
-                    arrived.notify_one();
-                }
-                for (done, stored) in answers.into_iter().zip(stored) {
-                    // NOTE: no specification governs this: our own design; a caller that
-                    // stopped waiting has its task log the outcome, so none is lost here.
-                    let _unread: Result<(), _> = done.send(stored);
-                }
-            })
-            .await
-            .map_err(SpoolError::Task)
+    /// Has the queue written: wakes the writer of a spool on disk, or writes
+    /// it on this thread for a spool in memory.
+    fn write(&self) {
+        if self.writer.is_some() {
+            self.wake.notify_one();
+        } else {
+            writer::write_queued(&self.shared());
+        }
+    }
+
+    /// What the writer shares with the callers.
+    fn shared(&self) -> Shared {
+        Shared {
+            waiting: Arc::clone(&self.waiting),
+            wake: Arc::clone(&self.wake),
+            inner: Arc::clone(&self.inner),
+            arrived: Arc::clone(&self.arrived),
+            closed: Arc::clone(&self.closed),
+            #[cfg(test)]
+            flush: Arc::clone(&self.flush),
+            #[cfg(test)]
+            gate: Arc::clone(&self.gate),
         }
     }
 
@@ -810,331 +837,5 @@ impl Inner {
         }
         self.depth.messages = self.depth.messages.saturating_add(1);
         self.depth.bytes = self.depth.bytes.saturating_add(size);
-    }
-
-    /// Stores `messages` in their order as one batch, each with its own
-    /// outcome: its sequence number once it is durable, or why it is not.
-    ///
-    /// On disk the messages the bounds admit are one segment, flushed once,
-    /// renamed, and the directory flushed once; they are stored together or
-    /// not at all.
-    fn push_batch(&mut self, messages: Vec<SecretSlice<u8>>) -> Vec<Result<u64, SpoolError>> {
-        let mut outcomes = Vec::with_capacity(messages.len());
-        let mut admitted: Vec<(usize, u64, SecretSlice<u8>)> = Vec::new();
-        let mut ahead = Depth::default();
-        for message in messages {
-            let size = u64::try_from(message.expose_secret().len()).unwrap_or(u64::MAX);
-            if let Err(full) = self.check_room(ahead, size) {
-                outcomes.push(Err(full));
-                continue;
-            }
-            ahead.messages = ahead.messages.saturating_add(1);
-            ahead.bytes = ahead.bytes.saturating_add(size);
-            admitted.push((outcomes.len(), size, message));
-            outcomes.push(Ok(0));
-        }
-        if admitted.is_empty() {
-            return outcomes;
-        }
-        let first = self.next;
-        self.next = first.saturating_add(u64::try_from(admitted.len()).unwrap_or(u64::MAX));
-        let stored = match &self.store {
-            Store::Memory { .. } => Ok(None),
-            Store::Disk { directory, .. } => {
-                let directory = directory.clone();
-                let bodies: Vec<&[u8]> = admitted
-                    .iter()
-                    .map(|(_, _, message)| message.expose_secret())
-                    .collect();
-                self.count_segment_sync();
-                write_segment(&directory, first, &bodies)
-                    .and_then(|frames| self.sync(&directory).map(|()| Some(frames)))
-            }
-        };
-        match stored {
-            Ok(frames) => {
-                if let (Some(frames), Store::Disk { segments, .. }) = (frames, &mut self.store) {
-                    segments.insert(
-                        first,
-                        Segment {
-                            frames,
-                            prefix: 0,
-                            settled: BTreeSet::new(),
-                        },
-                    );
-                }
-                let mut sequence = first;
-                for (at, size, message) in admitted {
-                    if let Store::Memory { queue, .. } = &mut self.store {
-                        queue.push_back((sequence, message));
-                    }
-                    self.count(sequence, size);
-                    if let Some(outcome) = outcomes.get_mut(at) {
-                        *outcome = Ok(sequence);
-                    }
-                    sequence = sequence.saturating_add(1);
-                }
-            }
-            Err(error) => {
-                let mut error = Some(error);
-                for (at, _, _) in admitted {
-                    let failed = error.take().unwrap_or(SpoolError::Unfinished);
-                    if let Some(outcome) = outcomes.get_mut(at) {
-                        *outcome = Err(failed);
-                    }
-                }
-            }
-        }
-        outcomes
-    }
-
-    /// Flushes `directory`, counting the flush under test.
-    #[cfg_attr(
-        not(test),
-        expect(
-            clippy::unused_self,
-            reason = "the flushes are counted only under test"
-        )
-    )]
-    fn sync(&mut self, directory: &Path) -> Result<(), SpoolError> {
-        #[cfg(test)]
-        {
-            self.syncs = self.syncs.saturating_add(1);
-        }
-        sync_directory(directory)
-    }
-
-    /// Counts a segment's flush under test.
-    #[cfg_attr(
-        not(test),
-        expect(
-            clippy::unused_self,
-            reason = "the flushes are counted only under test"
-        )
-    )]
-    fn count_segment_sync(&mut self) {
-        #[cfg(test)]
-        {
-            self.segment_syncs = self.segment_syncs.saturating_add(1);
-        }
-    }
-
-    /// The segment that holds message `sequence`, and the message's frame.
-    fn locate(&self, sequence: u64) -> Option<(u64, Frame)> {
-        let Store::Disk { segments, .. } = &self.store else {
-            return None;
-        };
-        let (first, segment) = segments.range(..=sequence).next_back()?;
-        let index = usize::try_from(sequence.checked_sub(*first)?).ok()?;
-        segment.frames.get(index).map(|frame| (*first, *frame))
-    }
-
-    fn oldest(&mut self) -> Result<Option<Stored>, SpoolError> {
-        self.oldest_after(None)
-    }
-
-    /// The oldest message after `after`, or the oldest of all, that can be
-    /// delivered; every one on the way that cannot is quarantined.
-    fn oldest_after(&mut self, after: Option<u64>) -> Result<Option<Stored>, SpoolError> {
-        let later = |sequence: &u64| after.is_none_or(|after| *sequence > after);
-        loop {
-            let (directory, content, sequence) = match &self.store {
-                Store::Memory { queue, .. } => {
-                    return Ok(queue.iter().find(|(sequence, _)| later(sequence)).map(
-                        |(sequence, message)| Stored {
-                            sequence: *sequence,
-                            message: SecretSlice::from(message.expose_secret().to_vec()),
-                        },
-                    ));
-                }
-                Store::Disk {
-                    directory,
-                    content,
-                    sizes,
-                    ..
-                } => {
-                    let from = after.map_or(0, |after| after.saturating_add(1));
-                    match sizes.range(from..).next() {
-                        None => return Ok(None),
-                        Some((sequence, _)) => (directory.clone(), *content, *sequence),
-                    }
-                }
-            };
-            let Some((first, frame)) = self.locate(sequence) else {
-                tracing::error!(target: crate::atna::targets::SPOOL, sequence, "a spooled audit message is gone from the spool");
-                self.forget(sequence)?;
-                continue;
-            };
-            match read_frame(&directory, first, frame) {
-                Ok(message) if content.holds(&message) => {
-                    return Ok(Some(Stored {
-                        sequence,
-                        message: SecretSlice::from(message),
-                    }));
-                }
-                Ok(message) => {
-                    self.quarantine(&directory, sequence, &message, content.mismatch())?;
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    tracing::error!(target: crate::atna::targets::SPOOL, sequence, "a spooled audit message is gone from the spool");
-                    self.forget(sequence)?;
-                }
-                Err(error) => {
-                    tracing::error!(target: crate::atna::targets::SPOOL, sequence, error = %error, "a spooled audit message cannot be read");
-                    self.quarantine(&directory, sequence, &[], "it cannot be read")?;
-                }
-            }
-        }
-    }
-
-    fn oldest_batch(&mut self, max: usize) -> Result<Vec<Stored>, SpoolError> {
-        let mut batch = Vec::new();
-        let mut after = None;
-        while batch.len() < max {
-            let Some(stored) = self.oldest_after(after)? else {
-                break;
-            };
-            after = Some(stored.sequence);
-            batch.push(stored);
-        }
-        Ok(batch)
-    }
-
-    /// Drops message `sequence`, which can no longer be read, from the
-    /// count.
-    fn forget(&mut self, sequence: u64) -> Result<(), SpoolError> {
-        if let Store::Disk { sizes, .. } = &mut self.store
-            && let Some(size) = sizes.remove(&sequence)
-        {
-            self.depth.messages = self.depth.messages.saturating_sub(1);
-            self.depth.bytes = self.depth.bytes.saturating_sub(size);
-        }
-        self.settle(sequence)
-    }
-
-    /// Records message `sequence` as delivered or quarantined in its
-    /// segment, and removes the segment once all of its messages are.
-    fn settle(&mut self, sequence: u64) -> Result<(), SpoolError> {
-        let Store::Disk {
-            directory,
-            segments,
-            ..
-        } = &mut self.store
-        else {
-            return Ok(());
-        };
-        let Some((first, segment)) = segments.range_mut(..=sequence).next_back() else {
-            return Ok(());
-        };
-        let first = *first;
-        let Some(index) = sequence.checked_sub(first) else {
-            return Ok(());
-        };
-        if index >= segment.len() || index < segment.prefix {
-            return Ok(());
-        }
-        segment.settled.insert(index);
-        let before = segment.prefix;
-        while segment.settled.remove(&segment.prefix) {
-            segment.prefix = segment.prefix.saturating_add(1);
-        }
-        if segment.prefix >= segment.len() {
-            segments.remove(&first);
-            return remove_segment(directory, first);
-        }
-        if segment.prefix > before {
-            write_sent(directory, first, segment.prefix)?;
-        }
-        Ok(())
-    }
-
-    /// Writes message `sequence`, `message`, to the quarantine, where it
-    /// stays counted, and settles it in its segment.
-    fn quarantine(
-        &mut self,
-        directory: &Path,
-        sequence: u64,
-        message: &[u8],
-        why: &'static str,
-    ) -> Result<(), SpoolError> {
-        let held = directory.join(QUARANTINE);
-        write_quarantined(&held, sequence, message)?;
-        if let Store::Disk {
-            sizes, quarantined, ..
-        } = &mut self.store
-            && let Some(size) = sizes.remove(&sequence)
-        {
-            quarantined.insert(sequence, size);
-            self.depth.quarantined = self.depth.quarantined.saturating_add(1);
-        }
-        self.settle(sequence)?;
-        tracing::error!(target: crate::atna::targets::SPOOL,
-            sequence,
-            reason = why,
-            "a spooled audit message was moved to the quarantine; the drain goes on"
-        );
-        Ok(())
-    }
-
-    fn reject(&mut self, sequence: u64) -> Result<(), SpoolError> {
-        match &mut self.store {
-            Store::Disk {
-                directory, sizes, ..
-            } => {
-                if !sizes.contains_key(&sequence) {
-                    return Ok(());
-                }
-                let directory = directory.clone();
-                let message = match self.locate(sequence) {
-                    Some((first, frame)) => {
-                        read_frame(&directory, first, frame).unwrap_or_default()
-                    }
-                    None => Vec::new(),
-                };
-                self.quarantine(
-                    &directory,
-                    sequence,
-                    &message,
-                    "the audit repository refused it",
-                )
-            }
-            Store::Memory { queue, held } => {
-                let Some(position) = queue.iter().position(|(kept, _)| *kept == sequence) else {
-                    return Ok(());
-                };
-                if let Some(message) = queue.remove(position) {
-                    held.push(message);
-                    self.depth.quarantined = self.depth.quarantined.saturating_add(1);
-                    tracing::error!(target: crate::atna::targets::SPOOL,
-                        sequence,
-                        reason = "the audit repository refused it",
-                        "an audit message held in memory was set aside; the drain goes on"
-                    );
-                }
-                Ok(())
-            }
-        }
-    }
-
-    fn remove(&mut self, sequence: u64) -> Result<(), SpoolError> {
-        let size = match &mut self.store {
-            Store::Disk { sizes, .. } => {
-                let Some(size) = sizes.remove(&sequence) else {
-                    return Ok(());
-                };
-                size
-            }
-            Store::Memory { queue, .. } => {
-                let Some(position) = queue.iter().position(|(held, _)| *held == sequence) else {
-                    return Ok(());
-                };
-                queue.remove(position).map_or(0, |(_, message)| {
-                    u64::try_from(message.expose_secret().len()).unwrap_or(u64::MAX)
-                })
-            }
-        };
-        self.depth.messages = self.depth.messages.saturating_sub(1);
-        self.depth.bytes = self.depth.bytes.saturating_sub(size);
-        self.settle(sequence)
     }
 }
