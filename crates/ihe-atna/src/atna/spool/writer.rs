@@ -53,6 +53,8 @@ pub(super) struct Shared {
     pub arrived: Arc<Notify>,
     /// Set when the spool is dropped.
     pub closed: Arc<AtomicBool>,
+    /// Set when every message of the active segment is settled.
+    pub retire: Arc<AtomicBool>,
     /// The flush of an append, which a test replaces to fail or delay it.
     #[cfg(test)]
     pub flush: Arc<Mutex<Option<Flush>>>,
@@ -126,9 +128,9 @@ struct Active {
 fn run(shared: &Shared) {
     let mut active: Option<Active> = None;
     loop {
-        {
+        let queued = {
             let mut queue = lock(&shared.waiting);
-            while queue.is_empty() {
+            while queue.is_empty() && !shared.retire.load(Ordering::Acquire) {
                 if shared.closed.load(Ordering::Acquire) {
                     return;
                 }
@@ -137,8 +139,14 @@ fn run(shared: &Shared) {
                     .wait(queue)
                     .unwrap_or_else(PoisonError::into_inner);
             }
+            !queue.is_empty()
+        };
+        if shared.retire.swap(false, Ordering::AcqRel) {
+            retire(shared, &mut active);
         }
-        write_batch(shared, &mut active);
+        if queued {
+            write_batch(shared, &mut active);
+        }
     }
 }
 
@@ -398,6 +406,40 @@ fn write_disk(
     }
 }
 
+/// Removes the active segment once every message of it is settled, which
+/// only the writer does, so no append reaches a removed file.
+fn retire(shared: &Shared, active: &mut Option<Active>) {
+    let Some(first) = active.as_ref().map(|segment| segment.first) else {
+        return;
+    };
+    let mut inner = lock(&shared.inner);
+    let Store::Disk {
+        directory,
+        segments,
+        ..
+    } = &mut inner.store
+    else {
+        return;
+    };
+    let settled = segments
+        .get(&first)
+        .is_some_and(|segment| segment.prefix >= segment.len());
+    if !settled {
+        return;
+    }
+    segments.remove(&first);
+    let removed = remove_segment(directory, first, false);
+    inner.active = None;
+    drop(inner);
+    *active = None;
+    if let Err(error) = removed {
+        tracing::error!(target: crate::atna::targets::SPOOL,
+            error = %super::super::chain(&error),
+            "a settled audit spool segment could not be removed; the next open removes it"
+        );
+    }
+}
+
 /// Seals `segment`: its index written, then renamed `.seg` and the
 /// directory flushed; a segment whose messages are all settled is removed.
 fn roll(shared: &Shared, directory: &Path, segment: Active) {
@@ -491,7 +533,7 @@ mod tests {
     use super::super::disk::{Frame, file, parse, write_index};
     use super::super::in_flight::tests::{BOUND, Logs, PATIENT, SLACK, Stall, naming_the_patient};
     use super::super::withdraw::Withdrawable;
-    use super::super::{Bounds, Depth, INDEX, OPEN, SEGMENT, Spool, SpoolError, lock};
+    use super::super::{Bounds, Depth, INDEX, OPEN, SEGMENT, SENT, Spool, SpoolError, lock};
     use super::SEGMENT_MESSAGES;
 
     fn bounds(write_timeout: Duration) -> Bounds {
@@ -746,6 +788,37 @@ mod tests {
         releasing.join().expect("the release ends");
         let reopened = Spool::open(&path, bounds(SLACK)).expect("it reopens");
         assert_eq!(QUEUED, drained(&reopened).await.len(), "each written once");
+    }
+
+    #[tokio::test]
+    async fn the_active_segment_is_removed_once_every_message_of_it_is_delivered() {
+        let directory = tempfile::tempdir().expect("a directory");
+        let path = directory.path().join("spool");
+        let spool = Spool::open(&path, bounds(SLACK)).expect("it opens");
+        for index in 0..2 {
+            spool.push(message(index)).await.expect("stored");
+        }
+        assert_eq!(
+            1,
+            files(&path, OPEN),
+            "the messages wait in the active segment"
+        );
+        assert_eq!(2, drained(&spool).await.len());
+        let until = Instant::now() + SLACK;
+        while files(&path, OPEN) > 0 && Instant::now() < until {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            0,
+            files(&path, OPEN),
+            "no delivered message stays on the disk"
+        );
+        assert_eq!(0, files(&path, SENT), "nor its sidecar");
+        spool
+            .push(message(2))
+            .await
+            .expect("the next message opens a segment");
+        assert_eq!(1, drained(&spool).await.len());
     }
 
     #[test]
