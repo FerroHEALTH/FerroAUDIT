@@ -399,6 +399,7 @@ impl<O: Outbox> Forwarder<O> {
     /// The oldest stored message, after waiting for one while the spool is
     /// empty; `None` after a wake-up or after a failure to read the spool,
     /// which has backed off.
+    #[cfg(feature = "atna")]
     async fn next(&self, backoff: &mut Backoff) -> Option<Stored> {
         match self.outbox.oldest().await {
             Ok(Some(stored)) => Some(stored),

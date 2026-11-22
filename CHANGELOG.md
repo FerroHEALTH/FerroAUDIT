@@ -13,13 +13,15 @@ and this project adheres to
 
 ### Added
 
-- `Reservation::push_or_withdraw` fills a reservation with a message and the
-  record of its refusal, for a caller that refuses its exchange when the
-  record is late. A message still queued at `Bounds::write_timeout` is
-  withdrawn and the refusal is queued in its place, answered as the new
-  `SpoolError::Withdrawn`; a message whose batch is already being written
-  is waited for and answered by its write. The trail then never records as
-  a success an exchange its client saw refused (#258).
+- `Reservation::push_or_withdraw` fills a reservation with records, each a
+  message and the record of its refusal (`spool::withdraw::Withdrawable`),
+  for a caller that refuses its exchange when its records are late. The
+  messages are queued together and written in one batch. Still queued at
+  `Bounds::write_timeout`, every one is withdrawn and its refusal queued in
+  its place, answered as the new `SpoolError::Withdrawn`; a batch already
+  being written is waited for and answered by its write. The trail then
+  never records as a success an exchange its client saw refused (#258,
+  #260).
 
 ## [0.24.0] - 2026-11-21
 
