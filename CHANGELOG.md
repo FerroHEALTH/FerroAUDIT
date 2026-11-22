@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-11-22
+
+A delivered audit record leaves the disk again as soon as it is delivered:
+0.24.2 kept it in the active spool segment until the segment rolled. The
+release is compatible with 0.24.2: products move their pin to `=0.24.3`,
+and a product still on 0.24.1 or older moves straight to it.
+`ehds-logging` requires `ihe-atna` `=0.24.3` and changes nothing else.
+
 ### Fixed
 
 - A delivered record no longer stays on disk in the active spool segment
