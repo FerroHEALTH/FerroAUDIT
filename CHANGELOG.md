@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: `ihe-atna` and `ehds-logging` take `fhir-types` 0.2, whose
+  exhaustive `Resource` enum adds `Provenance`. The `fhir_types::r4` types
+  `ihe-atna` exposes (the `AuditEvent` of a written record, the ITI-81
+  `searchset` Bundle and its `OperationOutcome`) come from that line, so a
+  product moves to `fhir-types` 0.2 with them.
+
 ## [0.25.0] - 2026-11-22
 
 A product that withdraws a late spool write no longer writes the record of
