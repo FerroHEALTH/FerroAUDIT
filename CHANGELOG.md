@@ -11,6 +11,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `ehds-logging`: a failed read, query, create or update no longer claims
+  its BALP pattern, which fixes `outcome` to `0`; it claims none, as a
+  failed delete already did (BALP 1.1.4, found by the HL7 FHIR Validator,
+  #279).
+- `ihe-atna`: the request id's entity type `XrequestId` carries the display
+  BALP 1.1.4's `BasicAuditEntityType` gives it, "transport specific unique
+  identifier where http X-Request-Id is used", in place of `X-Request-Id`
+  (#279).
+
 ## [0.25.0] - 2026-11-22
 
 A product that withdraws a late spool write no longer writes the record of

@@ -274,6 +274,43 @@ fn a_failed_delete_claims_no_pattern() {
     assert_eq!(written["outcome"], "4");
 }
 
+/// BALP 1.1.4: every `RESTful` pattern fixes `outcome` to `0`, so no failed
+/// access claims one.
+#[test]
+fn a_failed_access_claims_no_pattern() {
+    for action in [
+        Action::Query,
+        Action::Read,
+        Action::Create,
+        Action::Update,
+        Action::Delete,
+    ] {
+        let written = written(&record(action, Outcome::SeriousFailure));
+        assert!(
+            written.pointer("/meta/profile").is_none(),
+            "{action:?}: the pattern fixes outcome 0"
+        );
+        assert_eq!(written["outcome"], "8");
+    }
+}
+
+/// BALP 1.1.4 `BasicAuditEntityType`: the request id's type carries the
+/// display the code system gives `XrequestId`.
+#[test]
+fn the_request_id_carries_its_code_systems_display() {
+    let written = written(&record(Action::Read, Outcome::Success));
+    let transaction = written["entity"]
+        .as_array()
+        .expect("entities")
+        .iter()
+        .find(|entity| entity["type"]["code"] == "XrequestId")
+        .expect("entity:transaction");
+    assert_eq!(
+        transaction["type"]["display"],
+        "transport specific unique identifier where http X-Request-Id is used"
+    );
+}
+
 #[test]
 fn a_delete_names_one_application_agent() {
     let written = written(&record(Action::Delete, Outcome::Success));
