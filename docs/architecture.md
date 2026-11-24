@@ -31,22 +31,21 @@ its StructureDefinition under `docs/specs/ihe-balp/package/`.
 
 ## 0. The picture
 
-```text
-  product (an IHE actor, a FHIR server, a gateway)
-     │
-     ├── atna::message::AuditMessage ──▶ atna::syslog::Sender (RFC 5424 + RFC 5425 frame)
-     │                                         │
-     └── balp::Exchange ──▶ AuditEvent (FHIR R4 JSON)
-                                               │
-                              atna::forwarder::Forwarder::submit
-                                               │
-                                     atna::spool::Spool (store first)
-                                               │
-                                  Forwarder::run (oldest first)
-                               ┌───────────────┴───────────────┐
-                 atna::repository::Repository        atna::feed::FeedRepository
-                 syslog over TLS (RFC 5425)          FHIR create of AuditEvent
-                               └──────▶ Audit Record Repository ◀──────┘
+```mermaid
+flowchart TB
+    product["product (an IHE actor, a FHIR server, a gateway)"]
+    product --> message["atna::message::AuditMessage"]
+    message --> sender["atna::syslog::Sender (RFC 5424 + RFC 5425 frame)"]
+    product --> exchange["balp::Exchange"]
+    exchange --> event["AuditEvent (FHIR R4 JSON)"]
+    sender --> submit["atna::forwarder::Forwarder::submit"]
+    event --> submit
+    submit --> spool["atna::spool::Spool (store first)"]
+    spool --> run["Forwarder::run (oldest first)"]
+    run --> repository["atna::repository::Repository<br/>syslog over TLS (RFC 5425)"]
+    run --> feed["atna::feed::FeedRepository<br/>FHIR create of AuditEvent"]
+    repository --> arr["Audit Record Repository"]
+    feed --> arr
 ```
 
 ## 1. The role: the sending half of ITI-20
