@@ -83,7 +83,7 @@ version line. Each has its own README, which is its crates.io page.
 
 | Crate | Version | What it provides | Features |
 |---|---|---|---|
-| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `feed`, `retrieve`, `recording`, `redact` |
+| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `feed`, `retrieve`, `arr`, `recording`, `redact` |
 | [`ehds-logging`](crates/ehds-logging/README.md) | [![crates.io](https://img.shields.io/crates/v/ehds-logging?logo=rust&label=crates.io)](https://crates.io/crates/ehds-logging) | The EHDS logging component of Regulation (EU) 2025/327: the Annex II 3.2 access record, the Art 14(1) categories and the map that classifies an access, retention and security labels, written as a BALP `AuditEvent` or a DICOM audit message | `balp`, `atna`, `schema` |
 
 ## What it provides
@@ -100,6 +100,10 @@ version line. Each has its own README, which is its crates.io page.
 - **Retrieving audit events (ITI-81):** the FHIR search a product serves
   over its own audit store, read into typed criteria with the family's FHIR
   search grammar, and the `searchset` answer (feature `retrieve`).
+- **An Audit Record Repository** a product mounts over its own store:
+  ITI-20 received over TLS syslog and the FHIR Feed, no record lost while
+  the store is down, and ITI-81 answered with every search parameter the
+  RESTful ATNA supplement asks for (feature `arr`).
 - **The EHDS access record:** who accessed which categories of whose data,
   when and from where, as Annex II 3.2 of Regulation (EU) 2025/327 asks,
   with the deployment's category map, retention within the Art 9(2) floor,
