@@ -225,6 +225,10 @@ enum Destination {
     /// A FHIR Feed repository (ITI TF-2 §3.20.4.2).
     #[cfg(feature = "feed")]
     Feed(FeedRepository),
+    /// The store of an Audit Record Repository this crate runs (feature
+    /// `arr`), which keeps each received syslog frame as an `AuditEvent`.
+    #[cfg(feature = "arr")]
+    Store(Arc<dyn crate::arr::AuditStore>),
 }
 
 /// The store-and-forward sender to one Audit Record Repository, from the
@@ -271,6 +275,21 @@ impl Forwarder<Spool> {
     pub fn fhir_feed(spool: Spool, feed: FeedRepository) -> Arc<Self> {
         let retry = feed.between_rounds();
         Self::to(spool, Destination::Feed(feed), retry)
+    }
+
+    /// The deliverer of the syslog frames an Audit Record Repository
+    /// received into `spool` to its `store`, each as the `AuditEvent` of its
+    /// DICOM audit message ([`crate::arr::dicom`]), retrying an unavailable
+    /// store in the rounds `retry` sets and quarantining a frame the mapping
+    /// cannot carry or the store refuses (feature `arr`).
+    #[cfg(feature = "arr")]
+    #[must_use]
+    pub fn into_store(
+        spool: Spool,
+        store: Arc<dyn crate::arr::AuditStore>,
+        retry: Retry,
+    ) -> Arc<Self> {
+        Self::to(spool, Destination::Store(store), retry)
     }
 
     /// Stores `frame` for delivery, returning once it is stored.
@@ -393,6 +412,61 @@ impl<O: Outbox> Forwarder<O> {
             Destination::Syslog(repository) => self.run_syslog(repository).await,
             #[cfg(feature = "feed")]
             Destination::Feed(feed) => self.run_feed(feed).await,
+            #[cfg(feature = "arr")]
+            Destination::Store(store) => self.run_store(store.as_ref()).await,
+        }
+    }
+
+    // NOTE: ITI TF-2 §3.20.4.2.3 has the repository keep each record it does not discard:
+    // only an unavailable store retries, and a record it cannot keep is set aside, never dropped.
+    #[cfg(feature = "arr")]
+    async fn run_store(&self, store: &dyn crate::arr::AuditStore) {
+        use secrecy::ExposeSecret as _;
+
+        let mut backoff = Backoff::new(self.retry);
+        loop {
+            let next = tokio::select! {
+                biased;
+                () = self.stopped() => break,
+                next = self.next(&mut backoff) => next,
+            };
+            let Some(stored) = next else {
+                continue;
+            };
+            let record = crate::arr::syslog::message(stored.message.expose_secret())
+                .map_err(|error| crate::arr::StoreError::Refused(Box::new(error)))
+                .and_then(|xml| {
+                    crate::arr::dicom::audit_event(xml)
+                        .map_err(|error| crate::arr::StoreError::Refused(Box::new(error)))
+                });
+            let kept = match record {
+                Ok(record) => store.keep(record).await,
+                Err(error) => Err(error),
+            };
+            match kept {
+                Ok(_) => self.delivered(stored.sequence, &mut backoff).await,
+                Err(crate::arr::StoreError::Refused(error)) => {
+                    tracing::error!(target: crate::atna::targets::REPOSITORY,
+                        sequence = stored.sequence,
+                        error = %chain(error.as_ref()),
+                        "a received audit message cannot be kept; it is quarantined"
+                    );
+                    if let Err(error) = self.outbox.quarantine(stored.sequence).await {
+                        tracing::warn!(target: crate::atna::targets::REPOSITORY,
+                            error = %chain(&error),
+                            "a received audit message could not be quarantined"
+                        );
+                        self.back_off(&mut backoff).await;
+                    }
+                }
+                Err(error @ crate::arr::StoreError::Unavailable(_)) => {
+                    tracing::warn!(target: crate::atna::targets::REPOSITORY,
+                        error = %chain(&error),
+                        "the audit store is unavailable; the received message stays spooled"
+                    );
+                    self.back_off(&mut backoff).await;
+                }
+            }
         }
     }
 

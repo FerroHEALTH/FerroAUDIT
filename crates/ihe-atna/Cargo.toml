@@ -78,6 +78,11 @@ retrieve = [
   "dep:percent-encoding",
   "dep:thiserror",
 ]
+# The Audit Record Repository with the Retrieve Audit Message Option
+# (`arr`): ITI-20 received over RFC 5425 TLS into the spool and the caller's
+# store, the ATX: FHIR Feed received, and ITI-81 answered over that store.
+# It links no HTTP server: the product's server hands it each request.
+arr = ["atna", "balp", "retrieve", "dep:http"]
 # The ATX: FHIR Feed (`atna::feed`) and the forwarder to it, sent through the
 # caller's `FeedClient`, which carries the endpoint's TLS, credential and tries:
 # no HTTP client and no auth library.

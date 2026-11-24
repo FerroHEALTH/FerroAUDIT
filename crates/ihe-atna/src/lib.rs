@@ -9,6 +9,10 @@
 //! - `balp`: the Basic Audit Log Patterns, the FHIR R4 `AuditEvent` an IHE
 //!   FHIR transaction is audited as, sent over ITI-20's ATX: FHIR Feed
 //!   through the same spool and forwarder.
+//! - `retrieve`: Retrieve ATNA Audit Event (ITI-81), the query and its
+//!   answer.
+//! - `arr`: the Audit Record Repository, which receives ITI-20 over syslog
+//!   and the FHIR Feed into the caller's store and answers ITI-81 over it.
 //!
 //! Module `user` names whom an audited exchange is made for, a user an OAuth
 //! 2.0 access token names, a local user, or the system itself, and compiles
@@ -26,6 +30,8 @@
 //! caller.
 #![doc(test(attr(deny(warnings))))]
 
+#[cfg(feature = "arr")]
+pub mod arr;
 #[cfg(any(feature = "atna", feature = "balp"))]
 pub mod atna;
 #[cfg(feature = "balp")]

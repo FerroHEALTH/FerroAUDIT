@@ -61,10 +61,14 @@ pub mod targets {
     pub const SPOOL: &str = "ihe_atna::atna::spool";
     /// The target of every event of the forwarder.
     pub const FORWARDER: &str = "ihe_atna::atna::forwarder";
+    /// The target of every event of the Audit Record Repository (feature
+    /// `arr`).
+    #[cfg(feature = "arr")]
+    pub const REPOSITORY: &str = "ihe_atna::arr";
 }
 
 /// `error` with its causes, joined, for a log line.
-fn chain(error: &dyn std::error::Error) -> String {
+pub(crate) fn chain(error: &dyn std::error::Error) -> String {
     let mut line = error.to_string();
     let mut cause = error.source();
     while let Some(source) = cause {
