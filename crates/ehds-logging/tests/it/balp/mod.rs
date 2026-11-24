@@ -44,6 +44,8 @@ mod dicom;
 #[cfg(test)]
 mod emergency;
 #[cfg(test)]
+mod fields;
+#[cfg(test)]
 mod inserted;
 #[cfg(test)]
 mod labels;
@@ -183,6 +185,7 @@ fn written(record: &AccessRecord) -> Value {
         .audit_event(&observer)
         .expect("a record")
         .into_bytes();
+    crate::support::emit(bytes.expose_secret());
     serde_json::from_slice(bytes.expose_secret()).expect("JSON")
 }
 

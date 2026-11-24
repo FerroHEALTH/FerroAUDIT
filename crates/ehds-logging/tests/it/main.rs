@@ -310,6 +310,35 @@ mod support {
         }
     }
 
+    /// Writes a BALP `AuditEvent` a test wrote to the directory
+    /// `BALP_EMIT_DIR` names, when it names one, for the HL7 FHIR Validator
+    /// lane (`scripts/checks/fhir-validator.sh`). The file is named by the
+    /// test and the record's bytes, so a record two tests write is
+    /// validated once.
+    #[cfg(feature = "balp")]
+    pub(crate) fn emit(bytes: &[u8]) {
+        use std::hash::{Hash as _, Hasher as _};
+
+        let Some(dir) = std::env::var_os("BALP_EMIT_DIR") else {
+            return;
+        };
+        let mut hasher = std::hash::DefaultHasher::new();
+        bytes.hash(&mut hasher);
+        let test: String = std::thread::current()
+            .name()
+            .unwrap_or("test")
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).expect("the emit directory");
+        std::fs::write(
+            dir.join(format!("{test}-{:016x}.json", hasher.finish())),
+            bytes,
+        )
+        .expect("the record is written");
+    }
+
     /// A person bound to a complete party, a member of two groups.
     pub(crate) fn bound(guest: bool) -> Binding {
         Binding::Bound {

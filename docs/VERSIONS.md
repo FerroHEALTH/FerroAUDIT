@@ -86,6 +86,26 @@ Legal Provisions for the RFCs, and Auteurswet Art. 11 for the Dutch acts.
 | `ihe-atna`, `ehds-logging` | 0.25.0, the workspace version both crates inherit, the release tag `v0.25.0` and the `CHANGELOG.md` section | `Cargo.toml` `[workspace.package] version` (held to this row by `scripts/checks/versions.sh`), `Cargo.lock`, `CHANGELOG.md` (held together by `scripts/checks/crate-version-guard.sh`) |
 | Third-party crates | the `[workspace.dependencies]` table, each version checked against crates.io on 2026-10-20 | `Cargo.toml`, `Cargo.lock` |
 
+## HL7 FHIR Validator (the BALP validation lane, never committed)
+
+The CI `conformance` job runs the HL7 FHIR Validator over the BALP
+`AuditEvent`s the `ehds-logging` tests write
+(`scripts/checks/fhir-validator.sh`, #279). The validator is a test tool and
+never the oracle. The jar comes from the `hapifhir/org.hl7.fhir.core` GitHub
+release of its version and each package from the FHIR package registry; the
+script fetches each into the ignored `target/hl7-validator/` and checks its
+sha256 before a run. `ihe.iti.balp` is the tarball `docs/specs/ihe-balp/`
+vendors, whose manifest the validator needs; the others are FHIR R4 core and
+the two packages BALP 1.1.4 depends on. No build reads anything here.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| `validator_cli.jar` | 7.0.4 sha256 `43e29fa8822d670740a909c395ca5b70a3d07fbaa8936f8dedc6a98b007f555b` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.fhir.r4.core` | 4.0.1 sha256 `ebd7731df7d36b5b7d39d5fb6c9d77b44bb7fe5742f1a2e87f164738c3289d44` | read by `scripts/checks/fhir-validator.sh` |
+| `ihe.iti.balp` | 1.1.4 sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90` | read by `scripts/checks/fhir-validator.sh`, `docs/specs/ihe-balp/PROVENANCE.md` |
+| `hl7.terminology.r4` | 6.5.0 sha256 `a28b638483a11df696ed92198276236d759e41c7a3a8960c9e7e7d0a1185bd06` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.fhir.uv.extensions.r4` | 5.2.0 sha256 `b406e75575f05676559d0759770c5939d023ee72fb2ef38e0b3259328487720a` | read by `scripts/checks/fhir-validator.sh` |
+
 ## The CI tools
 
 | Item | Pin | Repeated in |
