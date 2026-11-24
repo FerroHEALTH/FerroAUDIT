@@ -350,7 +350,10 @@ records stay the repository's (§3.81.4.1.3, ITI TF-1 §9.4).
 The repository actor of ATNA with the Retrieve Audit Message Option (ITI
 TF-1 §9.2.3) and both transports of ITI-20, as a crate a product mounts.
 The product supplies the store, `arr::AuditStore`, with `keep` and
-`search`; its HTTP server and TLS configuration stay its own.
+`search`; its HTTP server and TLS configuration stay its own. It is the
+testable form Xt-EHR D8.2 §5.1.11 (2026-05-19) gives the log-Review
+requirement, which rests on Regulation (EU) 2025/327 Annex II 3.3; D8.2 is
+a Joint Action deliverable, not adopted text.
 
 - **Syslog (ITI TF-2 §3.20.4.1).** `arr::syslog::serve` accepts RFC 5425
   TLS connections and reads octet-counted frames, each checked as an RFC
