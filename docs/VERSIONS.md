@@ -95,8 +95,10 @@ never the oracle. The jar comes from the `hapifhir/org.hl7.fhir.core` GitHub
 release of its version and each package from the FHIR package registry; the
 script fetches each into the ignored `target/hl7-validator/` and checks its
 sha256 before a run. `ihe.iti.balp` is the tarball `docs/specs/ihe-balp/`
-vendors, whose manifest the validator needs; the others are FHIR R4 core and
-the two packages BALP 1.1.4 depends on. No build reads anything here.
+vendors, whose manifest the validator needs; the others are FHIR R4 core,
+the two packages BALP 1.1.4 depends on, and the five the validator loads
+for FHIR 4.0.1 on its own, at the versions FerroBRIDGE pins for the same
+jar. No build reads anything here.
 
 | Item | Pin | Repeated in |
 |---|---|---|
@@ -105,6 +107,11 @@ the two packages BALP 1.1.4 depends on. No build reads anything here.
 | `ihe.iti.balp` | 1.1.4 sha256 `be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90` | read by `scripts/checks/fhir-validator.sh`, `docs/specs/ihe-balp/PROVENANCE.md` |
 | `hl7.terminology.r4` | 6.5.0 sha256 `a28b638483a11df696ed92198276236d759e41c7a3a8960c9e7e7d0a1185bd06` | read by `scripts/checks/fhir-validator.sh` |
 | `hl7.fhir.uv.extensions.r4` | 5.2.0 sha256 `b406e75575f05676559d0759770c5939d023ee72fb2ef38e0b3259328487720a` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.fhir.xver-extensions` | 0.1.0 sha256 `f3bb9fa2083402e88a02b41f433655274e8a1cca563211c8f7ba6fd0badf537a` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.terminology` | 7.5.0 sha256 `c54ebe534cd3f2474459eaed68e54c34f09b003766605b19e5552db376f2cc42` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.fhir.uv.extensions` | 5.3.0 sha256 `6e3a3f9929e05d2b813a3f98fa1ad2f5122fb6b2819fa73e6c5520002fb2c5b0` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.terminology.r5` | 7.1.0 sha256 `473303108b5607aad7b910581739e8bbf3e61a625ed9e739c66e0ca597d4aefe` | read by `scripts/checks/fhir-validator.sh` |
+| `hl7.fhir.uv.extensions.r5` | 5.2.0 sha256 `e02fc6eff0f37c1611a35aa93ef9aaa3b55ab7371a5c96f4d2a5834106a13170` | read by `scripts/checks/fhir-validator.sh` |
 
 ## The CI tools
 
