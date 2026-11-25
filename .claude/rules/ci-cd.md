@@ -36,10 +36,13 @@ Actions Security Cheat Sheet, SLSA v1.0, OpenSSF Scorecard, and Sigstore.
   `if: ${{ !cancelled() }}` so a run still reports every finding.
 - `.github/workflows/specs.yml`: the vendored-specification guard,
   `scripts/checks/versions.sh`, offline, on the same events.
-- `.github/workflows/codeql.yml`: CodeQL over the `actions` language and Rust.
+- `.github/workflows/codeql.yml`: CodeQL over the `actions` language and Rust,
+  on a push to `main`, weekly, and on a pull request that changes a Rust
+  source, a Cargo file or `.github/`; never on a merge group.
 - `.github/workflows/sonar.yml`: SonarQube Cloud over the scope
   `sonar-project.properties` sets, with the lcov of an instrumented nextest
-  run; advisory, it gates no merge (`ai-code-review.md`).
+  run; advisory, it gates no merge (`ai-code-review.md`), and runs on a push
+  to `main` and weekly only (owner decision, 2026-11-25).
 - `.github/workflows/scorecard.yml`: OpenSSF Scorecard, published to the
   OpenSSF API and to code scanning.
 - `.github/workflows/release.yml`: dormant until a `v*` tag is pushed. It
