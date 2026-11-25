@@ -11,6 +11,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-25
+
+`ihe-atna` gains the receiving side of the audit trail: feature `arr`, an
+Audit Record Repository with the Retrieve Audit Message Option that a
+product mounts over its own store, which answers the Xt-EHR D8.2
+log-Review assertion. The HL7 FHIR Validator now checks every BALP record
+the `ehds-logging` tests write, and it found two output defects, fixed
+here. A product on 0.25 takes 0.26 with no code change; a failed access's
+record now claims no BALP pattern, which a consumer that filters on
+`meta.profile` sees.
+
 ### Added
 
 - `ihe-atna` feature `arr`: the Audit Record Repository with the Retrieve
