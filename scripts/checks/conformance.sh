@@ -25,9 +25,11 @@
 # "certified", "compliant" or "conformant" fails, in a badge file or in the
 # README's conformance group. The badges stay short, and the small caption
 # under that group's heading says once what they count (owner decision,
-# 2026-11-25); a README without it fails. Every badge, and every static badge in the
-# README, carries a logo from scripts/checks/badge-logos/ (the EU emblem on
-# EU blue for an EU act, else a pictogram), and one without fails.
+# 2026-11-25); a README without it fails. Every badge, and every static
+# badge in the README, carries a logo from scripts/checks/badge-logos/ (the
+# EU emblem on EU blue for an EU act, else a pictogram), and one without
+# fails. A badge's colour follows its count: green when all pass, yellow
+# when some do, red when none do.
 #
 # Usage:
 #   scripts/checks/conformance.sh --write JUNIT COUNTS   rewrite the badge files
@@ -101,8 +103,8 @@ passed() {
 
 # badge LABEL N M LOGO: the endpoint JSON of N of M, with logo LOGO.
 badge() {
-  local color=brightgreen logo
-  [[ "$2" -eq "$3" ]] || color=orange
+  local color logo
+  color="$(badge_count_color "$2" "$3")"
   logo="$(badge_logo_fields "$4")"
   jq -cn --arg label "$1" --arg message "$2/$3" --arg color "$color" --argjson logo "$logo" \
     '{schemaVersion: 1, label: $label, message: $message, color: $color} + $logo'
@@ -139,6 +141,7 @@ labels() {
     bad=1
   fi
   badge_caption_check "$README" || bad=1
+  badge_color_check "$BADGES"/*.json || bad=1
   badge_logo_check "$BADGES"/*.json || bad=1
   badge_logo_readme "$README" || bad=1
   return "$bad"
@@ -191,10 +194,31 @@ XML
     echo "::error::self-test: the validator counts are not the BALP badge" >&2
     wrong=1
   }
-  [[ "$(jq -r .color "$scratch/out/balp-1.1.4.json")" == "orange" ]] || {
-    echo "::error::self-test: a badge short of its total is not orange" >&2
+  [[ "$(jq -r .color "$scratch/out/balp-1.1.4.json")" == "yellow" ]] || {
+    echo "::error::self-test: a badge short of its total is not yellow" >&2
     wrong=1
   }
+  echo "0 4" > "$scratch/counts"
+  render "$scratch/junit.xml" "$scratch/counts" "$scratch/zero"
+  [[ "$(jq -r .color "$scratch/zero/balp-1.1.4.json")" == "red" ]] || {
+    echo "::error::self-test: a badge with nothing passing is not red" >&2
+    wrong=1
+  }
+  echo "4 4" > "$scratch/counts"
+  render "$scratch/junit.xml" "$scratch/counts" "$scratch/all"
+  [[ "$(jq -r .color "$scratch/all/balp-1.1.4.json")" == "brightgreen" ]] || {
+    echo "::error::self-test: a badge with every case passing is not green" >&2
+    wrong=1
+  }
+  badge_color_check "$scratch"/out/*.json "$scratch"/zero/*.json "$scratch"/all/*.json 2> /dev/null || {
+    echo "::error::self-test: a rendered badge's colour does not follow its count" >&2
+    wrong=1
+  }
+  jq -c '.color = "blue"' "$scratch/all/balp-1.1.4.json" > "$scratch/blue.json"
+  if badge_color_check "$scratch/blue.json" 2> /dev/null; then
+    echo "::error::self-test: a counted badge in blue passes" >&2
+    wrong=1
+  fi
   if jq -r .label "$scratch"/out/*.json | grep -qiE "$FORBIDDEN"; then
     echo "::error::self-test: a rendered label claims a certification" >&2
     wrong=1
