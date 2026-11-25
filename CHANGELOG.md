@@ -11,6 +11,23 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-25
+
+`ihe-atna` and `ehds-logging` follow `fhir-types` to the 0.2 line, whose
+exhaustive `Resource` enum adds `Provenance`. The `fhir_types::r4` types in
+`ihe-atna`'s API come from that line, so the move breaks the public API even
+though no item of either crate changes shape. Products pin `=0.27.0` and move
+their own `fhir-types` requirement to 0.2 in the same change, so they link one
+copy of it.
+
+### Changed
+
+- Breaking: `ihe-atna` and `ehds-logging` take `fhir-types` 0.2, whose
+  exhaustive `Resource` enum adds `Provenance`. The `fhir_types::r4` types
+  `ihe-atna` exposes (the `AuditEvent` of a written record, the ITI-81
+  `searchset` Bundle and its `OperationOutcome`) come from that line, so a
+  product moves to `fhir-types` 0.2 with them.
+
 ## [0.26.0] - 2026-11-25
 
 `ihe-atna` gains the receiving side of the audit trail: feature `arr`, an

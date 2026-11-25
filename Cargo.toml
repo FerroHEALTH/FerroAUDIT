@@ -6,7 +6,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.26.0"
+version = "0.27.0"
 edition = "2024"
 rust-version = "1.98"
 license = "BUSL-1.1"
@@ -38,11 +38,10 @@ tracing = "0.1.44"
 url = "2.5.8"
 # BALP: the FHIR R4 `AuditEvent` and the ATX: FHIR Feed client, and the
 # ITI-81 searchset Bundle. fhir-types tracks its newest release, the line the
-# products build on, so a product carries one copy; 0.1.130 is the first with
-# one resources feature per release. Verified on crates.io 2026-11-09
-# (0.1.130).
+# products build on, so a product carries one copy; 0.2.0 adds Provenance to
+# the Resource enum. Verified on crates.io (0.2.0).
 async-trait = "0.1.92"
-fhir-types = { version = "0.1.130", default-features = false }
+fhir-types = { version = "0.2.0", default-features = false }
 http = "1.5.0"
 # ITI-81: RFC 3986 percent-decoding of the query string. Verified on
 # crates.io 2026-10-25 (2.3.2).
@@ -89,7 +88,7 @@ ferrohealth-config = "0.4.5"
 # run time, on the aws-lc-rs provider rustls already uses.
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
 # The workspace's own crates, each at the workspace version.
-ihe-atna = { path = "crates/ihe-atna", version = "=0.26.0" }
+ihe-atna = { path = "crates/ihe-atna", version = "=0.27.0" }
 # Test-only: the spool directories, the log capture of the forwarder tests,
 # and the stub FHIR Feed repository.
 tempfile = "3.27.0"
