@@ -23,18 +23,22 @@
 #
 # A badge label never claims more than a self-test shows: a label holding
 # "certified", "compliant" or "conformant" fails, in a badge file or in the
-# README's conformance group.
+# README's conformance group. Every badge, and every static badge in the
+# README, carries a logo from scripts/checks/badge-logos/ (the EU emblem on
+# EU blue for an EU act, else a pictogram), and one without fails.
 #
 # Usage:
 #   scripts/checks/conformance.sh --write JUNIT COUNTS   rewrite the badge files
 #   scripts/checks/conformance.sh --check JUNIT COUNTS   fail when a badge file differs
-#   scripts/checks/conformance.sh --labels               the label guard alone
+#   scripts/checks/conformance.sh --labels               the label and logo guard alone
 #   scripts/checks/conformance.sh --self-test
 #
 # JUNIT is the nextest JUnit report, COUNTS the validator's counts file
 # ("<valid> <validated>"). Needs awk and jq.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# shellcheck source=scripts/checks/badge-logos/logo.sh
+source scripts/checks/badge-logos/logo.sh
 
 readonly BADGES="conformance/badges"
 readonly README="README.md"
@@ -93,12 +97,13 @@ passed() {
   echo "$n"
 }
 
-# badge LABEL N M: the endpoint JSON of N of M.
+# badge LABEL N M LOGO: the endpoint JSON of N of M, with logo LOGO.
 badge() {
-  local color=brightgreen
+  local color=brightgreen logo
   [[ "$2" -eq "$3" ]] || color=orange
-  jq -cn --arg label "$1" --arg message "$2/$3" --arg color "$color" \
-    '{schemaVersion: 1, label: $label, message: $message, color: $color}'
+  logo="$(badge_logo_fields "$4")"
+  jq -cn --arg label "$1" --arg message "$2/$3" --arg color "$color" --argjson logo "$logo" \
+    '{schemaVersion: 1, label: $label, message: $message, color: $color} + $logo'
 }
 
 # render JUNIT COUNTS DIR: writes every badge file to DIR.
@@ -107,16 +112,17 @@ render() {
   outcomes="$(outcomes "$junit")"
   read -r valid validated < "$counts"
   mkdir -p "$dir"
-  badge "IHE BALP 1.1.4 · AuditEvents valid (self-tested)" "$valid" "$validated" > "$dir/balp-1.1.4.json"
+  badge "IHE BALP 1.1.4 · AuditEvents valid (self-tested)" "$valid" "$validated" log > "$dir/balp-1.1.4.json"
   badge "EHDS Annex II 3.2 logging fields mapped (self-tested)" \
-    "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" > "$dir/ehds-annex-ii.json"
+    "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" eu > "$dir/ehds-annex-ii.json"
   badge "Xt-EHR D8.2 2026-05-19 logging assertions (self-tested)" \
-    "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" > "$dir/xt-ehr-d8-2.json"
+    "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" eu > "$dir/xt-ehr-d8-2.json"
   badge "IHE ITI-81 Retrieve (ARR) · RESTful ATNA Rev. 3.6 search parameters (self-tested)" \
-    "$(passed "$outcomes" "$ITI81_ITEMS")" "$(grep -c . <<< "$ITI81_ITEMS")" > "$dir/iti-81.json"
+    "$(passed "$outcomes" "$ITI81_ITEMS")" "$(grep -c . <<< "$ITI81_ITEMS")" magnifier > "$dir/iti-81.json"
 }
 
-# labels: fails when a badge label claims a certification.
+# labels: fails when a badge label claims a certification or a badge carries
+# no logo.
 labels() {
   local bad=0 file
   for file in "$BADGES"/*.json; do
@@ -130,6 +136,8 @@ labels() {
     echo "::error::$README: the conformance group never says certified, compliant or conformant" >&2
     bad=1
   fi
+  badge_logo_check "$BADGES"/*.json || bad=1
+  badge_logo_readme "$README" || bad=1
   return "$bad"
 }
 
@@ -186,6 +194,28 @@ XML
   }
   if jq -r .label "$scratch"/out/*.json | grep -qiE "$FORBIDDEN"; then
     echo "::error::self-test: a rendered label claims a certification" >&2
+    wrong=1
+  fi
+  [[ "$(jq -r .logoSvg "$scratch/out/iti-81.json")" == "<svg "* ]] || {
+    echo "::error::self-test: the ITI-81 badge carries no pictogram" >&2
+    wrong=1
+  }
+  [[ "$(jq -r '.namedLogo + .labelColor' "$scratch/out/ehds-annex-ii.json")" == "europeanunion#003399" ]] || {
+    echo "::error::self-test: the EHDS badge carries no EU emblem on EU blue" >&2
+    wrong=1
+  }
+  badge_logo_check "$scratch"/out/*.json 2> /dev/null || {
+    echo "::error::self-test: a rendered badge carries no logo" >&2
+    wrong=1
+  }
+  jq -c 'del(.logoSvg)' "$scratch/out/balp-1.1.4.json" > "$scratch/bare.json"
+  if badge_logo_check "$scratch/bare.json" 2> /dev/null; then
+    echo "::error::self-test: a badge without a logo passes" >&2
+    wrong=1
+  fi
+  printf '[![x](https://img.shields.io/badge/x-y-blue)](x)\n' > "$scratch/README.md"
+  if badge_logo_readme "$scratch/README.md" 2> /dev/null; then
+    echo "::error::self-test: a static badge without a logo passes" >&2
     wrong=1
   fi
   if ! grep -qiE "$FORBIDDEN" <<< "IHE BALP Conformant"; then
