@@ -62,6 +62,7 @@ that ground differs per agreement.
 |---|---|---|---|
 | log-UserAccess | §5.1.8 | Annex II 3.2 | `d8_2_log_user_access_records_every_annex_point` |
 | log-APIAccess | §5.1.9 | Annex II 3.2 | `d8_2_log_api_access_names_the_accessing_system` |
+| log-Review | §5.1.11 | Annex II 3.3 | `ihe-atna` feature `arr`, the Audit Record Repository with the Retrieve Audit Message Option (`docs/architecture.md` §4.5); `d8_2_log_review_retrieves_the_matching_records_and_records_the_retrieval` |
 | log-interoperability (SHOULD) | §5.1.12 | none | `d8_2_log_interoperability_claims_a_balp_pattern`, and the BALP validation below |
 
 ## BALP validation

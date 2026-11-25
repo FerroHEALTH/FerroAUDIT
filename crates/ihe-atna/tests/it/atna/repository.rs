@@ -37,13 +37,13 @@ const RECEIVE_BUFFER: u32 = 4096;
 
 /// A CA and the leaf it signed for `localhost`, valid from yesterday to a
 /// week from today.
-pub(super) struct Pki {
-    pub(super) ca_pem: String,
-    pub(super) leaf: CertificateDer<'static>,
-    pub(super) key: Vec<u8>,
+pub(crate) struct Pki {
+    pub(crate) ca_pem: String,
+    pub(crate) leaf: CertificateDer<'static>,
+    pub(crate) key: Vec<u8>,
 }
 
-pub(super) fn pki() -> Pki {
+pub(crate) fn pki() -> Pki {
     use rcgen::{
         BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer,
         KeyPair, KeyUsagePurpose,
@@ -95,7 +95,7 @@ pub(super) fn pki() -> Pki {
 
 /// The client configuration a product's `TlsClient` builds: TLS 1.2 or
 /// later, trusting `pki`'s CA.
-pub(super) fn client(pki: &Pki) -> Arc<rustls::ClientConfig> {
+pub(crate) fn client(pki: &Pki) -> Arc<rustls::ClientConfig> {
     client_at(pki, rustls::DEFAULT_VERSIONS)
 }
 

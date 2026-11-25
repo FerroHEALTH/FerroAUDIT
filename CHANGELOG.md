@@ -11,6 +11,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `ihe-atna` feature `arr`: the Audit Record Repository with the Retrieve
+  Audit Message Option, mounted by a product over its own
+  `arr::AuditStore`. It receives ITI-20 over RFC 5425 TLS
+  (`arr::syslog::serve`), storing each frame in its spool before reading
+  the next and delivering it into the store with `Forwarder::into_store`,
+  and the ATX: FHIR Feed `create` and `batch` in JSON or XML
+  (`arr::feed::receive`). It answers ITI-81 over the store
+  (`arr::search::retrieve`) with every search parameter of RESTful ATNA
+  §3.81.4.1.2 (`arr::search::matches`), and keeps the "Audit Log Used"
+  record of each retrieval before answering. A DICOM audit message is kept
+  as the `AuditEvent` of RESTful ATNA Table 3.81.4.2.2.1-1
+  (`arr::dicom::audit_event`). This answers the Xt-EHR D8.2 log-Review
+  assertion (#278).
+
 ### Fixed
 
 - `ehds-logging`: a failed read, query, create or update no longer claims

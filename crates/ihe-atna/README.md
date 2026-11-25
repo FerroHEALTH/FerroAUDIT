@@ -13,6 +13,7 @@ ITI-20's ATX: FHIR Feed, with a feature per layer.
 | `balp` | Basic Audit Log Patterns: the FHIR `AuditEvent` of an IHE FHIR transaction and its spool, without the syslog sender, its TLS stack or an HTTP client | ITI-20 |
 | `feed` | The ITI-20 FHIR Feed that sends the `AuditEvent`s through the same spool and forwarder, over the caller's `FeedClient` | ITI-20 |
 | `retrieve` | The retrieval an Audit Record Repository serves: the query string read into typed criteria, and the `searchset` Bundle and refusal `OperationOutcome` of the answer | ITI-81 |
+| `arr` | The Audit Record Repository with the Retrieve Audit Message Option, over the caller's store: ITI-20 received over RFC 5425 TLS and the FHIR Feed, and ITI-81 answered | ITI-20, ITI-81 |
 
 `recording` compiles `balp::recording` alone and `redact` compiles
 `redact::RedactedUrl` and `fhir_base` alone, for a profile crate that audits
@@ -147,6 +148,25 @@ search on `AuditEvent`:
   resources.
 
 The repository keeps its store, the query over it and who may read what.
+
+## Audit Record Repository (`arr`)
+
+`ihe_atna::arr` is the receiving side, mounted by a product over its own
+store (`arr::AuditStore`):
+
+- `arr::syslog::serve` and `receive`: ITI-20 over RFC 5425 TLS. Each frame
+  is stored in the repository's spool before the next is read, and the
+  forwarder `Forwarder::into_store` delivers it into the store as the
+  `AuditEvent` of RESTful ATNA Table 3.81.4.2.2.1-1 (`arr::dicom`). A full
+  spool stops the reading, so the sender keeps its records; a message the
+  mapping cannot carry is quarantined.
+- `arr::feed::receive`: the FHIR Feed `create` and `batch`, JSON or XML,
+  answered with a `2xx` only once the store kept the record.
+- `arr::search::retrieve`: ITI-81 over the store, with `arr::search::matches`
+  for every parameter of RESTful ATNA §3.81.4.1.2, and the "Audit Log Used"
+  record of §3.81.5.1 kept before the answer is returned.
+
+The product's HTTP server and TLS configuration stay its own.
 
 ## Whom an exchange is made for
 
