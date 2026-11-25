@@ -3,13 +3,20 @@
 
 # Machine review (SonarQube Cloud): advisory, never authority
 
-Every pull request from this repository and every push to `main` is analyzed
-by SonarQube Cloud (`.github/workflows/sonar.yml`; scope in
-`sonar-project.properties`; project `FerroHEALTH_FerroAUDIT`, organization
-`ferrohealth`, the built-in "Sonar way" quality gate). It is a second opinion
+Every push to `main`, and a weekly schedule, is analyzed by SonarQube Cloud
+(`.github/workflows/sonar.yml`; scope in `sonar-project.properties`;
+project `FerroHEALTH_FerroAUDIT`, organization `ferrohealth`, the built-in
+"Sonar way" quality gate). It is a second opinion
 beside the local gates and CodeQL, and it also reads the shell and workflow
 YAML the Rust gates never see. The scan imports the lcov report of the
 instrumented nextest run.
+
+Because it gates no merge, it runs on no pull request and no merge group
+(owner decision, 2026-11-25): the organisation shares 20 concurrent jobs,
+and an advisory analysis must not hold a runner a gate needs. A newer push
+to `main` cancels a running analysis. CodeQL, the security scanner, keeps
+its pull-request run, limited to changes under Rust sources, Cargo files or
+`.github/`, and runs on no merge group.
 
 ## Precedence: a finding never outranks the sources
 
