@@ -50,6 +50,7 @@ fn json(exchange: &ihe_atna::balp::Exchange) -> Value {
         .audit_event(&observer())
         .expect("a record")
         .into_bytes();
+    crate::support::emit(bytes.expose_secret());
     serde_json::from_slice(bytes.expose_secret()).expect("JSON")
 }
 
