@@ -23,7 +23,13 @@
 [![Signed releases](https://img.shields.io/badge/releases-signed-brightgreen?logo=github)](docs/release.md)
 [![SLSA Build L3](https://slsa.dev/images/gh-badge-level3.svg)](docs/release.md)
 
-**Conformance and compliance**<br>
+**Conformance (self-tested)**<br>
+<!-- conformance:begin -->
+[![IHE BALP 1.1.4](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fbalp-1.1.4.json)](docs/conformance.md#balp-validation)
+[![EHDS Annex II 3.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fehds-annex-ii.json)](docs/conformance.md#the-ehds-access-records-logging-fields)
+[![Xt-EHR D8.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fxt-ehr-d8-2.json)](docs/conformance.md#xt-ehr-d82-logging-assertions)
+[![IHE ITI-81](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fiti-81.json)](docs/conformance.md)
+<!-- conformance:end -->
 [![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion)](crates/ehds-logging/README.md)
 
 </div>

@@ -110,6 +110,9 @@ jobs:
       - name: Comment style
         if: ${{ !cancelled() }}
         run: bash scripts/checks/comment-style.sh --all
+      - name: No conformance badge claims a certification
+        if: ${{ !cancelled() }}
+        run: bash scripts/checks/conformance.sh --labels
       # Every TODO(#N) names an open issue.
       - name: Every pending-work pointer names an open issue
         if: ${{ !cancelled() }}
@@ -257,7 +260,8 @@ jobs:
       - run: bash scripts/checks/semver.sh
 
   # The HL7 FHIR Validator over every BALP AuditEvent the ehds-logging tests
-  # write, held to the pattern each claims (#279; scripts/checks/fhir-validator.sh).
+  # write, held to the pattern each claims (#279; scripts/checks/fhir-validator.sh),
+  # and the README's conformance badges held to this run's counts (#280).
   # The jar and the packages are pinned in docs/VERSIONS.md and cached.
   conformance:
     name: conformance
@@ -272,7 +276,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+      - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: cargo-nextest
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
@@ -281,6 +285,8 @@ jobs:
           java-version: "21"
       - name: The validator lane judges as it claims
         run: bash scripts/checks/fhir-validator.sh --self-test
+      - name: The badges count as they claim
+        run: bash scripts/checks/conformance.sh --self-test
       - name: Read the pinned validator downloads
         id: validator
         run: echo "key=$(bash scripts/checks/fhir-validator.sh --cache-key)" >> "$GITHUB_OUTPUT"
@@ -291,10 +297,12 @@ jobs:
             target/hl7-validator/*.tgz
             target/hl7-validator/validator_cli.jar
           key: hl7-validator-${{ steps.validator.outputs.key }}
-      - name: Write the BALP records
+      - name: Write the BALP records and the conformance tests' report
         env:
           BALP_EMIT_DIR: ${{ runner.temp }}/balp-records
-        run: cargo nextest run -p ehds-logging --all-features --locked -E 'test(/^balp::/)'
+        run: >-
+          cargo nextest run --workspace --all-features --locked --profile conformance
+          -E '(package(ehds-logging) & test(/^balp::/)) | (package(ihe-atna) & test(/^arr::search::/))'
       - name: Validate the BALP records
         env:
           RECORDS: ${{ runner.temp }}/balp-records
@@ -305,12 +313,20 @@ jobs:
           bash scripts/checks/fhir-validator.sh "$RECORDS" "$OUT" || status=$?
           cat "$OUT/summary.md" >> "$GITHUB_STEP_SUMMARY" || true
           exit "$status"
+      # The README's conformance badges are the counts of this run: a badge file
+      # that differs fails until scripts/checks/conformance.sh --write updates it.
+      - name: The conformance badges hold this run's counts
+        env:
+          OUT: ${{ runner.temp }}/balp-validation
+        run: bash scripts/checks/conformance.sh --check target/nextest/conformance/junit.xml "$OUT/counts"
       - name: Upload the validation results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: balp-validation
-          path: ${{ runner.temp }}/balp-validation/
+          path: |
+            ${{ runner.temp }}/balp-validation/
+            target/nextest/conformance/junit.xml
           if-no-files-found: warn
           retention-days: 7
 

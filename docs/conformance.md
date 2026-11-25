@@ -80,3 +80,32 @@ To run it locally, with Java 17 or later:
 BALP_EMIT_DIR=target/balp-records cargo nextest run -p ehds-logging --all-features -E 'test(/^balp::/)'
 scripts/checks/fhir-validator.sh target/balp-records target/balp-validation
 ```
+
+## ITI-81 search parameters
+
+`ihe-atna` feature `arr` answers Retrieve ATNA Audit Event over the
+repository's store. Each search parameter RESTful ATNA Rev. 3.6
+§3.81.4.1.2 asks an Audit Record Repository to support has its test in
+`crates/ihe-atna/tests/it/arr/search.rs`.
+
+| Parameter | Section | Matched against | Test |
+|---|---|---|---|
+| `date` | §3.81.4.1.2.1 | `recorded` | `date_bounds_the_recorded_time` |
+| `address` | §3.81.4.1.2.2 | `agent.network.address`, as a substring | `address_matches_a_substring_of_the_network_address` |
+| `agent.identifier` | §3.81.4.1.2.2 | `agent.who.identifier` | `agent_identifier_matches_the_agents_identifier` |
+| `patient.identifier` | §3.81.4.1.2.2 | the identifier of an agent or entity that is the patient | `patient_identifier_matches_the_patients_identifier` |
+| `entity.identifier` | §3.81.4.1.2.2 | `entity.what.identifier` | `entity_identifier_matches_the_entitys_identifier` |
+| `entity-type` | §3.81.4.1.2.2 | `entity.type` | `entity_type_matches_the_entitys_type` |
+| `entity-role` | §3.81.4.1.2.2 | `entity.role` | `entity_role_matches_the_entitys_role` |
+| `source.identifier` | §3.81.4.1.2.2 | `source.observer.identifier` | `source_identifier_matches_the_observers_identifier` |
+| `type` | §3.81.4.1.2.2 | `type` | `type_matches_the_event_type` |
+| `subtype` | §3.81.4.1.2.2 | `subtype` | `subtype_matches_the_event_subtype` |
+| `outcome` | §3.81.4.1.2.2 | `outcome` | `outcome_matches_any_of_its_values` |
+
+## The README badges
+
+The conformance badges of the README are shields.io endpoint files under
+`conformance/badges/`, each N of M from the CI `conformance` job, which
+fails when a committed file differs from its run
+(`scripts/checks/conformance.sh`). They count self-tests: no badge says
+certified, compliant or conformant, and a guard fails one that does.

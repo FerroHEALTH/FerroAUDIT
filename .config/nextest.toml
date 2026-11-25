@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The CI conformance job's run writes a JUnit report, which
+# scripts/checks/conformance.sh counts the README badges from (#280).
+[profile.conformance.junit]
+path = "junit.xml"
