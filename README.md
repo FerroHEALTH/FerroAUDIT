@@ -14,11 +14,11 @@
 **Project**<br>
 [![Release](https://img.shields.io/github/v/release/FerroHEALTH/FerroAUDIT?sort=semver&logo=github&label=release)](https://github.com/FerroHEALTH/FerroAUDIT/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroAUDIT/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI)](https://github.com/FerroHEALTH/FerroAUDIT/actions/workflows/ci.yml)
-[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue)](LICENSE)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTEyIDN2MThNNyAyMWgxME00IDdoMTZNNCA3TDEgMTRhMyAzIDAgMCAwIDYgMFpNMjAgN2wtMyA3YTMgMyAwIDAgMCA2IDBaIi8%2BPC9zdmc%2B)](LICENSE)
 [![Docs](https://img.shields.io/docsrs/ihe-atna?logo=docsdotrs&label=docs.rs)](https://docs.rs/ihe-atna)
 
 **Quality and security**<br>
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/FerroHEALTH/FerroAUDIT/badge)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroAUDIT)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/FerroHEALTH/FerroAUDIT?label=openssf%20scorecard&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTEyIDJsOCAzdjZjMCA1LTMuNSA5LjUtOCAxMS00LjUtMS41LTgtNi04LTExVjVaTTguNSAxMmwyLjUgMi41IDQuNS01Ii8%2BPC9zdmc%2B)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroAUDIT)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroAUDIT/codeql.yml?branch=main&logo=github&label=CodeQL)](https://github.com/FerroHEALTH/FerroAUDIT/actions/workflows/codeql.yml)
 [![Signed releases](https://img.shields.io/badge/releases-signed-brightgreen?logo=github)](docs/release.md)
 [![SLSA Build L3](https://slsa.dev/images/gh-badge-level3.svg)](docs/release.md)
@@ -30,7 +30,7 @@
 [![Xt-EHR D8.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fxt-ehr-d8-2.json)](docs/conformance.md#xt-ehr-d82-logging-assertions)
 [![IHE ITI-81](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fiti-81.json)](docs/conformance.md)
 <!-- conformance:end -->
-[![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion)](crates/ehds-logging/README.md)
+[![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](crates/ehds-logging/README.md)
 
 </div>
 
