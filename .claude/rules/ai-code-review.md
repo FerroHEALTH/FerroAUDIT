@@ -4,8 +4,9 @@
 # Machine review (SonarQube Cloud): advisory, never authority
 
 Every push to `main`, and a weekly schedule, is analyzed by SonarQube Cloud
-(`.github/workflows/sonar.yml`; scope in `sonar-project.properties`; project `FerroHEALTH_FerroAUDIT`, organization
-`ferrohealth`, the built-in "Sonar way" quality gate). It is a second opinion
+(`.github/workflows/sonar.yml`; scope in `sonar-project.properties`;
+project `FerroHEALTH_FerroAUDIT`, organization `ferrohealth`, the built-in
+"Sonar way" quality gate). It is a second opinion
 beside the local gates and CodeQL, and it also reads the shell and workflow
 YAML the Rust gates never see. The scan imports the lcov report of the
 instrumented nextest run.
