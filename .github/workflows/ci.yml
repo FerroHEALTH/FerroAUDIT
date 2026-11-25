@@ -9,7 +9,7 @@
 #   2. `lint` runs rustfmt, clippy with no feature, with `atna` and with
 #      every feature, rustdoc and cargo-deny over one build cache.
 #   3. `nextest (each feature set)` runs the tests and the doctests.
-#   4. `cargo-semver-checks` runs on a pull request and in the merge queue.
+#   4. `cargo-semver-checks` runs on a pull request.
 #   5. `conformance` runs the HL7 FHIR Validator over the BALP records the
 #      tests write.
 #
@@ -18,6 +18,11 @@
 # runner however short its work, and a job that waits on another pays it
 # twice (#190). Each guard step runs when an earlier one failed, so a run
 # still reports every finding.
+#
+# A merge group runs the light set: the guards without the publish dry run
+# and the MSRV build, rustfmt and cargo-deny without clippy and rustdoc, and
+# the unit tests with every feature. The pull request ran the full suite on
+# the same change.
 #
 # The vendored-specification guard runs in specs.yml beside this workflow.
 # The `conclusion` job is the single required status check on main.
@@ -138,17 +143,17 @@ jobs:
       # No cache from here on: the dry run checks the bytes a publish would
       # upload.
       - uses: ./.github/actions/setup-rust
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         with:
           cache: "false"
       - name: Publish dry run
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         run: cargo publish --workspace --dry-run --locked
       # The declared MSRV is the floor a consuming product builds on, so every
       # target is built with it, read from the manifest, with no feature, with
       # atna and with every feature.
       - name: Install the toolchain the manifest declares as its rust-version
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         id: msrv
         run: |
           set -euo pipefail
@@ -158,7 +163,7 @@ jobs:
           rustup toolchain install "$msrv" --profile minimal
           echo "toolchain=$msrv" >> "$GITHUB_OUTPUT"
       - name: Every target builds on the MSRV with no feature, with atna and with every feature
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         env:
           MSRV: ${{ steps.msrv.outputs.toolchain }}
         run: |
@@ -193,14 +198,14 @@ jobs:
       # The crate compiles with no feature (the `user` module), with the
       # syslog sender alone, and with BALP and the FHIR Feed, so each is
       # linted.
-      - if: ${{ !cancelled() }}
+      - if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - if: ${{ !cancelled() }}
+      - if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         run: cargo clippy --workspace --all-targets --features atna --locked -- -D warnings
-      - if: ${{ !cancelled() }}
+      - if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: rustdoc
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         run: cargo doc --locked --workspace --all-features --no-deps --document-private-items
       - name: cargo-deny
         if: ${{ !cancelled() }}
@@ -228,10 +233,18 @@ jobs:
       - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
         with:
           tool: cargo-nextest
-      - run: cargo nextest run --workspace --locked
-      - run: cargo nextest run --workspace --features atna --locked
-      - run: cargo nextest run --workspace --all-features --locked
-      - run: cargo test --doc --workspace --all-features --locked
+      - if: github.event_name != 'merge_group'
+        run: cargo nextest run --workspace --locked
+      - if: github.event_name != 'merge_group'
+        run: cargo nextest run --workspace --features atna --locked
+      - if: github.event_name != 'merge_group'
+        run: cargo nextest run --workspace --all-features --locked
+      - if: github.event_name != 'merge_group'
+        run: cargo test --doc --workspace --all-features --locked
+      # The merge group's smoke set: the pull request ran every suite, so the
+      # queue builds every feature once and runs the unit tests only.
+      - if: github.event_name == 'merge_group'
+        run: cargo nextest run --workspace --lib --bins --all-features --locked --no-tests=pass
 
   # Every crate's public API against its newest version on crates.io, on the
   # default feature set and on --only-explicit-features: a break, or a public
@@ -239,7 +252,7 @@ jobs:
   # with a minor bump fails (scripts/checks/semver.sh, #204).
   semver:
     name: cargo-semver-checks
-    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -265,6 +278,7 @@ jobs:
   # The jar and the packages are pinned in docs/VERSIONS.md and cached.
   conformance:
     name: conformance
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

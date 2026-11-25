@@ -26,6 +26,9 @@
 - [Signed commits and the merge queue](merge-queue-signed.md): `main` takes
   only signed commits through pull requests and the merge queue; no
   commit-message line starts with "-" or a git header word (2026-11-09)
+- [Merge queue is light](merge-queue-light.md): the merge-group run is the
+  guards, rustfmt, cargo-deny and a unit-test smoke set; the full suite runs
+  on the pull request and on main; owner 2026-11-25
 - [Auto-merge](pr-auto-merge.md): arm `gh pr merge <n> --auto` the moment a
   pull request opens; no `--squash`, no `--delete-branch`
 - [Release tag](release-tag.md): the tag is signed on the merge commit and pushed,

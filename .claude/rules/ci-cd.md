@@ -34,6 +34,13 @@ Actions Security Cheat Sheet, SLSA v1.0, OpenSSF Scorecard, and Sigstore.
   to 57 minutes for about 9 runner-minutes of work (#190). Add a step to one
   of the four before adding a job, and give a guard step
   `if: ${{ !cancelled() }}` so a run still reports every finding.
+
+  A merge-group run is light (owner, 2026-11-25), since the pull request
+  ran the full suite on the same change: the guards without the publish dry
+  run and the MSRV build, rustfmt, cargo-deny and the advisory-exception
+  check without clippy and rustdoc, and the unit tests with every feature
+  (`--lib --bins`). `conformance` and `cargo-semver-checks` do not run
+  there. `conclusion` reads a skipped job as a pass.
 - `.github/workflows/specs.yml`: the vendored-specification guard,
   `scripts/checks/versions.sh`, offline, on the same events.
 - `.github/workflows/codeql.yml`: CodeQL over the `actions` language and Rust.
