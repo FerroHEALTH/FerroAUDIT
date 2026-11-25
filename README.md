@@ -23,7 +23,13 @@
 [![Signed releases](https://img.shields.io/badge/releases-signed-brightgreen?logo=github)](docs/release.md)
 [![SLSA Build L3](https://slsa.dev/images/gh-badge-level3.svg)](docs/release.md)
 
-**Conformance and compliance**<br>
+**Conformance (self-tested)**<br>
+<!-- conformance:begin -->
+[![IHE BALP 1.1.4](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fbalp-1.1.4.json)](docs/conformance.md#balp-validation)
+[![EHDS Annex II 3.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fehds-annex-ii.json)](docs/conformance.md#the-ehds-access-records-logging-fields)
+[![Xt-EHR D8.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fxt-ehr-d8-2.json)](docs/conformance.md#xt-ehr-d82-logging-assertions)
+[![IHE ITI-81](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fiti-81.json)](docs/conformance.md)
+<!-- conformance:end -->
 [![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion)](crates/ehds-logging/README.md)
 
 </div>
@@ -83,7 +89,7 @@ version line. Each has its own README, which is its crates.io page.
 
 | Crate | Version | What it provides | Features |
 |---|---|---|---|
-| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `feed`, `retrieve`, `recording`, `redact` |
+| [`ihe-atna`](crates/ihe-atna/README.md) | [![crates.io](https://img.shields.io/crates/v/ihe-atna?logo=rust&label=crates.io)](https://crates.io/crates/ihe-atna) | The IHE audit trail: ATNA Record Audit Event (ITI-20) with the DICOM audit message over syslog and TLS, BALP `AuditEvent`s over the ATX: FHIR Feed, the store-and-forward spool and forwarder, and Retrieve ATNA Audit Event (ITI-81) | `atna`, `balp`, `feed`, `retrieve`, `arr`, `recording`, `redact` |
 | [`ehds-logging`](crates/ehds-logging/README.md) | [![crates.io](https://img.shields.io/crates/v/ehds-logging?logo=rust&label=crates.io)](https://crates.io/crates/ehds-logging) | The EHDS logging component of Regulation (EU) 2025/327: the Annex II 3.2 access record, the Art 14(1) categories and the map that classifies an access, retention and security labels, written as a BALP `AuditEvent` or a DICOM audit message | `balp`, `atna`, `schema` |
 
 ## What it provides
@@ -100,6 +106,10 @@ version line. Each has its own README, which is its crates.io page.
 - **Retrieving audit events (ITI-81):** the FHIR search a product serves
   over its own audit store, read into typed criteria with the family's FHIR
   search grammar, and the `searchset` answer (feature `retrieve`).
+- **An Audit Record Repository** a product mounts over its own store:
+  ITI-20 received over TLS syslog and the FHIR Feed, no record lost while
+  the store is down, and ITI-81 answered with every search parameter the
+  RESTful ATNA supplement asks for (feature `arr`).
 - **The EHDS access record:** who accessed which categories of whose data,
   when and from where, as Annex II 3.2 of Regulation (EU) 2025/327 asks,
   with the deployment's category map, retention within the Art 9(2) floor,
@@ -111,8 +121,8 @@ The crates need Rust 1.98 or newer (edition 2024). Pin the versions
 exactly, as every FerroHEALTH product does:
 
 ```sh
-cargo add ihe-atna@=0.25.0 --features balp
-cargo add ehds-logging@=0.25.0 --features balp
+cargo add ihe-atna@=0.26.0 --features balp
+cargo add ehds-logging@=0.26.0 --features balp
 ```
 
 The release plan refuses a tag while this page or a crate README pins

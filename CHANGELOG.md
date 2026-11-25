@@ -19,6 +19,44 @@ and this project adheres to
   `searchset` Bundle and its `OperationOutcome`) come from that line, so a
   product moves to `fhir-types` 0.2 with them.
 
+## [0.26.0] - 2026-11-25
+
+`ihe-atna` gains the receiving side of the audit trail: feature `arr`, an
+Audit Record Repository with the Retrieve Audit Message Option that a
+product mounts over its own store, which answers the Xt-EHR D8.2
+log-Review assertion. The HL7 FHIR Validator now checks every BALP record
+the `ehds-logging` tests write, and it found two output defects, fixed
+here. A product on 0.25 takes 0.26 with no code change; a failed access's
+record now claims no BALP pattern, which a consumer that filters on
+`meta.profile` sees.
+
+### Added
+
+- `ihe-atna` feature `arr`: the Audit Record Repository with the Retrieve
+  Audit Message Option, mounted by a product over its own
+  `arr::AuditStore`. It receives ITI-20 over RFC 5425 TLS
+  (`arr::syslog::serve`), storing each frame in its spool before reading
+  the next and delivering it into the store with `Forwarder::into_store`,
+  and the ATX: FHIR Feed `create` and `batch` in JSON or XML
+  (`arr::feed::receive`). It answers ITI-81 over the store
+  (`arr::search::retrieve`) with every search parameter of RESTful ATNA
+  §3.81.4.1.2 (`arr::search::matches`), and keeps the "Audit Log Used"
+  record of each retrieval before answering. A DICOM audit message is kept
+  as the `AuditEvent` of RESTful ATNA Table 3.81.4.2.2.1-1
+  (`arr::dicom::audit_event`). This answers the Xt-EHR D8.2 log-Review
+  assertion (#278).
+
+### Fixed
+
+- `ehds-logging`: a failed read, query, create or update no longer claims
+  its BALP pattern, which fixes `outcome` to `0`; it claims none, as a
+  failed delete already did (BALP 1.1.4, found by the HL7 FHIR Validator,
+  #279).
+- `ihe-atna`: the request id's entity type `XrequestId` carries the display
+  BALP 1.1.4's `BasicAuditEntityType` gives it, "transport specific unique
+  identifier where http X-Request-Id is used", in place of `X-Request-Id`
+  (#279).
+
 ## [0.25.0] - 2026-11-22
 
 A product that withdraws a late spool write no longer writes the record of

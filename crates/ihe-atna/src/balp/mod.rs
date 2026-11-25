@@ -197,11 +197,12 @@ pub const OTHER: Coded = Coded::fixed(
 );
 
 /// The entity type of the request id, `XrequestId` (`BasicAuditEntityType`),
-/// as every `RESTful` pattern's `entity:transaction` slice fixes it.
+/// as every `RESTful` pattern's `entity:transaction` slice fixes it, with the
+/// display the code system gives it.
 pub const REQUEST_ID: Coded = Coded::fixed(
     "https://profiles.ihe.net/ITI/BALP/CodeSystem/BasicAuditEntityType",
     "XrequestId",
-    "X-Request-Id",
+    "transport specific unique identifier where http X-Request-Id is used",
 );
 
 /// The entity type of a person: `1` (`audit-entity-type`).

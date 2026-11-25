@@ -57,10 +57,10 @@ defines: the DICOM audit message over syslog (ITI TF-2 §3.20.4.1) and, with
 the ATX: FHIR Feed Option the RESTful ATNA supplement adds, a FHIR
 `AuditEvent` posted as a `create` (RESTful ATNA §3.20.4.2).
 
-The receiving side, the Audit Record Repository with its query transactions
-(ITI-81), is not here yet. Retrieval belongs to this crate as its server
-half, a feature of the same crate, which a product uses over its own audit
-store (owner decision 2026-10-25); no separate product builds it.
+The receiving side is the feature `arr` (§4.5): the Audit Record
+Repository with the Retrieve Audit Message Option, which a product mounts
+over its own audit store (owner decision 2026-10-25); no separate product
+builds it.
 
 ## 2. Pinned versions
 
@@ -345,6 +345,49 @@ records stay the repository's (§3.81.4.1.3, ITI TF-1 §9.4).
   `fhir-search`, `jiff` and `percent-encoding`, and neither an HTTP client
   nor a runtime.
 
+### 4.5 The Audit Record Repository (feature `arr`)
+
+The repository actor of ATNA with the Retrieve Audit Message Option (ITI
+TF-1 §9.2.3) and both transports of ITI-20, as a crate a product mounts.
+The product supplies the store, `arr::AuditStore`, with `keep` and
+`search`; its HTTP server and TLS configuration stay its own. It is the
+testable form Xt-EHR D8.2 §5.1.11 (2026-05-19) gives the log-Review
+requirement, which rests on Regulation (EU) 2025/327 Annex II 3.3; D8.2 is
+a Joint Action deliverable, not adopted text.
+
+- **Syslog (ITI TF-2 §3.20.4.1).** `arr::syslog::serve` accepts RFC 5425
+  TLS connections and reads octet-counted frames, each checked as an RFC
+  5424 message with a `MSG`. RFC 5425 has no acknowledgement, so a frame
+  the repository loses after reading it is lost for good: each frame is
+  stored in the repository's spool before the next is read, and while the
+  spool is full the reading stops, so the sender's writes wait and its own
+  spool keeps its records. `Forwarder::into_store` delivers each stored
+  frame oldest first into the store, retries an unavailable store, and
+  quarantines a frame the mapping cannot carry or the store refuses.
+- **The mapping (RESTful ATNA Table 3.81.4.2.2.1-1).** `arr::dicom` reads a
+  DICOM audit message into the `AuditEvent` the table gives, every element
+  it maps carried; a `RoleIDCode` FHIR R4 lists as an agent type (DCM
+  110150 to 110155) is `agent.type`, any other `agent.role` (Note 1). An
+  element the table does not map refuses the message by name, so it is
+  quarantined whole. A `codeSystemName` that is neither `DCM`, `IHE
+  Transactions` nor a URI writes no system, and `ParticipantObjectDescription`
+  is kept as `entity.description`: no specification governs either, our
+  own design.
+- **FHIR Feed (§3.20.4.2 to §3.20.4.5).** `arr::feed::receive` takes a
+  `create` or a `batch` Bundle in JSON or XML (Appendix Z.6), and answers a
+  record `201` once the store kept it, `503` while the store cannot, which
+  the sender retries, and `422` when the store refuses it. A batch answers
+  each entry in a `batch-response`.
+- **ITI-81 (§3.81.4).** `arr::search::retrieve` reads the query with
+  `retrieve::Query`, asks the store for the page, keeps the "Audit Log
+  Used" record of §3.81.5.1 and only then returns the `searchset`, so no
+  answer leaves unrecorded; a store that cannot keep that record refuses
+  the retrieval with a `503`. `arr::search::matches` evaluates every
+  parameter of §3.81.4.1.2 against the element it names, `patient.identifier`
+  only on an agent or entity that is the patient, and the other R4
+  `AuditEvent` parameters by their type, for a store that filters in
+  memory or checks its own index against it.
+
 ## 5. Whom an exchange is made for
 
 `user::OnBehalfOf` is a `User`, as a verified OAuth 2.0 access token names
@@ -376,6 +419,7 @@ uses the same rule. No specification governs this: our own design.
 | `balp` | `syslog`, `spool`, `balp` | `fhir-types` (`r4-resources`), serde_json, timestamps, base64, tokio, tracing |
 | `retrieve` | `retrieve` | `fhir-types` (`r4-resources`), `fhir-search`, timestamps, percent-encoding |
 | `feed` | `balp`, `feed`, `forwarder` and `retry` | `http` (the status type); no HTTP client |
+| `arr` | `atna`, `balp`, `retrieve` and `arr` | `http` (the status type); no HTTP server |
 
 `tests/it/features.rs` holds the boundary: `atna` compiles no FHIR model and
 no HTTP client; `balp` compiles no HTTP client, no TLS stack and takes no XML

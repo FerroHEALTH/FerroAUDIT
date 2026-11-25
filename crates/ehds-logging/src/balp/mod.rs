@@ -12,8 +12,8 @@
 //! one patient, as the implementation guide lists them: the one the request
 //! named, or the one the identity service found behind the `ehr_id` it
 //! reached. Its `entity:patient` slice holds one patient, so a record that
-//! names several writes each and claims the plain pattern. The Delete pattern
-//! fixes `outcome` to `0`, so a failed delete claims no profile. The person
+//! names several writes each and claims the plain pattern. Every `RESTful`
+//! pattern fixes `outcome` to `0`, so a failed access claims no profile. The person
 //! and the client are the token's (BALP 1.1.4 §3:5.7.5.4), with the provider
 //! as an agent of its own, the request id is `entity:transaction`, and the
 //! query `entity:query`.
@@ -504,8 +504,12 @@ fn kind(record: &AccessRecord) -> EventKind {
         }));
         subtypes
     };
-    let profile = |plain: &'static str, with_patient: &'static str| {
-        if patient { with_patient } else { plain }
+    // NOTE: BALP 1.1.4 IHE.BasicAudit.Read, Query, Create, Update and Delete fix outcome to 0.
+    let succeeded = record.outcome == Outcome::Success;
+    let profile = |plain: &'static str, with_patient: &'static str| match (succeeded, patient) {
+        (false, _) => "",
+        (true, true) => with_patient,
+        (true, false) => plain,
     };
     match record.action {
         Action::Query => EventKind {
@@ -553,14 +557,10 @@ fn kind(record: &AccessRecord) -> EventKind {
             server: DESTINATION_ROLE,
         },
         Action::Delete => EventKind {
-            profile: if record.outcome == Outcome::Success {
-                profile(
-                    "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Delete",
-                    "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientDelete",
-                )
-            } else {
-                ""
-            },
+            profile: profile(
+                "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Delete",
+                "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientDelete",
+            ),
             event_type: REST,
             subtypes: subtypes(DELETE),
             action: "D",

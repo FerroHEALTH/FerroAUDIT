@@ -20,7 +20,7 @@ mod outbox;
 #[cfg(feature = "atna")]
 mod probe;
 #[cfg(feature = "atna")]
-mod repository;
+pub(crate) mod repository;
 mod spool;
 #[cfg(feature = "atna")]
 mod targets;
