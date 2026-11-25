@@ -23,9 +23,9 @@
 #
 # A badge label never claims more than a self-test shows: a label holding
 # "certified", "compliant" or "conformant" fails, in a badge file or in the
-# README's conformance group. The badges stay short, and the heading over that
-# group says once that the counts are self-tested (owner decision, 2026-11-25);
-# a heading without it fails. Every badge, and every static badge in the
+# README's conformance group. The badges stay short, and the small caption
+# under that group's heading says once what they count (owner decision,
+# 2026-11-25); a README without it fails. Every badge, and every static badge in the
 # README, carries a logo from scripts/checks/badge-logos/ (the EU emblem on
 # EU blue for an EU act, else a pictogram), and one without fails.
 #
@@ -138,18 +138,10 @@ labels() {
     echo "::error::$README: the conformance group never says certified, compliant or conformant" >&2
     bad=1
   fi
-  if ! heading "$README" | grep -qi 'self-tested'; then
-    echo "::error::$README: the heading over the conformance group says the counts are self-tested" >&2
-    bad=1
-  fi
+  badge_caption_check "$README" || bad=1
   badge_logo_check "$BADGES"/*.json || bad=1
   badge_logo_readme "$README" || bad=1
   return "$bad"
-}
-
-# heading README: the line just above the conformance group's markers.
-heading() {
-  awk '/<!-- conformance:begin -->/ { print previous; exit } { previous = $0 }' "$1"
 }
 
 # check JUNIT COUNTS: fails when a committed badge file differs from what
@@ -229,14 +221,14 @@ XML
     echo "::error::self-test: a static badge without a logo passes" >&2
     wrong=1
   fi
-  printf '**Conformance (self-tested)**<br>\n<!-- conformance:begin -->\n' > "$scratch/heading.md"
-  [[ "$(heading "$scratch/heading.md")" == *self-tested* ]] || {
-    echo "::error::self-test: the conformance heading is not read" >&2
+  printf '**Conformance**<br>\n%s<br>\n<!-- conformance:begin -->\n' "$badge_caption" > "$scratch/heading.md"
+  badge_caption_check "$scratch/heading.md" 2> /dev/null || {
+    echo "::error::self-test: the conformance caption is not found" >&2
     wrong=1
   }
   printf '**Conformance**<br>\n<!-- conformance:begin -->\n' > "$scratch/heading.md"
-  if heading "$scratch/heading.md" | grep -qi 'self-tested'; then
-    echo "::error::self-test: a heading without self-tested passes" >&2
+  if badge_caption_check "$scratch/heading.md" 2> /dev/null; then
+    echo "::error::self-test: a README without the conformance caption passes" >&2
     wrong=1
   fi
   if ! grep -qiE "$FORBIDDEN" <<< "IHE BALP Conformant"; then
