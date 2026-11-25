@@ -387,7 +387,8 @@ fn coded(code: &Code) -> CodeableConcept {
     }
 }
 
-/// A purpose of use as `agent.purposeOfUse` codes it.
+/// A purpose of use as `agent.purposeOfUse` and `purposeOfEvent` code it,
+/// with the user's own words as the concept's `text`.
 fn purpose(purpose: &PurposeOfUse) -> CodeableConcept {
     CodeableConcept {
         coding: vec![Coding {
@@ -395,6 +396,7 @@ fn purpose(purpose: &PurposeOfUse) -> CodeableConcept {
             code: Some(escaped(purpose.code.as_str())),
             ..Coding::default()
         }],
+        text: purpose.text.as_deref().map(escaped),
         ..CodeableConcept::default()
     }
 }
@@ -558,6 +560,7 @@ mod tests {
         PurposeOfUse {
             system: Some("http://terminology.hl7.org/CodeSystem/v3-ActReason".to_owned()),
             code: code.to_owned(),
+            text: None,
         }
     }
 

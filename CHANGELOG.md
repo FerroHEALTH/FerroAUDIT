@@ -11,6 +11,37 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-25
+
+A purpose of use carries the reason a person gave for an access in their own
+words, so a recording system can write why a clinician opened a record
+outside their care relationships or broke the glass, and the patient's
+ITI-81 retrieval shows it. Adding the field breaks every struct literal of
+the two purpose types, so products pin `=0.28.0` and set `text` where they
+build one.
+
+### Added
+
+- Breaking: `ihe_atna::user::PurposeOfUse` and
+  `ehds_logging::record::Purpose` gain `text: Option<String>`, the purpose
+  as the person stated it. A product that builds either with a struct
+  literal adds `text`, `None` where no reason was given. The BALP record
+  writes it as the `CodeableConcept` `text` of `agent.purposeOfUse` and
+  `purposeOfEvent` (FHIR R4 datatypes §2.24.0.11), and the DICOM form as
+  the `originalText` of `PurposeOfUse` (DICOM PS3.15 A.5.3; RESTful ATNA
+  Rev. 3.6 Table 3.81.4.2.2.1-1), which is still the code when no text is
+  given. `Debug` of either type shows only whether a text is given (#296).
+
+### Changed
+
+- `ihe-atna` feature `arr`: a DICOM message's `PurposeOfUse` `originalText`
+  is read back as the `text` of the `purposeOfEvent` concept, where it was
+  the coding's `display`, so the ITI-81 retrieval keeps the stated reason
+  (#296).
+- `ehds-logging`: `EmergencyPurposes::mark` matches a declared purpose on
+  its system and code alone, so a stated reason never changes the mark, and
+  names each matching code once, as the accessor first stated it (#296).
+
 ## [0.27.0] - 2026-11-25
 
 `ihe-atna` and `ehds-logging` follow `fhir-types` to the 0.2 line, whose

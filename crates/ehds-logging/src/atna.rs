@@ -64,7 +64,7 @@ use ihe_atna::balp::{Coded, Described, Direction, Entity, Exchange, NetworkAddre
 use secrecy::{ExposeSecret as _, SecretString};
 
 use crate::balp::{ObjectIds, exchange_with};
-use crate::record::{AccessRecord, Coded as RecordCoded, InvalidRecord, NameId};
+use crate::record::{AccessRecord, Coded as RecordCoded, InvalidRecord, NameId, Purpose};
 
 /// The code system name of a code no system names.
 pub const LOCAL_CODES: &str = "local";
@@ -163,7 +163,7 @@ pub fn audit_message_with(
             .accessor
             .purposes
             .iter()
-            .map(|purpose| local(purpose.system.as_deref(), &purpose.code))
+            .map(purpose_of_use)
             .collect(),
     };
     let objects = exchange
@@ -439,6 +439,17 @@ fn coded(code: &Coded) -> CodedValue {
 /// A record's coded value as a DICOM coded value.
 fn record_coded(code: &RecordCoded) -> CodedValue {
     local(code.system.as_deref(), &code.code)
+}
+
+/// A purpose of use as the event's `PurposeOfUse`, with the accessor's own
+/// words as its original text, or the code when they gave none.
+// NOTE: DICOM PS3.15 A.5.3 requires originalText, and RESTful ATNA Rev. 3.6 Table 3.81.4.2.2.1-1
+// maps it from purposeOfEvent, whose CodeableConcept.text is the user's words (FHIR R4 §2.24.0.11).
+fn purpose_of_use(purpose: &Purpose) -> CodedValue {
+    CodedValue {
+        original_text: purpose.text.clone().unwrap_or_else(|| purpose.code.clone()),
+        ..local(purpose.system.as_deref(), &purpose.code)
+    }
 }
 
 /// `code` in `system`, or in [`LOCAL_CODES`] when no system names it.

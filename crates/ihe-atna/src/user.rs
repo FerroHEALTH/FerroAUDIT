@@ -370,11 +370,27 @@ impl fmt::Debug for PersonId {
 }
 
 /// One purpose of use: a code and the system that defines it, the HL7 v3
-/// `PurposeOfUse` coding of the IHE IUA `purpose_of_use` claim.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// `PurposeOfUse` coding of the IHE IUA `purpose_of_use` claim, with the
+/// reason the user gave in their own words.
+///
+/// `Debug` shows the system and the code, and only whether a text is given.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurposeOfUse {
     /// The code system, when the token names one.
     pub system: Option<String>,
     /// The code.
     pub code: String,
+    /// The purpose as the user stated it, written as the `CodeableConcept`
+    /// `text` (FHIR R4 datatypes §2.24.0.11).
+    pub text: Option<String>,
+}
+
+impl fmt::Debug for PurposeOfUse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PurposeOfUse")
+            .field("system", &self.system)
+            .field("code", &self.code)
+            .field("text", &self.text.is_some())
+            .finish()
+    }
 }

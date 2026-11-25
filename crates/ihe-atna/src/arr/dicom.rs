@@ -248,8 +248,13 @@ fn open(
         (Some("EventIdentification"), "EventID") => event.r#type = coding(element)?,
         (Some("EventIdentification"), "EventTypeCode") => event.subtype.push(coding(element)?),
         (Some("EventIdentification"), "PurposeOfUse") => {
+            // NOTE: FHIR R4 datatypes §2.24.0.11 maps CodeableConcept.text to the original text, so a
+            // purpose's originalText, the user's words (DICOM PS3.15 A.5.3), is the concept's text.
+            let mut coded = coding(element)?;
+            let text = coded.display.take();
             event.purpose_of_event.push(CodeableConcept {
-                coding: vec![coding(element)?],
+                coding: vec![coded],
+                text,
                 ..CodeableConcept::default()
             });
         }
@@ -483,7 +488,22 @@ mod tests {
             event.outcome_desc.and_then(|o| o.value).as_deref(),
             Some("fine")
         );
-        assert_eq!(event.purpose_of_event.len(), 1);
+        let [purpose] = event.purpose_of_event.as_slice() else {
+            panic!("one purposeOfEvent");
+        };
+        assert_eq!(
+            purpose.text.as_ref().and_then(|t| t.value.as_deref()),
+            Some("treatment"),
+            "the originalText is the concept's text"
+        );
+        assert_eq!(
+            purpose.coding[0]
+                .code
+                .as_ref()
+                .and_then(|c| c.value.as_deref()),
+            Some("TREAT")
+        );
+        assert!(purpose.coding[0].display.is_none(), "{purpose:?}");
         let agent = &event.agent[0];
         assert_eq!(agent.requestor.value, Some(true));
         assert_eq!(

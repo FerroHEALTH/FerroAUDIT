@@ -49,7 +49,40 @@ fn purpose(code: &str) -> PurposeOfUse {
     PurposeOfUse {
         system: Some(ACT_REASON.to_owned()),
         code: code.to_owned(),
+        text: None,
     }
+}
+
+/// A purpose `code` the user stated in their own words, `text`.
+fn stated(code: &str, text: &str) -> PurposeOfUse {
+    PurposeOfUse {
+        text: Some(text.to_owned()),
+        ..purpose(code)
+    }
+}
+
+/// The `text` of each concept in `concepts`, `None` where it has none.
+fn texts(concepts: &Value) -> Vec<Option<String>> {
+    concepts
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|concept| concept["text"].as_str().map(str::to_owned))
+        .collect()
+}
+
+/// The `agent:user` (`IRCP`) of `record`.
+fn user_agent(record: &Value) -> &Value {
+    let users: Vec<&Value> = record["agent"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|agent| agent["type"]["coding"][0]["code"] == "IRCP")
+        .collect();
+    let [user] = users.as_slice() else {
+        panic!("one agent:user, got {}", users.len());
+    };
+    user
 }
 
 /// An exchange made for a synthetic user who declared `purposes`.
@@ -108,16 +141,7 @@ fn codes(concepts: &Value) -> Vec<(String, String)> {
 
 /// The purposes at the `agent:user` (`IRCP`) of `record`.
 fn at_user(record: &Value) -> Vec<(String, String)> {
-    let users: Vec<&Value> = record["agent"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|agent| agent["type"]["coding"][0]["code"] == "IRCP")
-        .collect();
-    let [user] = users.as_slice() else {
-        panic!("one agent:user, got {}", users.len());
-    };
-    codes(&user["purposeOfUse"])
+    codes(&user_agent(record)["purposeOfUse"])
 }
 
 fn expected(list: &[&str]) -> Vec<(String, String)> {
@@ -161,6 +185,67 @@ fn a_record_with_no_purpose_has_no_purpose_of_event() {
     let record = written(&exchange(Vec::new()));
     assert!(record["purposeOfEvent"].is_null(), "no purposeOfEvent");
     assert!(at_user(&record).is_empty(), "no agent:user purposeOfUse");
+}
+
+/// FHIR R4 datatypes §2.24.0.11: the purpose as the user stated it is the
+/// `text` of its `CodeableConcept`, at the `agent:user` and at
+/// `purposeOfEvent`, beside the coding it does not change.
+#[test]
+fn a_stated_reason_is_the_concept_text_at_the_user_and_at_purpose_of_event() {
+    let reason = "Qz7 patient arrived unconscious at the emergency desk";
+    let record = written(&exchange(vec![purpose("TREAT"), stated("BTG", reason)]));
+    let want = vec![None, Some(reason.to_owned())];
+    assert_eq!(
+        texts(&user_agent(&record)["purposeOfUse"]),
+        want,
+        "agent:user"
+    );
+    assert_eq!(texts(&record["purposeOfEvent"]), want, "purposeOfEvent");
+    assert_eq!(at_user(&record), expected(&["TREAT", "BTG"]));
+    assert_eq!(
+        codes(&record["purposeOfEvent"]),
+        expected(&["TREAT", "BTG"])
+    );
+}
+
+/// The text is a value the user supplied, so the escape writes it as it
+/// writes every other.
+#[test]
+fn a_stated_reason_is_written_through_the_escape() {
+    let record = written(&exchange(vec![stated("BTG", "Qz7-reason\u{0}\u{202e}")]));
+    for text in texts(&record["purposeOfEvent"])
+        .into_iter()
+        .chain(texts(&user_agent(&record)["purposeOfUse"]))
+    {
+        let text = text.expect("a text");
+        assert!(text.starts_with("Qz7-reason"), "{text:?}");
+        assert!(
+            !text.contains(['\u{0}', '\u{202e}']),
+            "no raw control reaches the record: {text:?}"
+        );
+    }
+}
+
+/// The same code stated with two reasons is two purposes, each kept with
+/// its own words.
+#[test]
+fn one_code_stated_with_two_reasons_keeps_both() {
+    let record = written(&exchange(vec![
+        stated("BTG", "Qz7-first"),
+        stated("BTG", "Qz7-second"),
+    ]));
+    assert_eq!(
+        texts(&record["purposeOfEvent"]),
+        [Some("Qz7-first".to_owned()), Some("Qz7-second".to_owned())]
+    );
+}
+
+/// `Debug` says a text is given and never shows it.
+#[test]
+fn debug_shows_no_stated_reason() {
+    let shown = format!("{:?}", stated("BTG", "Qz7-private-reason"));
+    assert!(!shown.contains("Qz7-private-reason"), "{shown}");
+    assert!(shown.contains("BTG"), "{shown}");
 }
 
 /// BALP 1.1.4 Read admits `purposeOfEvent` as `0..*` bound extensibly to the

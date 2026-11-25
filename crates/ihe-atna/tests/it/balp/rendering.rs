@@ -76,18 +76,22 @@ fn hostile_user() -> User {
             PurposeOfUse {
                 system: Some(hostile("purpose-system")),
                 code: "Qz7-purpose\u{7}".to_owned(),
+                text: None,
             },
             PurposeOfUse {
                 system: Some(hostile("purpose-system")),
                 code: r"Qz7-purpose\u{7}".to_owned(),
+                text: None,
             },
             PurposeOfUse {
                 system: Some(hostile("purpose-system")),
                 code: "Qz7-purpose\u{7}".to_owned(),
+                text: None,
             },
             PurposeOfUse {
                 system: None,
                 code: hostile("purpose-bare"),
+                text: None,
             },
         ])
 }
