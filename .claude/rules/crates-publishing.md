@@ -78,8 +78,7 @@ workspace at the version pinned in `docs/VERSIONS.md`, compares each
 crate's public dependency lines with its newest release's, and names a
 judge that could not build apart from a judged break:
 
-- on every pull request and in the merge queue (the `cargo-semver-checks`
-  job of `ci.yml`);
+- on every pull request (the `cargo-semver-checks` job of `ci.yml`);
 - in the release plan (`scripts/release/plan.sh`, which
   `scripts/release/preflight.sh` and the `plan` job of `release.yml` both
   run) at every tag.
