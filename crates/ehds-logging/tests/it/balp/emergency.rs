@@ -20,6 +20,7 @@ fn emergency_record() -> AccessRecord {
     let glass = Purpose {
         system: Some(ACT_REASON.to_owned()),
         code: "BTG".to_owned(),
+        text: None,
     };
     record.accessor.purposes.push(glass.clone());
     let declared = EmergencyPurposes::declare(&[glass]).expect("the declared purposes");
@@ -99,6 +100,47 @@ fn a_member_whose_denial_was_set_aside_is_named_in_the_mark() {
     assert_eq!(
         details(mark, "ehds-consent-set-aside"),
         ["node-a", "node-b"]
+    );
+}
+
+/// FHIR R4 datatypes §2.24.0.11: the reason the accessor gave for an
+/// emergency access is the `text` of its purpose at the `agent:user` and at
+/// `purposeOfEvent`, and the mark still names the purpose by its code.
+#[test]
+fn a_stated_reason_is_the_purpose_text() {
+    let reason = "Qz7 patient arrived unconscious, no relation on record";
+    let mut record = record(Action::Query, Outcome::Success);
+    let glass = Purpose {
+        system: Some(ACT_REASON.to_owned()),
+        code: "BTG".to_owned(),
+        text: Some(reason.to_owned()),
+    };
+    record.accessor.purposes.push(glass.clone());
+    let declared = EmergencyPurposes::declare(&[Purpose {
+        text: None,
+        ..glass
+    }])
+    .expect("the declared purposes");
+    record.emergency = declared.mark(&record.accessor.purposes);
+    let written = written(&record);
+    let texts = |concepts: &serde_json::Value| -> Vec<Option<String>> {
+        concepts
+            .as_array()
+            .expect("purposes")
+            .iter()
+            .map(|purpose| purpose["text"].as_str().map(str::to_owned))
+            .collect()
+    };
+    let want = vec![None, Some(reason.to_owned())];
+    assert_eq!(texts(&person(&written)["purposeOfUse"]), want, "agent:user");
+    assert_eq!(texts(&written["purposeOfEvent"]), want, "purposeOfEvent");
+    let marks = entity(&written, EMERGENCY_ENTITY);
+    let [mark] = marks.as_slice() else {
+        panic!("one emergency entity: {written}");
+    };
+    assert_eq!(
+        details(mark, "ehds-emergency-purpose"),
+        [format!("{ACT_REASON}|BTG")]
     );
 }
 

@@ -70,13 +70,28 @@ pub enum Outcome {
 }
 
 /// One purpose of use the accessor declared: a code and the system that
-/// defines it.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// defines it, with the reason the accessor gave in their own words.
+///
+/// `Debug` shows the system and the code, and only whether a text is given.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Purpose {
     /// The code system, when one is named.
     pub system: Option<String>,
     /// The code.
     pub code: String,
+    /// The purpose as the accessor stated it, such as the reason given for
+    /// an access outside a care relationship.
+    pub text: Option<String>,
+}
+
+impl fmt::Debug for Purpose {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Purpose")
+            .field("system", &self.system)
+            .field("code", &self.code)
+            .field("text", &self.text.is_some())
+            .finish()
+    }
 }
 
 /// Who acts behind the token an access was authenticated by.

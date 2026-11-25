@@ -226,7 +226,10 @@ records it. Each coding a pattern fixes is a public constant (`REST`,
 A user's purposes of use are written at the `agent:user` `purposeOfUse`
 (BALP 1.1.4) and at `purposeOfEvent`, which RESTful ATNA Table
 3.20.4.2.2.1-1 maps to the DICOM `PurposeOfUse` ITI TF-2 §3.20.7.1.2 asks
-for.
+for. The reason a user gives for an access in their own words is the
+`text` of each `CodeableConcept` (FHIR R4 datatypes §2.24.0.11) and the
+`originalText` of the DICOM `PurposeOfUse` (DICOM PS3.15 A.5.3), and the
+repository reads that `originalText` back as the `text` over ITI-81.
 
 A `Coded` holds fixed or run-time text, so a subtype known only when the
 exchange is made, such as an operation id, follows the pattern's codes:
@@ -446,7 +449,9 @@ natural person, the categories of the data, when, and where it came from
 - `retention`: how long a record is kept, never under the three years of
   Article 9(2). `label`: the security labels per category and origin
   (Annex II 3.4). `emergency`: the purposes of use that assert an access in
-  the vital interests of the data subject (Article 11(5)).
+  the vital interests of the data subject (Article 11(5)), matched by
+  system and code alone, so the reason an accessor states never changes
+  the mark.
   `transformation`: the record of a semantic transformation an access
   applied (eHealth Network General Guidelines Release 3.1 Article 6(3)).
 - `sink`: where records go; `balp` (feature `balp`): the record written as a

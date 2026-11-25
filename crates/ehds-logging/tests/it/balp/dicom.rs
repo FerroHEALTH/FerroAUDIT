@@ -13,7 +13,7 @@ use base64::Engine as _;
 use ehds_logging::atna::{AtnaError, audit_message};
 use ehds_logging::record::{
     AccessClass, AccessRecord, Action, Binding, Coded, Correlation, CorrelationSource, IssuedId,
-    Outcome, PatientIdentifier, Relayed, Representation, Via,
+    Outcome, PatientIdentifier, Purpose, Relayed, Representation, Via,
 };
 use ihe_atna::atna::message::AuditSource;
 use ihe_atna::escape;
@@ -297,6 +297,37 @@ fn the_purpose_of_use_is_the_events() {
         .map(|element| element.attributes["csd-code"].clone())
         .collect();
     assert_eq!(purposes, ["TREAT"]);
+}
+
+/// DICOM PS3.15 A.5.3 and `RESTful` ATNA Rev. 3.6 Table 3.81.4.2.2.1-1: a
+/// purpose's `originalText` is the reason the accessor gave, or its code
+/// when they gave none.
+#[test]
+fn a_stated_reason_is_the_purposes_original_text() {
+    let mut record = relayed_record();
+    record.accessor.purposes.push(Purpose {
+        system: Some("http://terminology.hl7.org/CodeSystem/v3-ActReason".to_owned()),
+        code: "BTG".to_owned(),
+        text: Some("Qz7 patient unconscious".to_owned()),
+    });
+    let text = xml(&record);
+    let purposes: Vec<(String, String)> = elements(&text)
+        .into_iter()
+        .filter(|element| element.name == "PurposeOfUse")
+        .map(|element| {
+            (
+                element.attributes["csd-code"].clone(),
+                element.attributes["originalText"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        purposes,
+        [
+            ("TREAT".to_owned(), "TREAT".to_owned()),
+            ("BTG".to_owned(), "Qz7 patient unconscious".to_owned())
+        ]
+    );
 }
 
 /// The event is the BALP record's, by the `RESTful` ATNA mapping: `type` is

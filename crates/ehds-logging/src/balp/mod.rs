@@ -424,6 +424,7 @@ pub fn exchange_with(
                 .map(|purpose| PurposeOfUse {
                     system: purpose.system.clone(),
                     code: purpose.code.clone(),
+                    text: purpose.text.clone(),
                 })
                 .collect(),
         )

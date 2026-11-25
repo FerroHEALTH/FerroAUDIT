@@ -104,6 +104,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
             purposes: vec![Purpose {
                 system: Some("http://terminology.hl7.org/CodeSystem/v3-ActReason".to_owned()),
                 code: "TREAT".to_owned(),
+                text: None,
             }],
             policies: Vec::new(),
             relayed: None,

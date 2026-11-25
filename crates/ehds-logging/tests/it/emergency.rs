@@ -15,6 +15,15 @@ fn purpose(system: Option<&str>, code: &str) -> Purpose {
     Purpose {
         system: system.map(str::to_owned),
         code: code.to_owned(),
+        text: None,
+    }
+}
+
+/// A purpose the accessor stated with the reason `text`.
+fn stated(code: &str, text: &str) -> Purpose {
+    Purpose {
+        text: Some(text.to_owned()),
+        ..purpose(Some(ACT_REASON), code)
     }
 }
 
@@ -93,4 +102,31 @@ fn an_empty_code_or_system_is_refused() {
         EmergencyPurposes::declare(&[purpose(Some(""), "BTG")]),
         Err(EmergencyError::EmptySystem { index: 0 })
     );
+}
+
+/// The mark matches on the system and the code alone: a reason the accessor
+/// gave marks the access as the bare code does, and names the purpose as
+/// the accessor stated it.
+#[test]
+fn a_stated_reason_never_changes_the_mark() {
+    let declared = [stated("BTG", "Qz7 patient unconscious")];
+    let mark = break_the_glass().mark(&declared).expect("a mark");
+    assert_eq!(mark.purposes(), declared);
+    let worded =
+        EmergencyPurposes::declare(&[stated("BTG", "Qz7 deployment wording")]).expect("declared");
+    assert!(worded.mark(&[purpose(Some(ACT_REASON), "BTG")]).is_some());
+    assert!(
+        worded
+            .mark(&[stated("TREAT", "Qz7 deployment wording")])
+            .is_none()
+    );
+}
+
+/// One code stated twice with two reasons marks the access once, as the
+/// accessor first stated it.
+#[test]
+fn a_code_stated_twice_is_named_once_as_first_stated() {
+    let declared = [stated("BTG", "Qz7-first"), stated("BTG", "Qz7-second")];
+    let mark = break_the_glass().mark(&declared).expect("a mark");
+    assert_eq!(mark.purposes(), [stated("BTG", "Qz7-first")]);
 }

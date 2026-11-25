@@ -19,7 +19,7 @@
 //! them, and Art 8 keeps the fact of a restriction from the recording
 //! system, so the mark does not say that restricted data were reached.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::record::Purpose;
 
@@ -29,10 +29,15 @@ use crate::record::Purpose;
 ///
 /// A declared purpose matches a purpose the accessor declared only when the
 /// two codes are equal and the two systems are equal, an absent system
-/// matching only an absent one.
+/// matching only an absent one. The text of either never changes the match.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EmergencyPurposes {
     purposes: BTreeSet<Purpose>,
+}
+
+/// The system and code a purpose is matched by.
+fn coding(purpose: &Purpose) -> (Option<&str>, &str) {
+    (purpose.system.as_deref(), purpose.code.as_str())
 }
 
 impl EmergencyPurposes {
@@ -72,16 +77,20 @@ impl EmergencyPurposes {
     }
 
     /// The mark of an access whose accessor declared `declared`: the
-    /// declared purposes this set holds, or `None` when it holds none of
-    /// them.
+    /// declared purposes whose system and code this set holds, each as the
+    /// accessor first stated it, or `None` when it holds none of them.
     #[must_use]
     pub fn mark(&self, declared: &[Purpose]) -> Option<Emergency> {
-        let marking: BTreeSet<&Purpose> = declared
-            .iter()
-            .filter(|purpose| self.purposes.contains(*purpose))
-            .collect();
+        let held: BTreeSet<(Option<&str>, &str)> = self.purposes.iter().map(coding).collect();
+        let mut marking: BTreeMap<(Option<&str>, &str), &Purpose> = BTreeMap::new();
+        for purpose in declared {
+            let key = coding(purpose);
+            if held.contains(&key) {
+                marking.entry(key).or_insert(purpose);
+            }
+        }
         (!marking.is_empty()).then(|| Emergency {
-            purposes: marking.into_iter().cloned().collect(),
+            purposes: marking.into_values().cloned().collect(),
             consent_set_aside: BTreeSet::new(),
         })
     }

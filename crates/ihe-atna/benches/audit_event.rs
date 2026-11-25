@@ -41,6 +41,7 @@ fn exchange() -> Option<Exchange> {
     .with_purposes(vec![PurposeOfUse {
         system: Some("http://terminology.hl7.org/CodeSystem/v3-ActReason".to_owned()),
         code: "TREAT".to_owned(),
+        text: None,
     }]);
     let label = |code: &str| SecurityLabel {
         system: "http://terminology.hl7.org/CodeSystem/v3-Confidentiality".to_owned(),
