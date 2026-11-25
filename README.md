@@ -23,7 +23,8 @@
 [![Signed releases](https://img.shields.io/badge/releases-signed-brightgreen?logo=github)](docs/release.md)
 [![SLSA Build L3](https://slsa.dev/images/gh-badge-level3.svg)](docs/release.md)
 
-**Conformance (self-tested)**<br>
+**Conformance**<br>
+<sub>(self-tested and self-assessed counts; none is a certification)</sub><br>
 <!-- conformance:begin -->
 [![IHE BALP 1.1.4](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fbalp-1.1.4.json)](docs/conformance.md#balp-validation)
 [![EHDS Annex II 3.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fehds-annex-ii.json)](docs/conformance.md#the-ehds-access-records-logging-fields)

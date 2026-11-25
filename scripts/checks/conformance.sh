@@ -23,7 +23,9 @@
 #
 # A badge label never claims more than a self-test shows: a label holding
 # "certified", "compliant" or "conformant" fails, in a badge file or in the
-# README's conformance group. Every badge, and every static badge in the
+# README's conformance group. The badges stay short, and the small caption
+# under that group's heading says once what they count (owner decision,
+# 2026-11-25); a README without it fails. Every badge, and every static badge in the
 # README, carries a logo from scripts/checks/badge-logos/ (the EU emblem on
 # EU blue for an EU act, else a pictogram), and one without fails.
 #
@@ -112,12 +114,12 @@ render() {
   outcomes="$(outcomes "$junit")"
   read -r valid validated < "$counts"
   mkdir -p "$dir"
-  badge "IHE BALP 1.1.4 · AuditEvents valid (self-tested)" "$valid" "$validated" log > "$dir/balp-1.1.4.json"
-  badge "EHDS Annex II 3.2 logging fields mapped (self-tested)" \
+  badge "IHE BALP 1.1.4 · AuditEvents valid" "$valid" "$validated" log > "$dir/balp-1.1.4.json"
+  badge "EHDS Annex II 3.2 logging fields mapped" \
     "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" eu > "$dir/ehds-annex-ii.json"
-  badge "Xt-EHR D8.2 2026-05-19 logging assertions (self-tested)" \
+  badge "Xt-EHR D8.2 2026-05-19 logging assertions" \
     "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" eu > "$dir/xt-ehr-d8-2.json"
-  badge "IHE ITI-81 Retrieve (ARR) · RESTful ATNA Rev. 3.6 search parameters (self-tested)" \
+  badge "IHE ITI-81 Retrieve (ARR) · RESTful ATNA Rev. 3.6 search parameters" \
     "$(passed "$outcomes" "$ITI81_ITEMS")" "$(grep -c . <<< "$ITI81_ITEMS")" magnifier > "$dir/iti-81.json"
 }
 
@@ -136,6 +138,7 @@ labels() {
     echo "::error::$README: the conformance group never says certified, compliant or conformant" >&2
     bad=1
   fi
+  badge_caption_check "$README" || bad=1
   badge_logo_check "$BADGES"/*.json || bad=1
   badge_logo_readme "$README" || bad=1
   return "$bad"
@@ -216,6 +219,16 @@ XML
   printf '[![x](https://img.shields.io/badge/x-y-blue)](x)\n' > "$scratch/README.md"
   if badge_logo_readme "$scratch/README.md" 2> /dev/null; then
     echo "::error::self-test: a static badge without a logo passes" >&2
+    wrong=1
+  fi
+  printf '**Conformance**<br>\n%s<br>\n<!-- conformance:begin -->\n' "$badge_caption" > "$scratch/heading.md"
+  badge_caption_check "$scratch/heading.md" 2> /dev/null || {
+    echo "::error::self-test: the conformance caption is not found" >&2
+    wrong=1
+  }
+  printf '**Conformance**<br>\n<!-- conformance:begin -->\n' > "$scratch/heading.md"
+  if badge_caption_check "$scratch/heading.md" 2> /dev/null; then
+    echo "::error::self-test: a README without the conformance caption passes" >&2
     wrong=1
   fi
   if ! grep -qiE "$FORBIDDEN" <<< "IHE BALP Conformant"; then
