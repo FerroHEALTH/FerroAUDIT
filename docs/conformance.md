@@ -8,8 +8,8 @@ requirement, and where the record writes each field. The tests run on every
 pull request; the numbers are self-tested, never a certification.
 
 The Xt-EHR deliverables cited here are Joint Action deliverables, not
-adopted law: Xt-EHR D8.2 (Digital testing environment specifications,
-2026-05-19,
+adopted law: Xt-EHR D8.2 (EHR Conformity Assessment Scheme - Assertion Document and
+Checklists, 2026-05-19,
 <https://www.xt-ehr.eu/wp-content/uploads/2026/05/Xt-EHR-D8.2.pdf>) turns
 the D5.1 requirements into testable assertions, and Xt-EHR D5.2 (EEHRxF
 metadata, 2026-04-09,
