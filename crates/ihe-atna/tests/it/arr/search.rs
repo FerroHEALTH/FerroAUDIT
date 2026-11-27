@@ -265,6 +265,35 @@ fn store() -> Memory {
     store
 }
 
+/// Regulation (EU) 2025/327 Annex II 3.3: external software reviews and
+/// analyses the log through ITI-81, here every access to one patient's data
+/// by its identifier, answered with those records alone.
+#[tokio::test]
+async fn annex_ii_3_3_external_software_reviews_a_patients_accesses() {
+    let store = store();
+    let requester = requester();
+    let answer = retrieve(
+        &store,
+        retrieval(
+            "date=2013-01-05&patient.identifier=urn:oid:1.2.3.4|Qz7-5678",
+            &requester,
+        ),
+    )
+    .await;
+    assert_eq!(answer.status, StatusCode::OK);
+    let Some(Resource::Bundle(bundle)) = answer.body else {
+        panic!("a Bundle, got {:?}", answer.body);
+    };
+    assert_eq!(bundle.total.and_then(|total| total.value), Some(1));
+    let [entry] = bundle.entry.as_slice() else {
+        panic!("one entry, got {}", bundle.entry.len());
+    };
+    let Some(Resource::AuditEvent(reviewed)) = entry.resource.as_ref() else {
+        panic!("an AuditEvent");
+    };
+    assert_eq!(**reviewed, found(), "the patient's access, as it was kept");
+}
+
 /// Xt-EHR D8.2 §5.1.11 log-Review: the repository answers ITI-81 with the
 /// matching records in a `searchset` Bundle, and keeps the "Audit Log Used"
 /// record of the retrieval (§3.81.5.1).

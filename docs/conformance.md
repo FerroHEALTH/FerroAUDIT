@@ -56,14 +56,27 @@ purpose, so writing them on each record would repeat them on every entry. A rela
 agreement (`agreement-legal-ground` on the entity `ehds-relayed`), because
 that ground differs per agreement.
 
+### Annex II 3.3 and 3.4
+
+Annex II point 3 asks two more things of the harmonised software
+components beside the log entry of 3.2. The README badge counts 3.2(a) to
+(e), 3.3 and 3.4.
+
+| Point | Requirement | Evidence | Test |
+|---|---|---|---|
+| 3.3 | tools or mechanisms to review and analyse the log data, or the connection and use of external software for the same purposes | `ihe-atna` feature `arr`: ITI-81 Retrieve ATNA Audit Event, the connection an external review tool searches the log through | `annex_ii_3_3_external_software_reviews_a_patients_accesses` in `crates/ihe-atna/tests/it/arr/search.rs` |
+| 3.4 | different retention periods and access rights that take into account the origins and categories of the data | the retention period of `ehds-categories` (`ehds-retention-period`) and the `securityLabel` of `ehds-categories` and of each `origin`, per category and per origin | `annex_ii_3_4_retention_and_access_rights_follow_the_categories` |
+
 ## Xt-EHR D8.2 logging assertions
 
 | Assertion | D8.2 | Rests on | Evidence |
 |---|---|---|---|
 | log-UserAccess | §5.1.8 | Annex II 3.2 | `d8_2_log_user_access_records_every_annex_point` |
 | log-APIAccess | §5.1.9 | Annex II 3.2 | `d8_2_log_api_access_names_the_accessing_system` |
+| log-UserID | §5.1.10 | Annex II 3.1, 3.2(b) | `agent:user.who.identifier` is the token's issuer and subject, with the eIDAS level of assurance (Regulation (EU) No 910/2014 Art 8(2)) in `ihe-assuranceLevel`: `d8_2_log_user_id_names_each_user_by_issuer_subject_and_assurance`. The eIDAS relying party D8.2 suggests is the identity provider's, outside this library. |
 | log-Review | §5.1.11 | Annex II 3.3 | `ihe-atna` feature `arr`, the Audit Record Repository with the Retrieve Audit Message Option (`docs/architecture.md` §4.5); `d8_2_log_review_retrieves_the_matching_records_and_records_the_retrieval` |
 | log-interoperability (SHOULD) | §5.1.12 | none | `d8_2_log_interoperability_claims_a_balp_pattern`, and the BALP validation below |
+| log-Retention | §5.1.13 (out of scope for automated testing) | Annex II 3.4 | the retention period and the security labels follow the origin as well as the category: `d8_2_log_retention_retention_and_access_rights_follow_the_origins` |
 
 ## BALP validation
 
