@@ -159,7 +159,7 @@ render() {
     return 1
   }
   mkdir -p "$dir"
-  badge "IHE BALP 1.1.4 patterns" \
+  badge "BALP 1.1.4 patterns" \
     "$(LC_ALL=C comm -12 <(echo "$profiles") <(LC_ALL=C sort -u "$validation/profiles") | grep -c . || true)" \
     "$(grep -c . <<< "$profiles")" log > "$dir/balp-1.1.4.json"
   badge "EHDS Annex II 3.2 to 3.4" \
@@ -168,7 +168,7 @@ render() {
     "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" eu > "$dir/xt-ehr-d8-2.json"
   badge "Xt-EHR D5.2 2026-04-09 §7.2.7" \
     "$(passed "$outcomes" "$D5_ITEMS")" "$(grep -c . <<< "$D5_ITEMS")" eu > "$dir/xt-ehr-d5-2.json"
-  badge "IHE ITI-81 ATNA Rev. 3.6" \
+  badge "ITI-81 ATNA Rev. 3.6" \
     "$(passed "$outcomes" "$ITI81_ITEMS")" "$(grep -c . <<< "$ITI81_ITEMS")" magnifier > "$dir/iti-81.json"
   badge_length_check "$dir"/*.json
 }
@@ -193,6 +193,8 @@ labels() {
   badge_logo_check "$BADGES"/*.json || bad=1
   badge_logo_readme "$README" || bad=1
   badge_length_readme "$README" || bad=1
+  badge_block_check "$README" || bad=1
+  badge_render_check "$README" || bad=1
   return "$bad"
 }
 
