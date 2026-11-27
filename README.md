@@ -122,8 +122,8 @@ The crates need Rust 1.98 or newer (edition 2024). Pin the versions
 exactly, as every FerroHEALTH product does:
 
 ```sh
-cargo add ihe-atna@=0.30.0 --features balp
-cargo add ehds-logging@=0.30.0 --features balp
+cargo add ihe-atna@=0.31.0 --features balp
+cargo add ehds-logging@=0.31.0 --features balp
 ```
 
 The release plan refuses a tag while this page or a crate README pins

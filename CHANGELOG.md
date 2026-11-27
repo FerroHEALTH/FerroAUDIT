@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-27
+
+`ihe-atna` and `ehds-logging` build on `fhir-types` 0.4, the line the
+family moves to with `ferrohealth-smart` 0.36, so products pin `=0.31.0`
+beside `fhir-types` 0.4. The README badges count the Xt-EHR D5.2 logging
+metadata.
+
 ### Changed
 
 - `ihe-atna` and `ehds-logging` build on `fhir-types` 0.4, the line the
