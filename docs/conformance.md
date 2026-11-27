@@ -80,9 +80,9 @@ components beside the log entry of 3.2. The README badge counts 3.2(a) to
 
 ## BALP validation
 
-Every `AuditEvent` the `ehds-logging` BALP tests write is held to the BALP
-1.1.4 pattern it claims, and to the FHIR R4 `AuditEvent`, by the HL7 FHIR
-Validator in the CI `conformance` job (`scripts/checks/fhir-validator.sh`,
+Every `AuditEvent` the `ehds-logging` BALP tests and the `ihe-atna` pattern
+tests write is held to the BALP 1.1.4 pattern it claims, and to the FHIR R4
+`AuditEvent`, by the HL7 FHIR Validator in the CI `conformance` job (`scripts/checks/fhir-validator.sh`,
 pinned in `docs/VERSIONS.md`). A record fails on an error, a fatal issue or
 a claimed profile the validator could not find. The job's summary and the
 `balp-validation` artifact list every issue.
@@ -96,28 +96,29 @@ none of its claims. Each profile and the test whose record claims it:
 |---|---|
 | `IHE.BasicAudit.Query` | `balp::population::a_population_access_states_its_scope_in_its_own_entity` |
 | `IHE.BasicAudit.PatientQuery` | `balp::each_action_is_written_as_its_pattern` |
-| `IHE.BasicAudit.Read` | `balp::a_patient_not_named_is_said_so_beside_the_ehr_id` |
+| `IHE.BasicAudit.Read` | `balp::an_access_that_names_no_patient_is_written_as_its_plain_pattern` |
 | `IHE.BasicAudit.PatientRead` | `balp::each_action_is_written_as_its_pattern` |
-| `IHE.BasicAudit.Create` | none |
+| `IHE.BasicAudit.Create` | `balp::an_access_that_names_no_patient_is_written_as_its_plain_pattern` |
 | `IHE.BasicAudit.PatientCreate` | `balp::each_action_is_written_as_its_pattern` |
-| `IHE.BasicAudit.Update` | none |
+| `IHE.BasicAudit.Update` | `balp::an_access_that_names_no_patient_is_written_as_its_plain_pattern` |
 | `IHE.BasicAudit.PatientUpdate` | `balp::each_action_is_written_as_its_pattern` |
-| `IHE.BasicAudit.Delete` | none |
+| `IHE.BasicAudit.Delete` | `balp::an_access_that_names_no_patient_is_written_as_its_plain_pattern` |
 | `IHE.BasicAudit.PatientDelete` | `balp::each_action_is_written_as_its_pattern` |
 | `IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive` | `balp::a_data_permit_is_the_persons_policy_after_the_token` |
-| `IHE.BasicAudit.OAUTHaccessTokenUse.Minimal` | none |
-| `IHE.BasicAudit.OAUTHaccessTokenUse.Opaque` | none |
-| `IHE.BasicAudit.SAMLaccessTokenUse.Minimal` | none |
-| `IHE.BasicAudit.SAMLaccessTokenUse.Comprehensive` | none |
-| `IHE.BasicAudit.AuthZconsent` | none |
-| `IHE.BasicAudit.PrivacyDisclosure.Source` | none |
-| `IHE.BasicAudit.PrivacyDisclosure.Recipient` | none |
-| `IHE.IUA.71` | none |
+| `IHE.BasicAudit.OAUTHaccessTokenUse.Minimal` | `ihe-atna` `balp::patterns::oauth_minimal_is_a_jwt_whose_client_is_not_named` |
+| `IHE.BasicAudit.OAUTHaccessTokenUse.Opaque` | `ihe-atna` `balp::patterns::oauth_opaque_keeps_the_last_32_characters_of_the_token` |
+| `IHE.BasicAudit.SAMLaccessTokenUse.Minimal` | `ihe-atna` `balp::patterns::saml_minimal_names_the_user_by_issuer_and_name_id` |
+| `IHE.BasicAudit.SAMLaccessTokenUse.Comprehensive` | `ihe-atna` `balp::patterns::saml_comprehensive_keeps_the_attributes_and_the_organisation` |
+| `IHE.BasicAudit.AuthZconsent` | `ihe-atna` `balp::patterns::authz_consent_names_the_client_the_user_the_organisation_and_the_authorizer` |
+| `IHE.BasicAudit.PrivacyDisclosure.Source` | `ihe-atna` `balp::patterns::privacy_disclosure_source_is_an_export_from_the_recording_system` |
+| `IHE.BasicAudit.PrivacyDisclosure.Recipient` | `ihe-atna` `balp::patterns::privacy_disclosure_recipient_is_an_import_by_the_recording_system` |
+| `IHE.IUA.71` | `ihe-atna` `balp::patterns::iua_71_records_the_token_request_at_the_authorization_server` |
 
 To run it locally, with Java 17 or later:
 
 ```sh
-BALP_EMIT_DIR=target/balp-records cargo nextest run -p ehds-logging --all-features -E 'test(/^balp::/)'
+BALP_EMIT_DIR=target/balp-records cargo nextest run --workspace --all-features \
+  -E '(package(ehds-logging) & test(/^balp::/)) | (package(ihe-atna) & test(/^balp::patterns::/))'
 scripts/checks/fhir-validator.sh target/balp-records target/balp-validation
 ```
 

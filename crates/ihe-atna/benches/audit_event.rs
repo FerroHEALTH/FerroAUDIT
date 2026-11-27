@@ -17,7 +17,7 @@ use ihe_atna::balp::{
     NetworkAddress, OTHER, Observer, Outcome, Peer, READ, REST, SOURCE_APPLICATION_SERVER,
     SOURCE_ROLE, SecurityLabel, What,
 };
-use ihe_atna::user::{Code, OnBehalfOf, PurposeOfUse, User};
+use ihe_atna::user::{AccessToken, Code, OnBehalfOf, PurposeOfUse, User};
 use secrecy::SecretString;
 use url::Url;
 
@@ -33,7 +33,7 @@ fn exchange() -> Option<Exchange> {
         "Qz7-client-32".to_owned(),
     )
     .with_name(Some("Qz7 Clinician".to_owned()))
-    .with_token_id(Some("Qz7-jti-33".to_owned()))
+    .with_token(Some(AccessToken::Jwt("Qz7-jti-33".to_owned())))
     .with_roles(vec![Code {
         system: Some("urn:oid:2.16.840.1.113883.2.4.15.111".to_owned()),
         code: "01.015".to_owned(),

@@ -5,7 +5,8 @@
 #
 # The BALP validation lane (#279; no specification governs the lane: our own
 # design). The ehds-logging suites that write an access record as a BALP
-# AuditEvent also write it to the directory BALP_EMIT_DIR names; this script
+# AuditEvent, and the ihe-atna suite that writes each other BALP pattern,
+# also write it to the directory BALP_EMIT_DIR names; this script
 # runs HL7's FHIR Validator over every one of them with the BALP 1.1.4
 # package loaded, so each record is held to the BALP pattern it claims in
 # meta.profile and every record to the FHIR R4 AuditEvent. The validator is

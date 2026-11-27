@@ -21,7 +21,7 @@ use ihe_atna::balp::{
     Outcome, PATIENT_NAMESPACE, Peer, READ, REST, SOURCE_APPLICATION_SERVER, SOURCE_ROLE,
     USER_AUTHENTICATION,
 };
-use ihe_atna::user::{OnBehalfOf, User};
+use ihe_atna::user::{AccessToken, OnBehalfOf, User};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde_json::Value;
 use url::Url;
@@ -192,7 +192,7 @@ fn the_audit_source_id_is_the_observers_identifier() {
 #[test]
 fn the_token_id_is_the_users_policy_and_claims_the_comprehensive_pattern() {
     let user = User::new(ISSUER.to_owned(), SUBJECT.to_owned(), CLIENT.to_owned())
-        .with_token_id(Some(TOKEN.to_owned()));
+        .with_token(Some(AccessToken::Jwt(TOKEN.to_owned())));
     let record = written(&exchange(OnBehalfOf::User(user)));
     assert_eq!(requestor(&record)["policy"][0], TOKEN);
     assert!(profiles(&record).contains(&OAUTH_COMPREHENSIVE), "{record}");
@@ -228,7 +228,7 @@ fn a_record_that_does_not_hold_to_the_token_pattern_does_not_claim_it() {
 
     let mut delete = exchange(OnBehalfOf::User(
         User::new(ISSUER.to_owned(), SUBJECT.to_owned(), CLIENT.to_owned())
-            .with_token_id(Some(TOKEN.to_owned())),
+            .with_token(Some(AccessToken::Jwt(TOKEN.to_owned()))),
     ));
     delete.kind = EventKind {
         profile: "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Delete",
@@ -257,7 +257,7 @@ fn a_record_that_does_not_hold_to_the_token_pattern_does_not_claim_it() {
 #[test]
 fn a_policy_beside_the_token_follows_the_jti_and_drops_the_token_pattern() {
     let user = User::new(ISSUER.to_owned(), SUBJECT.to_owned(), CLIENT.to_owned())
-        .with_token_id(Some(TOKEN.to_owned()))
+        .with_token(Some(AccessToken::Jwt(TOKEN.to_owned())))
         .with_policies(vec![PERMIT.to_owned(), SECOND_PERMIT.to_owned()]);
     let record = written(&exchange(OnBehalfOf::User(user)));
     assert_eq!(

@@ -70,9 +70,10 @@ struct Stated {
     provider_identifier: Option<String>,
     assurance: Option<Code>,
     roles: Vec<Code>,
-    token_id: Option<String>,
+    token: Option<AccessToken>,
     policies: Vec<String>,
     person_id: Option<PersonId>,
+    organisation_name: Option<String>,
 }
 
 impl User {
@@ -190,6 +191,22 @@ impl User {
         self
     }
 
+    /// Returns this user, the organisation they act for named `name`, the
+    /// SAML `subject:organization` attribute, which BALP 1.1.4 §3:5.7.4.3
+    /// writes as `agent[userorg].who.display`.
+    #[must_use]
+    pub fn with_organisation_name(mut self, name: Option<String>) -> Self {
+        self.stated.organisation_name = name;
+        self
+    }
+
+    /// Returns the name of the organisation the user acts for, when one is
+    /// known.
+    #[must_use]
+    pub fn organisation_name(&self) -> Option<&str> {
+        self.stated.organisation_name.as_deref()
+    }
+
     /// Returns this user, known by `alt_id` as well, such as a professional
     /// registration number the token states beside its `sub`.
     #[must_use]
@@ -227,20 +244,19 @@ impl User {
         self
     }
 
-    /// Returns this user, the token they presented identified by
-    /// `token_id`, its `jti`, which BALP 1.1.4 §3:5.7.5.4 writes as
-    /// `agent[user].policy`.
+    /// Returns this user, authorised by the access token `token`, whose
+    /// identity BALP 1.1.4 writes as `agent[user].policy` (§3:5.7.4.3 and
+    /// §3:5.7.5).
     #[must_use]
-    pub fn with_token_id(mut self, token_id: Option<String>) -> Self {
-        self.stated.token_id = token_id;
+    pub fn with_token(mut self, token: Option<AccessToken>) -> Self {
+        self.stated.token = token;
         self
     }
 
-    /// Returns the identity of the token the user presented (`jti`), when it
-    /// names one.
+    /// Returns the access token the user presented, when one is known.
     #[must_use]
-    pub fn token_id(&self) -> Option<&str> {
-        self.stated.token_id.as_deref()
+    pub fn token(&self) -> Option<&AccessToken> {
+        self.stated.token.as_ref()
     }
 
     /// Returns this user, acting under `policies` beside the token: each the
@@ -334,6 +350,55 @@ impl User {
 impl fmt::Debug for User {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("User").field(&REDACTED).finish()
+    }
+}
+
+/// The access token a user presented, by what identifies it in the record
+/// (BALP 1.1.4 §3:5.7.4 and §3:5.7.5).
+///
+/// `Debug` shows the kind of token and no value.
+#[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AccessToken {
+    /// An OAuth access token the recorder read as a JWT, by its `jti`.
+    Jwt(String),
+    /// An opaque OAuth access token, by its last 32 characters at most
+    /// (§3:5.7.5.1); [`AccessToken::opaque`] takes them from the token.
+    Opaque(String),
+    /// A SAML assertion, by its `ID` (§3:5.7.4.3).
+    Saml(String),
+}
+
+impl AccessToken {
+    /// The most characters of an opaque token a record keeps.
+    pub const OPAQUE_TAIL: usize = 32;
+
+    /// The opaque token `token`, kept by its last [`Self::OPAQUE_TAIL`]
+    /// characters, which carry the most entropy (§3:5.7.5.1): the whole
+    /// token is never recorded.
+    #[must_use]
+    pub fn opaque(token: &str) -> Self {
+        let skip = token.chars().count().saturating_sub(Self::OPAQUE_TAIL);
+        Self::Opaque(token.chars().skip(skip).collect())
+    }
+
+    /// The value the record writes as `agent[user].policy`.
+    #[must_use]
+    pub fn policy(&self) -> &str {
+        match self {
+            Self::Jwt(value) | Self::Opaque(value) | Self::Saml(value) => value,
+        }
+    }
+}
+
+impl fmt::Debug for AccessToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self {
+            Self::Jwt(_) => "Jwt",
+            Self::Opaque(_) => "Opaque",
+            Self::Saml(_) => "Saml",
+        };
+        f.debug_tuple(kind).field(&REDACTED).finish()
     }
 }
 

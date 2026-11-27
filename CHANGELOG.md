@@ -11,7 +11,47 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-27
+
+`ihe-atna` writes every audit pattern of BALP 1.1.4: the consent
+authorization decision, the privacy disclosure at its source and at its
+recipient, the IUA Get Access Token, and the OAuth Minimal and Opaque and
+SAML Minimal and Comprehensive token-use patterns beside the OAuth
+Comprehensive one, and the BALP badge reads 19 of 19. A user's token becomes
+an `AccessToken`, which breaks every caller of `User::with_token_id`, and
+`Exchange` has a new `Direction`, so products pin `=0.30.0` and write
+`.with_token(Some(AccessToken::Jwt(jti)))` where they wrote
+`.with_token_id(Some(jti))`.
+
+### Added
+
+- `ihe_atna::balp::pattern`: the `EventKind` of `IHE.BasicAudit.AuthZconsent`
+  (`EventKind::authz_consent`), `IHE.BasicAudit.PrivacyDisclosure.Source` and
+  `.Recipient` (`EventKind::privacy_disclosure_source`,
+  `EventKind::privacy_disclosure_recipient`) and `IHE.IUA.71`
+  (`EventKind::iua_get_access_token`), with `Entity::consent` and
+  `Entity::token` for the consent decision's entities (#307).
+- `Direction::Decided`: the recording system decided on a client's request
+  as an authorization service, its own agent written with no network, as
+  `IHE.BasicAudit.AuthZconsent` fixes it (#307).
+- `ihe_atna::user::AccessToken`: a JWT by its `jti`, an opaque token by its
+  last 32 characters (`AccessToken::opaque`, BALP 1.1.4 §3:5.7.5.1) or a SAML
+  assertion by its `ID`. A record claims `OAUTHaccessTokenUse.Minimal` for a
+  JWT whose client it cannot name, `.Opaque` for an opaque token, and
+  `SAMLaccessTokenUse.Minimal` or `.Comprehensive` for a SAML assertion, with
+  the user agent typed `UserOauthAgent` or `UserSamlAgent` beside `IRCP`
+  (#307).
+- `User::with_organisation_name`, the organisation's name as
+  `agent[userorg].who.display` (BALP 1.1.4 §3:5.7.4.3 and §3:5.7.5.4) (#307).
+
 ### Changed
+
+- Breaking: `User::with_token_id` and `User::token_id` give way to
+  `User::with_token` and `User::token`, which take and return an
+  `AccessToken` (#307).
+- The agent of the organisation a user acts for is typed `PROV`
+  (`v3-RoleClass`), the `agent:userorg` BALP 1.1.4 maps the organisation to
+  (#307).
 
 - The EHDS badge counts Regulation (EU) 2025/327 Annex II 3.3 (review and
   analysis through ITI-81) and 3.4 (retention periods and access rights by
@@ -22,6 +62,9 @@ and this project adheres to
   package for which a record the HL7 FHIR Validator finds valid is written,
   in place of the records written, and `docs/conformance.md` names the test
   that writes each profile (#308).
+- `ehds-logging`'s tests write a record of the plain `IHE.BasicAudit.Read`,
+  `.Create`, `.Update` and `.Delete` patterns, and the CI `conformance` job
+  validates the `ihe-atna` pattern records beside them (#307).
 
 ## [0.29.0] - 2026-11-26
 

@@ -131,7 +131,10 @@ fn the_user_is_written_with_the_organisation_and_alternative_identity() {
         .expect("the organisation agent");
     assert_eq!(organisation["who"]["identifier"]["value"], ORGANISATION);
     assert_eq!(organisation["requestor"], false);
-    assert!(organisation.get("type").is_none(), "it fills no BALP slice");
+    assert_eq!(
+        organisation["type"]["coding"][0]["code"], "PROV",
+        "BALP 1.1.4 §3:5.7.5.4 writes the organisation as agent[userorg], typed PROV"
+    );
 }
 
 /// The exchange of [`exchange`], its user stated with a name, a provider
