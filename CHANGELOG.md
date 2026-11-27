@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- The README shows a Xt-EHR D5.2 badge: the logging metadata elements of
+  D5.2 §7.2.7 whose test passed, of the eleven `docs/conformance.md` lists,
+  written by `scripts/checks/conformance.sh` from the CI conformance run
+  (#316).
+
 ## [0.30.0] - 2026-11-27
 
 `ihe-atna` writes every audit pattern of BALP 1.1.4: the consent
