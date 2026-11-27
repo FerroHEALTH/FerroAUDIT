@@ -35,7 +35,9 @@
 # badge in the README, carries a logo from scripts/checks/badge-logos/ (the
 # EU emblem on EU blue for an EU act, else a pictogram), and one without
 # fails. A badge's colour follows its count: green when all pass, yellow
-# when some do, red when none do.
+# when some do, red when none do. A label stays within 30 characters and a
+# message within 20, or rendering fails (owner decision, 2026-11-27); what
+# each badge counts, item by item, is docs/conformance.md.
 #
 # Usage:
 #   scripts/checks/conformance.sh --write JUNIT VALIDATION   rewrite the badge files
@@ -157,17 +159,18 @@ render() {
     return 1
   }
   mkdir -p "$dir"
-  badge "IHE BALP 1.1.4 · patterns with a valid record" \
+  badge "IHE BALP 1.1.4 patterns" \
     "$(LC_ALL=C comm -12 <(echo "$profiles") <(LC_ALL=C sort -u "$validation/profiles") | grep -c . || true)" \
     "$(grep -c . <<< "$profiles")" log > "$dir/balp-1.1.4.json"
-  badge "EHDS Annex II 3.2 to 3.4 logging requirements" \
+  badge "EHDS Annex II 3.2 to 3.4" \
     "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" eu > "$dir/ehds-annex-ii.json"
-  badge "Xt-EHR D8.2 2026-05-19 logging assertions" \
+  badge "Xt-EHR D8.2 2026-05-19" \
     "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" eu > "$dir/xt-ehr-d8-2.json"
-  badge "Xt-EHR D5.2 2026-04-09 §7.2.7 logging metadata" \
+  badge "Xt-EHR D5.2 2026-04-09 §7.2.7" \
     "$(passed "$outcomes" "$D5_ITEMS")" "$(grep -c . <<< "$D5_ITEMS")" eu > "$dir/xt-ehr-d5-2.json"
-  badge "IHE ITI-81 Retrieve (ARR) · RESTful ATNA Rev. 3.6 search parameters" \
+  badge "IHE ITI-81 ATNA Rev. 3.6" \
     "$(passed "$outcomes" "$ITI81_ITEMS")" "$(grep -c . <<< "$ITI81_ITEMS")" magnifier > "$dir/iti-81.json"
+  badge_length_check "$dir"/*.json
 }
 
 # labels: fails when a badge label claims a certification or a badge carries
@@ -207,6 +210,7 @@ check() {
     fi
   done
   labels || status=1
+  badge_length_check "$BADGES"/*.json || status=1
   return "$status"
 }
 
@@ -311,6 +315,16 @@ XML
     echo "::error::self-test: a README without the conformance caption passes" >&2
     wrong=1
   fi
+  badge_length_check "$scratch"/out/*.json 2> /dev/null || {
+    echo "::error::self-test: a rendered badge runs past the length limits" >&2
+    wrong=1
+  }
+  jq -c '.label = "IHE ITI-81 Retrieve (ARR) · RESTful ATNA Rev. 3.6 search parameters"' "$scratch/out/iti-81.json" > "$scratch/long.json"
+  if badge_length_check "$scratch/long.json" 2> /dev/null; then
+    echo "::error::self-test: a label past 30 characters passes" >&2
+    wrong=1
+  fi
+  badge_length_self_test > /dev/null || wrong=1
   if ! grep -qiE "$FORBIDDEN" <<< "IHE BALP Conformant"; then
     echo "::error::self-test: the guard misses a claim" >&2
     wrong=1

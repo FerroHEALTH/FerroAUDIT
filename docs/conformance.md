@@ -156,3 +156,15 @@ The conformance badges of the README are shields.io endpoint files under
 fails when a committed file differs from its run
 (`scripts/checks/conformance.sh`). They count self-tests: no badge says
 certified, compliant or conformant, and a guard fails one that does.
+
+Each badge shows its count alone, its label within 30 characters and its
+message within 20, and the script fails a badge that runs longer. What
+each one counts:
+
+| Badge | Counts |
+|---|---|
+| IHE BALP 1.1.4 patterns | the AuditEvent profiles of the pinned BALP package that a record the HL7 FHIR Validator found valid claims ([BALP validation](#balp-validation)) |
+| EHDS Annex II 3.2 to 3.4 | the logging requirements of Annex II 3.2(a) to (e), 3.3 and 3.4 whose test passed ([the logging fields](#the-ehds-access-records-logging-fields)) |
+| Xt-EHR D8.2 2026-05-19 | the six logging assertions, §5.1.8 to §5.1.12 and log-Retention of §5.1.13, whose test passed ([D8.2](#xt-ehr-d82-logging-assertions)) |
+| Xt-EHR D5.2 2026-04-09 §7.2.7 | the eleven logging metadata elements whose test passed ([the logging fields](#the-ehds-access-records-logging-fields)) |
+| IHE ITI-81 ATNA Rev. 3.6 | the eleven ITI-81 search parameters of RESTful ATNA Rev. 3.6 §3.81.4.1.2 whose test passed ([ITI-81](#iti-81-search-parameters)) |

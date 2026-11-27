@@ -30,7 +30,7 @@
 [![EHDS Annex II 3.2 to 3.4](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fehds-annex-ii.json)](docs/conformance.md#the-ehds-access-records-logging-fields)
 [![Xt-EHR D8.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fxt-ehr-d8-2.json)](docs/conformance.md#xt-ehr-d82-logging-assertions)
 [![Xt-EHR D5.2](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fxt-ehr-d5-2.json)](docs/conformance.md#the-ehds-access-records-logging-fields)
-[![IHE ITI-81](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fiti-81.json)](docs/conformance.md)
+[![IHE ITI-81](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fiti-81.json)](docs/conformance.md#iti-81-search-parameters)
 <!-- conformance:end -->
 [![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](crates/ehds-logging/README.md)
 
