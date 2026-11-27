@@ -374,6 +374,35 @@ fn the_binding_rides_as_a_participant_object() {
     );
 }
 
+/// The regulatory metadata (Xt-EHR D5.2 §7.2.7) ride as details of the
+/// categories object, as in the BALP record.
+#[test]
+fn the_regulatory_metadata_ride_as_details_of_the_categories() {
+    use ehds_logging::regulatory::{Condition, Lawfulness, LegalBasis, Regulatory};
+
+    let mut record = record(Action::Read, Outcome::Success);
+    record.regulatory = Regulatory {
+        legal_basis: Some(LegalBasis {
+            lawfulness: Lawfulness::PublicTask,
+            condition: Some(Condition::HealthOrSocialCare),
+        }),
+        controllers: vec!["Qz7-controller-91".to_owned()],
+        processors: vec!["Qz7-processor-92".to_owned()],
+    };
+    let categories = object_details(&xml(&record), "ehds-categories");
+    for expected in [
+        ("ehds-legal-basis", "gdpr-art-6-1-e"),
+        ("ehds-legal-condition", "gdpr-art-9-2-h"),
+        ("ehds-controller", "Qz7-controller-91"),
+        ("ehds-processor", "Qz7-processor-92"),
+    ] {
+        assert!(
+            categories.contains(&(expected.0.to_owned(), expected.1.to_owned())),
+            "{expected:?} in {categories:?}"
+        );
+    }
+}
+
 /// Each caller-kind refusal rides as the `binding` detail of the accessor
 /// object, with no `security-event` detail.
 #[test]

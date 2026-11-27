@@ -221,6 +221,15 @@ pub const RETENTION_ENDS: &str = "ehds-retention-ends";
 /// What called for the period: `default`, `unclassified`,
 /// `category:<system>|<code>` or `origin:<endpoint>`.
 pub const RETENTION_GROUND: &str = "ehds-retention-ground";
+/// The point of GDPR Art 6(1) the access rests on: `gdpr-art-6-1-<point>`.
+pub const LEGAL_BASIS: &str = "ehds-legal-basis";
+/// The point of GDPR Art 9(2) the access rests on: `gdpr-art-9-2-<point>`.
+pub const LEGAL_CONDITION: &str = "ehds-legal-condition";
+/// A controller of the processing, once per controller (GDPR Art 4(7),
+/// Art 26).
+pub const CONTROLLER: &str = "ehds-controller";
+/// A processor of the processing, once per processor (GDPR Art 4(8)).
+pub const PROCESSOR: &str = "ehds-processor";
 /// That the access is an emergency access (Art 11(5)): `true`.
 pub const EMERGENCY_ACCESS: &str = "ehds-emergency-access";
 /// `<system>|<code>`, or `<code>`, once per purpose of use that marked

@@ -12,6 +12,7 @@ use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
     AccessRecord, Accessor, Action, DataSubject, Origin, Outcome, Request, WrittenVersion,
 };
+use ehds_logging::regulatory::Regulatory;
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::withheld::{Hold, HoldError, Holds, Reader};
 use jiff::{SignedDuration, Timestamp};
@@ -106,6 +107,7 @@ fn read_with(
         emergency: None,
         inserted: None,
         transformations: Vec::new(),
+        regulatory: Regulatory::default(),
     }
 }
 

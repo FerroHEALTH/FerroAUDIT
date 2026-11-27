@@ -29,6 +29,8 @@ mod map;
 #[cfg(test)]
 mod property;
 #[cfg(test)]
+mod regulatory;
+#[cfg(test)]
 mod relayed;
 #[cfg(test)]
 mod retention;
@@ -46,6 +48,7 @@ mod balp_free {
     use ehds_logging::record::{
         AccessRecord, Accessor, Action, DataSubject, Outcome, Professional, Request,
     };
+    use ehds_logging::regulatory::Regulatory;
     use ehds_logging::retention::RetentionPolicy;
 
     use super::support::map;
@@ -102,6 +105,7 @@ mod balp_free {
             emergency: None,
             inserted: None,
             transformations: Vec::new(),
+            regulatory: Regulatory::default(),
         }
     }
 }

@@ -42,19 +42,21 @@ the element it is written to and the test in
 | User roles and the policies of the access | D5.2 §7.2.7 | none | `agent:user` `role` and `policy` (the token's `jti`, then each data permit) | `d5_2_roles_and_policies_are_the_user_agents` |
 | Standard event type | D5.2 §7.2.7 | none | `type` from `audit-event-type` | `d5_2_event_type_is_the_audit_event_type` |
 | Retention policy | D5.2 §7.2.7 | 3.4 | the entity `ehds-categories`: `detail` `ehds-retention-period`, `ehds-retention-ends`, `ehds-retention-ground`, `ehds-retention-floor` | `d5_2_retention_policy_is_the_categories_entitys` |
-| Legal basis | D5.2 §7.2.7 | none | gap | none |
-| Controller and processor roles | D5.2 §7.2.7 | none | gap | none |
+| Legal basis | D5.2 §7.2.7 | none | the entity `ehds-categories`: `detail` `ehds-legal-basis` (the GDPR Art 6(1) point) and `ehds-legal-condition` (the Art 9(2) point) | `d5_2_legal_basis_is_the_categories_entitys` |
+| Controller and processor roles | D5.2 §7.2.7 | none | the entity `ehds-categories`: `detail` `ehds-controller` per controller and `ehds-processor` per processor | `d5_2_controller_and_processor_roles_are_the_categories_entitys` |
 
-Annex II 3.2 asks for five points, and the record writes all five. The two
-gaps are D5.2 metadata that the Regulation does not ask of a log entry.
-The controller and processor roles belong to a processing activity, whose
-record of processing names the controller and each processor (GDPR
-Art 30(1)(a) and 30(2)(a)), and the legal basis belongs to each purpose of
-processing, which the controller states to the data subject (GDPR
-Art 13(1)(c)). Both are the same for every access of one deployment and
-purpose, so writing them on each record would repeat them on every entry. A relayed access carries the legal ground of its federation
-agreement (`agreement-legal-ground` on the entity `ehds-relayed`), because
-that ground differs per agreement.
+Annex II 3.2 asks for five points, and the record writes all five. The
+legal basis and the controller and processor roles are D5.2 regulatory
+metadata ("Metadata SHALL capture legal basis, controller/processor roles,
+and retention policies", §7.2.7) that the Regulation does not ask of a log
+entry. The record carries them as `ehds_logging::regulatory::Regulatory`:
+the GDPR Art 6(1) point and the Art 9(2) condition, each controller (Art
+4(7), Art 26) and each processor (Art 4(8)). A deployment declares them in
+its configuration, and a recording system overrides them for one access
+with `Regulatory::overridden_by`, since a legal basis can differ per access
+(an explicit consent stored beside it) and a relayed access carries the
+legal ground of its federation agreement (`agreement-legal-ground` on the
+entity `ehds-relayed`). A deployment that declares none writes none.
 
 ### Annex II 3.3 and 3.4
 

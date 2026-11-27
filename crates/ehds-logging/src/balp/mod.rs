@@ -129,6 +129,7 @@
 //! use ehds_logging::record::{
 //!     AccessRecord, Accessor, Acting, Action, DataSubject, Outcome, Professional, Request,
 //! };
+//! use ehds_logging::regulatory::Regulatory;
 //! use ehds_logging::retention::RetentionPolicy;
 //! use ehds_logging::sink::AccessSink;
 //! use ihe_atna::balp::{AuditError, AuditRecorder, Exchange, NetworkAddress};
@@ -203,6 +204,7 @@
 //!     emergency: None,
 //!     inserted: None,
 //!     transformations: Vec::new(),
+//!     regulatory: Regulatory::default(),
 //! };
 //! let sink = BalpSink::new(Arc::new(Recorder), NetworkAddress::host("cdr.example.org"));
 //! sink.store(record).await?;
@@ -233,6 +235,7 @@ use crate::label::Label;
 use crate::record::{
     AccessRecord, Action, Origin, Outcome, PartyRef, PatientIdentifier, PatientLookup, Population,
 };
+use crate::regulatory::Regulatory;
 use crate::retention::Retention;
 use crate::sink::{AccessSink, Reservation, SinkError};
 
@@ -635,6 +638,7 @@ fn entities(record: &AccessRecord, ids: &ObjectIds) -> Vec<Entity> {
         details.push(Detail::new(crate::detail::ORIGIN_COUNT, count.to_string()));
     }
     details.extend(retention_details(&record.retention));
+    details.extend(regulatory_details(&record.regulatory));
     entities.push(other(
         None,
         "ehds-categories",
@@ -717,6 +721,33 @@ fn retention_details(retention: &Retention) -> Vec<Detail> {
         Detail::new(crate::detail::RETENTION_FLOOR, retention.floor().code()),
     ]);
     details
+}
+
+/// The `detail` entries of the regulatory metadata (Xt-EHR D5.2 §7.2.7):
+/// the legal basis, each controller and each processor.
+// NOTE: BALP 1.1.4 has no element for a legal basis or a controller, so they ride beside the
+// retention policy, the other D5.2 regulatory metadata, on the categories entity.
+fn regulatory_details(regulatory: &Regulatory) -> impl Iterator<Item = Detail> + '_ {
+    let basis = regulatory.legal_basis.iter().flat_map(|basis| {
+        std::iter::once(Detail::new(
+            crate::detail::LEGAL_BASIS,
+            basis.lawfulness.code(),
+        ))
+        .chain(
+            basis
+                .condition
+                .map(|condition| Detail::new(crate::detail::LEGAL_CONDITION, condition.code())),
+        )
+    });
+    let controllers = regulatory
+        .controllers
+        .iter()
+        .map(|controller| Detail::new(crate::detail::CONTROLLER, controller.clone()));
+    let processors = regulatory
+        .processors
+        .iter()
+        .map(|processor| Detail::new(crate::detail::PROCESSOR, processor.clone()));
+    basis.chain(controllers).chain(processors)
 }
 
 /// The entities of whose data `record` concerned: each patient it names, by

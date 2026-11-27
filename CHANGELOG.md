@@ -21,7 +21,10 @@ Comprehensive one, and the BALP badge reads 19 of 19. A user's token becomes
 an `AccessToken`, which breaks every caller of `User::with_token_id`, and
 `Exchange` has a new `Direction`, so products pin `=0.30.0` and write
 `.with_token(Some(AccessToken::Jwt(jti)))` where they wrote
-`.with_token_id(Some(jti))`.
+`.with_token_id(Some(jti))`. The access record carries its legal basis
+and its controllers and processors, so products add
+`regulatory: Regulatory::default()` to every `AccessRecord` they build, or
+the deployment's declaration.
 
 ### Added
 
@@ -43,9 +46,19 @@ an `AccessToken`, which breaks every caller of `User::with_token_id`, and
   (#307).
 - `User::with_organisation_name`, the organisation's name as
   `agent[userorg].who.display` (BALP 1.1.4 §3:5.7.4.3 and §3:5.7.5.4) (#307).
+- `ehds_logging::regulatory`: the legal basis of an access (the GDPR Art
+  6(1) point and the Art 9(2) condition) and its controllers and processors,
+  the regulatory metadata Xt-EHR D5.2 §7.2.7 asks logging to capture. A
+  deployment declares a `Regulatory` in its configuration (with a JSON
+  Schema behind the `schema` feature), and `Regulatory::overridden_by` takes
+  the value a recording system knows for one access. The BALP and DICOM
+  records write them as the `ehds-legal-basis`, `ehds-legal-condition`,
+  `ehds-controller` and `ehds-processor` details of the categories entity,
+  and `docs/conformance.md` maps all 17 D5.2 §7.2.7 fields (#310).
 
 ### Changed
 
+- Breaking: `AccessRecord` has a `regulatory` field (#310).
 - Breaking: `User::with_token_id` and `User::token_id` give way to
   `User::with_token` and `User::token`, which take and return an
   `AccessToken` (#307).

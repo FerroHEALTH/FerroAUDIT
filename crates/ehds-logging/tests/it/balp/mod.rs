@@ -23,6 +23,7 @@ use ehds_logging::record::{
     AccessRecord, Accessor, Acting, Action, AssuranceLevel, CreatedEhr, DataSubject, EhrAt, Origin,
     Outcome, PatientIdentifier, PatientLookup, Professional, Purpose, Request, WrittenVersion,
 };
+use ehds_logging::regulatory::Regulatory;
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::AccessSink;
 use ihe_atna::balp::{AuditError, AuditRecorder, Exchange, NetworkAddress, Observer, Reserved};
@@ -156,6 +157,7 @@ fn record(action: Action, outcome: Outcome) -> AccessRecord {
         emergency: None,
         inserted: None,
         transformations: Vec::new(),
+        regulatory: Regulatory::default(),
     }
 }
 

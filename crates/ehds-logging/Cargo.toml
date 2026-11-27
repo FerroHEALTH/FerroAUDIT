@@ -30,8 +30,9 @@ balp = ["dep:ihe-atna", "dep:url"]
 # syslog message carries, from the same exchange as its BALP record by the
 # RESTful ATNA mapping, so it takes the balp feature with it.
 atna = ["balp", "ihe-atna/atna"]
-# `schemars::JsonSchema` on `map::Declared`, for a product that generates its
-# configuration reference from the types its configuration holds.
+# `schemars::JsonSchema` on `map::Declared` and `regulatory::Regulatory`, for
+# a product that generates its configuration reference from the types its
+# configuration holds.
 schema = ["dep:schemars"]
 
 # docs.rs documents the BALP rendering too (no specification governs this:

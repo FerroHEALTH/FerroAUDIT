@@ -36,6 +36,7 @@ use secrecy::SecretString;
 use crate::classify::Classification;
 use crate::emergency::Emergency;
 use crate::label::Labels;
+use crate::regulatory::Regulatory;
 use crate::retention::Retention;
 use crate::transformation::Transformation;
 
@@ -1523,6 +1524,9 @@ pub struct AccessRecord {
     /// the exchange format (eHealth Network General Guidelines Release 3.1
     /// Art 6(3)), in the order it applied them.
     pub transformations: Vec<Transformation>,
+    /// The legal basis of the access and its controllers and processors
+    /// (Xt-EHR D5.2 §7.2.7).
+    pub regulatory: Regulatory,
 }
 
 /// Why a record is not one a sink stores.
@@ -1595,6 +1599,7 @@ impl fmt::Debug for AccessRecord {
             .field("emergency", &self.emergency)
             .field("inserted", &self.inserted)
             .field("transformations", &self.transformations)
+            .field("regulatory", &self.regulatory)
             .finish()
     }
 }
