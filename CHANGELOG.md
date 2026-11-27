@@ -11,6 +11,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The EHDS badge counts Regulation (EU) 2025/327 Annex II 3.3 (review and
+  analysis through ITI-81) and 3.4 (retention periods and access rights by
+  origin and category) beside the five points of 3.2, and the Xt-EHR D8.2
+  badge counts `log-UserID` (§5.1.10) and `log-Retention` (§5.1.13), each
+  with its own test and its row in `docs/conformance.md` (#309).
+
 ## [0.29.0] - 2026-11-26
 
 `ihe-atna` and `ehds-logging` follow `fhir-types` to the 0.3 line, whose

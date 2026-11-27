@@ -3,13 +3,14 @@
 
 //! The logging fields an assessor checks, each held to the BALP element the
 //! record writes it to: the five points of Regulation (EU) 2025/327 Annex
-//! II 3.2, the Xt-EHR D8.2 (2026-05-19) logging assertions §5.1.8, §5.1.9
-//! and §5.1.12, and the Xt-EHR D5.2 (2026-04-09) §7.2.7 logging metadata
+//! II 3.2 and point 3.4, the Xt-EHR D8.2 (2026-05-19) logging assertions
+//! §5.1.8 to §5.1.10, §5.1.12 and `log-Retention` (§5.1.13), and the Xt-EHR D5.2 (2026-04-09) §7.2.7 logging metadata
 //! (`EEHRXFMDReq07`, `EEHRXFMDReq08`). `docs/conformance.md` lists each field
 //! with the element and the test; a test's name starts with the field's
 //! source, which the conformance badges count.
 
 use super::*;
+use crate::support::DISCHARGE;
 
 /// The agent whose `type` is `code` in its first coding.
 fn agent<'a>(written: &'a Value, code: &str) -> &'a Value {
@@ -120,6 +121,133 @@ fn annex_ii_3_2_e_each_origin_is_an_origin_entity() {
     };
     assert_eq!(origin["what"]["identifier"]["value"], "node-a");
     assert_eq!(details(origin, "system-id"), ["cdr-a.example.org"]);
+}
+
+/// A read of compositions of `template` from `origin`, kept by a policy
+/// that keeps lab reports 10 years, discharge reports 20, data from
+/// `node-b` 25 and everything else 5, and labelled by its categories and
+/// its origin.
+fn kept(template: &str, origin: &str) -> AccessRecord {
+    let mut record = read();
+    let years = |entries: &[(&str, u16)]| -> BTreeMap<String, u16> {
+        entries
+            .iter()
+            .map(|(key, years)| ((*key).to_owned(), *years))
+            .collect()
+    };
+    let policy = RetentionPolicy::declare(
+        5,
+        &years(&[("Laboratory-Reports", 10), ("Discharge-Reports", 20)]),
+        &years(&[("node-b", 25)]),
+        &map(),
+    )
+    .expect("a policy");
+    record.categories = map().classify(&Evidence::reached(
+        Basis::Returned,
+        vec![RootObject {
+            template_id: Some(template.to_owned()),
+            ..RootObject::default()
+        }],
+    ));
+    record.origins[0].endpoint = Some(origin.to_owned());
+    record.retention = policy.retain(record.recorded, &record.categories, [origin]);
+    record.labels = labels().label(&record.categories, [origin]);
+    record
+}
+
+/// The retention period and the security labels `written` carries for its
+/// categories, and the security labels of its one origin.
+fn kept_as(written: &Value) -> (Vec<&str>, &Value, &Value) {
+    let categories = entity(written, "ehds-categories");
+    let [categories] = categories.as_slice() else {
+        panic!("one categories entity, got {categories:?}");
+    };
+    let origins = entity(written, "origin");
+    let [origin] = origins.as_slice() else {
+        panic!("one origin, got {origins:?}");
+    };
+    (
+        details(categories, "ehds-retention-period"),
+        &categories["securityLabel"],
+        &origin["securityLabel"],
+    )
+}
+
+/// Annex II 3.4: the record of an access states a retention period and
+/// security labels that follow the categories of the data, so a store keeps
+/// a discharge report's access longer than a lab report's and admits its
+/// readers by category.
+#[test]
+fn annex_ii_3_4_retention_and_access_rights_follow_the_categories() {
+    let lab = written(&kept(LAB_REPORT, "node-a"));
+    let discharge = written(&kept(DISCHARGE, "node-a"));
+    let (lab_period, lab_labels, _) = kept_as(&lab);
+    let (discharge_period, discharge_labels, _) = kept_as(&discharge);
+    assert_eq!(
+        lab_period,
+        ["P10Y"],
+        "Annex II 3.4: the lab report's period"
+    );
+    assert_eq!(
+        discharge_period,
+        ["P20Y"],
+        "Annex II 3.4: the discharge report's period"
+    );
+    assert_eq!(lab_labels[0]["code"], "Laboratory-Reports");
+    assert_eq!(discharge_labels[0]["code"], "Discharge-Reports");
+}
+
+/// Xt-EHR D8.2 §5.1.13 log-Retention: the retention period and the security
+/// labels of a record also follow the origin of the data, so data from
+/// `node-b` is kept longer and labelled apart from the same data from
+/// `node-a`.
+#[test]
+fn d8_2_log_retention_retention_and_access_rights_follow_the_origins() {
+    let near = written(&kept(LAB_REPORT, "node-a"));
+    let far = written(&kept(LAB_REPORT, "node-b"));
+    let (near_period, _, near_labels) = kept_as(&near);
+    let (far_period, _, far_labels) = kept_as(&far);
+    assert_eq!(near_period, ["P10Y"], "the category's period for node-a");
+    assert_eq!(
+        far_period,
+        ["P25Y"],
+        "the origin's longer period for node-b"
+    );
+    assert_eq!(near_labels[0]["system"], ORIGIN_SYSTEM);
+    assert_eq!(near_labels[0]["code"], "node-a");
+    assert_eq!(far_labels[0]["code"], "node-b");
+}
+
+/// Xt-EHR D8.2 §5.1.10 log-UserID: each end user is named unambiguously, by
+/// the issuer and the subject of the token as `agent:user.who.identifier`,
+/// with the level of assurance of the electronic identification
+/// (Regulation (EU) No 910/2014 Art 8(2)) in `ihe-assuranceLevel`.
+#[test]
+fn d8_2_log_user_id_names_each_user_by_issuer_subject_and_assurance() {
+    let first = written(&read());
+    let person = agent(&first, "IRCP");
+    assert_eq!(
+        person["who"]["identifier"]["system"],
+        "https://issuer.example.org"
+    );
+    assert_eq!(person["who"]["identifier"]["value"], SUBJECT);
+    let levels = extensions(person, "ihe-assuranceLevel");
+    let [level] = levels.as_slice() else {
+        panic!("one assurance level, got {levels:?}");
+    };
+    assert_eq!(
+        level["valueCodeableConcept"]["coding"][0]["code"],
+        "substantial"
+    );
+
+    let mut other = read();
+    other.accessor.issuer = Some("https://other-issuer.example.org".to_owned());
+    let other = written(&other);
+    assert_ne!(
+        agent(&other, "IRCP")["who"]["identifier"],
+        person["who"]["identifier"],
+        "the same subject from another issuer is another user"
+    );
 }
 
 /// Xt-EHR D8.2 §5.1.8 log-UserAccess: an access by a person records every

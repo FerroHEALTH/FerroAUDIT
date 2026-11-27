@@ -10,9 +10,11 @@
 #
 #   balp-1.1.4.json      the BALP AuditEvents the HL7 FHIR Validator found
 #                        valid, from scripts/checks/fhir-validator.sh's counts
-#   ehds-annex-ii.json   the five points of Regulation (EU) 2025/327 Annex II
-#                        3.2 whose field test passed (annex_ii_3_2_<point>_*)
-#   xt-ehr-d8-2.json     the four Xt-EHR D8.2 logging assertions whose test
+#   ehds-annex-ii.json   the logging points of Regulation (EU) 2025/327 Annex
+#                        II point 3, 3.2(a) to (e), 3.3 and 3.4, whose test
+#                        passed (annex_ii_<point>_*)
+#   xt-ehr-d8-2.json     the six Xt-EHR D8.2 logging assertions, §5.1.8 to
+#                        §5.1.12 and log-Retention of §5.1.13, whose test
 #                        passed (d8_2_<assertion>_*)
 #   iti-81.json          the eleven search parameters of RESTful ATNA Rev. 3.6
 #                        §3.81.4.1.2 whose ITI-81 test passed
@@ -53,11 +55,15 @@ readonly ANNEX_ITEMS="balp::fields::annex_ii_3_2_a_
 balp::fields::annex_ii_3_2_b_
 balp::fields::annex_ii_3_2_c_
 balp::fields::annex_ii_3_2_d_
-balp::fields::annex_ii_3_2_e_"
+balp::fields::annex_ii_3_2_e_
+arr::search::annex_ii_3_3_
+balp::fields::annex_ii_3_4_"
 readonly D8_ITEMS="balp::fields::d8_2_log_user_access_
 balp::fields::d8_2_log_api_access_
+balp::fields::d8_2_log_user_id_
 arr::search::d8_2_log_review_
-balp::fields::d8_2_log_interoperability_"
+balp::fields::d8_2_log_interoperability_
+balp::fields::d8_2_log_retention_"
 readonly ITI81_ITEMS="arr::search::date_
 arr::search::address_
 arr::search::agent_identifier_
@@ -117,7 +123,7 @@ render() {
   read -r valid validated < "$counts"
   mkdir -p "$dir"
   badge "IHE BALP 1.1.4 · AuditEvents valid" "$valid" "$validated" log > "$dir/balp-1.1.4.json"
-  badge "EHDS Annex II 3.2 logging fields mapped" \
+  badge "EHDS Annex II 3.2 to 3.4 logging requirements" \
     "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" eu > "$dir/ehds-annex-ii.json"
   badge "Xt-EHR D8.2 2026-05-19 logging assertions" \
     "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" eu > "$dir/xt-ehr-d8-2.json"
@@ -186,7 +192,7 @@ self_test() {
 XML
   echo "3 4" > "$scratch/counts"
   render "$scratch/junit.xml" "$scratch/counts" "$scratch/out"
-  [[ "$(jq -r .message "$scratch/out/ehds-annex-ii.json")" == "2/5" ]] || {
+  [[ "$(jq -r .message "$scratch/out/ehds-annex-ii.json")" == "2/7" ]] || {
     echo "::error::self-test: a failed or missing test counted" >&2
     wrong=1
   }
