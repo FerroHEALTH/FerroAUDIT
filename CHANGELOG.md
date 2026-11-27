@@ -18,6 +18,10 @@ and this project adheres to
   origin and category) beside the five points of 3.2, and the Xt-EHR D8.2
   badge counts `log-UserID` (§5.1.10) and `log-Retention` (§5.1.13), each
   with its own test and its row in `docs/conformance.md` (#309).
+- The BALP badge counts the 19 `AuditEvent` profiles of the BALP 1.1.4
+  package for which a record the HL7 FHIR Validator finds valid is written,
+  in place of the records written, and `docs/conformance.md` names the test
+  that writes each profile (#308).
 
 ## [0.29.0] - 2026-11-26
 

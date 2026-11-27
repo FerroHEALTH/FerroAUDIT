@@ -8,8 +8,10 @@
 # file under conformance/badges/ (https://shields.io/badges/endpoint-badge),
 # N of M from the last CI run on main:
 #
-#   balp-1.1.4.json      the BALP AuditEvents the HL7 FHIR Validator found
-#                        valid, from scripts/checks/fhir-validator.sh's counts
+#   balp-1.1.4.json      the AuditEvent profiles of the pinned BALP 1.1.4
+#                        package (docs/specs/ihe-balp/package) that a record
+#                        the HL7 FHIR Validator found valid claims, from
+#                        scripts/checks/fhir-validator.sh's profiles file
 #   ehds-annex-ii.json   the logging points of Regulation (EU) 2025/327 Annex
 #                        II point 3, 3.2(a) to (e), 3.3 and 3.4, whose test
 #                        passed (annex_ii_<point>_*)
@@ -34,13 +36,14 @@
 # when some do, red when none do.
 #
 # Usage:
-#   scripts/checks/conformance.sh --write JUNIT COUNTS   rewrite the badge files
-#   scripts/checks/conformance.sh --check JUNIT COUNTS   fail when a badge file differs
+#   scripts/checks/conformance.sh --write JUNIT VALIDATION   rewrite the badge files
+#   scripts/checks/conformance.sh --check JUNIT VALIDATION   fail when a badge file differs
 #   scripts/checks/conformance.sh --labels               the label and logo guard alone
 #   scripts/checks/conformance.sh --self-test
 #
-# JUNIT is the nextest JUnit report, COUNTS the validator's counts file
-# ("<valid> <validated>"). Needs awk and jq.
+# JUNIT is the nextest JUnit report, VALIDATION the directory
+# scripts/checks/fhir-validator.sh wrote its results to, whose profiles file
+# lists the profiles a valid record claims. Needs awk and jq.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 # shellcheck source=scripts/checks/badge-logos/logo.sh
@@ -49,6 +52,7 @@ source scripts/checks/badge-logos/logo.sh
 readonly BADGES="conformance/badges"
 readonly README="README.md"
 readonly FORBIDDEN='certified|compliant|conformant'
+readonly BALP_PACKAGE="docs/specs/ihe-balp/package"
 
 # The tests each badge counts: a name prefix per item, one item per line.
 readonly ANNEX_ITEMS="balp::fields::annex_ii_3_2_a_
@@ -107,6 +111,16 @@ passed() {
   echo "$n"
 }
 
+# balp_profiles PACKAGE: the canonical URL of every AuditEvent profile of
+# the BALP package in PACKAGE, one per line, sorted.
+balp_profiles() {
+  local file
+  for file in "$1"/StructureDefinition-*.json; do
+    jq -r 'select(.resourceType == "StructureDefinition" and .type == "AuditEvent"
+      and .derivation == "constraint") | .url' "$file"
+  done | LC_ALL=C sort -u
+}
+
 # badge LABEL N M LOGO: the endpoint JSON of N of M, with logo LOGO.
 badge() {
   local color logo
@@ -116,13 +130,23 @@ badge() {
     '{schemaVersion: 1, label: $label, message: $message, color: $color} + $logo'
 }
 
-# render JUNIT COUNTS DIR: writes every badge file to DIR.
+# render JUNIT VALIDATION DIR [PACKAGE]: writes every badge file to DIR.
 render() {
-  local junit="$1" counts="$2" dir="$3" outcomes valid validated
+  local junit="$1" validation="$2" dir="$3" package="${4:-$BALP_PACKAGE}" outcomes profiles
   outcomes="$(outcomes "$junit")"
-  read -r valid validated < "$counts"
+  profiles="$(balp_profiles "$package")"
+  [[ -n "$profiles" ]] || {
+    echo "::error::$package holds no AuditEvent profile" >&2
+    return 1
+  }
+  [[ -f "$validation/profiles" ]] || {
+    echo "::error::$validation/profiles is missing: run scripts/checks/fhir-validator.sh first" >&2
+    return 1
+  }
   mkdir -p "$dir"
-  badge "IHE BALP 1.1.4 · AuditEvents valid" "$valid" "$validated" log > "$dir/balp-1.1.4.json"
+  badge "IHE BALP 1.1.4 · patterns with a valid record" \
+    "$(LC_ALL=C comm -12 <(echo "$profiles") <(LC_ALL=C sort -u "$validation/profiles") | grep -c . || true)" \
+    "$(grep -c . <<< "$profiles")" log > "$dir/balp-1.1.4.json"
   badge "EHDS Annex II 3.2 to 3.4 logging requirements" \
     "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" eu > "$dir/ehds-annex-ii.json"
   badge "Xt-EHR D8.2 2026-05-19 logging assertions" \
@@ -153,7 +177,7 @@ labels() {
   return "$bad"
 }
 
-# check JUNIT COUNTS: fails when a committed badge file differs from what
+# check JUNIT VALIDATION: fails when a committed badge file differs from what
 # --write would write.
 check() {
   local scratch file status=0
@@ -190,28 +214,35 @@ self_test() {
 </testsuite>
 </testsuites>
 XML
-  echo "3 4" > "$scratch/counts"
-  render "$scratch/junit.xml" "$scratch/counts" "$scratch/out"
+  mkdir -p "$scratch/package" "$scratch/some" "$scratch/none" "$scratch/every"
+  for name in a b c d; do
+    printf '{"resourceType":"StructureDefinition","type":"AuditEvent","derivation":"constraint","url":"p:%s"}' "$name" \
+      > "$scratch/package/StructureDefinition-$name.json"
+  done
+  printf '{"resourceType":"StructureDefinition","type":"Extension","derivation":"constraint","url":"p:ext"}' \
+    > "$scratch/package/StructureDefinition-ext.json"
+  printf 'p:a\np:b\np:c\np:ext\np:other\n' > "$scratch/some/profiles"
+  : > "$scratch/none/profiles"
+  printf 'p:d\np:c\np:b\np:a\n' > "$scratch/every/profiles"
+  render "$scratch/junit.xml" "$scratch/some" "$scratch/out" "$scratch/package"
   [[ "$(jq -r .message "$scratch/out/ehds-annex-ii.json")" == "2/7" ]] || {
     echo "::error::self-test: a failed or missing test counted" >&2
     wrong=1
   }
   [[ "$(jq -r .message "$scratch/out/balp-1.1.4.json")" == "3/4" ]] || {
-    echo "::error::self-test: the validator counts are not the BALP badge" >&2
+    echo "::error::self-test: the BALP badge does not count the package's AuditEvent profiles a valid record claims" >&2
     wrong=1
   }
   [[ "$(jq -r .color "$scratch/out/balp-1.1.4.json")" == "yellow" ]] || {
     echo "::error::self-test: a badge short of its total is not yellow" >&2
     wrong=1
   }
-  echo "0 4" > "$scratch/counts"
-  render "$scratch/junit.xml" "$scratch/counts" "$scratch/zero"
+  render "$scratch/junit.xml" "$scratch/none" "$scratch/zero" "$scratch/package"
   [[ "$(jq -r .color "$scratch/zero/balp-1.1.4.json")" == "red" ]] || {
     echo "::error::self-test: a badge with nothing passing is not red" >&2
     wrong=1
   }
-  echo "4 4" > "$scratch/counts"
-  render "$scratch/junit.xml" "$scratch/counts" "$scratch/all"
+  render "$scratch/junit.xml" "$scratch/every" "$scratch/all" "$scratch/package"
   [[ "$(jq -r .color "$scratch/all/balp-1.1.4.json")" == "brightgreen" ]] || {
     echo "::error::self-test: a badge with every case passing is not green" >&2
     wrong=1
@@ -271,18 +302,18 @@ XML
 
 case "${1:-}" in
 --write)
-  [[ "$#" -eq 3 ]] || { echo "usage: $0 --write JUNIT COUNTS" >&2; exit 2; }
+  [[ "$#" -eq 3 ]] || { echo "usage: $0 --write JUNIT VALIDATION" >&2; exit 2; }
   render "$2" "$3" "$BADGES"
   labels
   ;;
 --check)
-  [[ "$#" -eq 3 ]] || { echo "usage: $0 --check JUNIT COUNTS" >&2; exit 2; }
+  [[ "$#" -eq 3 ]] || { echo "usage: $0 --check JUNIT VALIDATION" >&2; exit 2; }
   check "$2" "$3"
   ;;
 --labels) labels ;;
 --self-test) self_test ;;
 *)
-  echo "usage: $0 --write JUNIT COUNTS | --check JUNIT COUNTS | --labels | --self-test" >&2
+  echo "usage: $0 --write JUNIT VALIDATION | --check JUNIT VALIDATION | --labels | --self-test" >&2
   exit 2
   ;;
 esac
