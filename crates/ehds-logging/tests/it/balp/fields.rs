@@ -9,6 +9,8 @@
 //! with the element and the test; a test's name starts with the field's
 //! source, which the conformance badges count.
 
+use ehds_logging::regulatory::{Condition, Lawfulness, LegalBasis};
+
 use super::*;
 use crate::support::DISCHARGE;
 
@@ -441,4 +443,74 @@ fn d5_2_retention_policy_is_the_categories_entitys() {
         details(categories, "ehds-retention-floor"),
         ["eu-2025-327-art-9-2"]
     );
+}
+
+/// A read whose deployment states the legal basis and the controllers and
+/// processors of the processing.
+fn regulated() -> AccessRecord {
+    let mut record = read();
+    record.regulatory = Regulatory {
+        legal_basis: Some(LegalBasis {
+            lawfulness: Lawfulness::PublicTask,
+            condition: Some(Condition::HealthOrSocialCare),
+        }),
+        controllers: vec!["Qz7-controller-83".to_owned()],
+        processors: vec!["Qz7-processor-84".to_owned(), "Qz7-processor-85".to_owned()],
+    };
+    record
+}
+
+/// Xt-EHR D5.2 §7.2.7 regulatory metadata, the legal basis: the point of
+/// GDPR Art 6(1) and the condition of Art 9(2) are details of the
+/// `ehds-categories` entity, beside the retention policy.
+#[test]
+fn d5_2_legal_basis_is_the_categories_entitys() {
+    let written = written(&regulated());
+    let categories = entity(&written, "ehds-categories");
+    let [categories] = categories.as_slice() else {
+        panic!("one categories entity, got {categories:?}");
+    };
+    assert_eq!(details(categories, "ehds-legal-basis"), ["gdpr-art-6-1-e"]);
+    assert_eq!(
+        details(categories, "ehds-legal-condition"),
+        ["gdpr-art-9-2-h"]
+    );
+}
+
+/// Xt-EHR D5.2 §7.2.7 regulatory metadata, the controller and processor
+/// roles: each controller (GDPR Art 4(7), Art 26) and each processor (Art
+/// 4(8)) is a detail of the `ehds-categories` entity, in order.
+#[test]
+fn d5_2_controller_and_processor_roles_are_the_categories_entitys() {
+    let written = written(&regulated());
+    let categories = entity(&written, "ehds-categories");
+    let [categories] = categories.as_slice() else {
+        panic!("one categories entity, got {categories:?}");
+    };
+    assert_eq!(
+        details(categories, "ehds-controller"),
+        ["Qz7-controller-83"]
+    );
+    assert_eq!(
+        details(categories, "ehds-processor"),
+        ["Qz7-processor-84", "Qz7-processor-85"]
+    );
+}
+
+/// A record whose deployment states no regulatory metadata writes none.
+#[test]
+fn a_record_with_no_regulatory_metadata_writes_none() {
+    let written = written(&read());
+    let categories = entity(&written, "ehds-categories");
+    let [categories] = categories.as_slice() else {
+        panic!("one categories entity, got {categories:?}");
+    };
+    for kind in [
+        "ehds-legal-basis",
+        "ehds-legal-condition",
+        "ehds-controller",
+        "ehds-processor",
+    ] {
+        assert!(details(categories, kind).is_empty(), "{kind}");
+    }
 }

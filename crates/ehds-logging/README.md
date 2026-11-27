@@ -30,6 +30,10 @@ what classifies it.
   unclassified access. The record states the period, the first date it may
   be deleted on (none for a record kept without end), what called for it and
   the ground of its floor, so the store that holds it can apply it.
+- `regulatory`: the legal basis of an access (the GDPR Art 6(1) point and
+  the Art 9(2) condition) and its controllers and processors, the
+  regulatory metadata Xt-EHR D5.2 §7.2.7 asks logging to capture, declared
+  by the deployment and overridden for one access.
 - `label`: the security labels a record carries per category and per
   origin of the data (Annex II 3.4), by default each category's own code
   and each origin's endpoint in a code system the deployment names, and
@@ -49,10 +53,10 @@ what classifies it.
   PS3.15 A.5 audit message from the same exchange, by the `RESTful` ATNA
   mapping, for an ITI-20 syslog sender, with the participants the eHDSI
   Audit Trail Profile 10.1.0 names for a relayed access.
-- `schema` (feature `schema`): `schemars::JsonSchema` on `map::Declared`,
-  for a product that generates its configuration reference from the types
-  its configuration holds: the word `none` or a non-empty list of
-  categories.
+- `schema` (feature `schema`): `schemars::JsonSchema` on `map::Declared`
+  (the word `none` or a non-empty list of categories) and
+  `regulatory::Regulatory`, for a product that generates its configuration
+  reference from the types its configuration holds.
 
 The accessor carries how the recording system bound it to a party (the
 binding outcome, the party and its groups), the token's actor chain, the

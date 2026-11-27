@@ -463,6 +463,10 @@ natural person, the categories of the data, when, and where it came from
   archetype ids to categories, and the classification of one access by the
   model ids of what it reached. An access the map cannot classify is marked
   unclassified with its evidence; it is never refused for it.
+- `regulatory`: the legal basis of an access (the GDPR Art 6(1) point and
+  the Art 9(2) condition) and its controllers and processors, which Xt-EHR
+  D5.2 §7.2.7 asks logging metadata to capture: declared by the deployment,
+  overridden per access, and written as details of the categories entity.
 - `retention`: how long a record is kept, never under the three years of
   Article 9(2). `label`: the security labels per category and origin
   (Annex II 3.4). `emergency`: the purposes of use that assert an access in
@@ -634,10 +638,12 @@ Recorded on the tracker with their grounds; each is a decision, not a gap.
   `fhir-types` 0.1.130, `balp` and `retrieve` take `r4-resources`, so a
   product that enables other FHIR releases compiles none of their resources
   for this crate (FerroHEALTH/FerroAUDIT#187).
-- **A per-access legal basis, a pseudonymisation domain and the raw
-  assurance claim.** Annex II 3.2 asks for none of them, and they stay the
+- **A pseudonymisation domain and the raw assurance claim.** Annex II 3.2
+  asks for neither, no specification names the domain, and they stay the
   columns of the product that keeps them (FerroHEALTH/FerroAUDIT#29,
-  FerroHEALTH/FerroAUDIT#30).
+  FerroHEALTH/FerroAUDIT#30). The legal basis is written (`regulatory`,
+  FerroHEALTH/FerroAUDIT#310): Xt-EHR D5.2 §7.2.7 asks logging metadata to
+  capture it.
 - **A synthesized emergency code on `purposeOfEvent`.** The record keeps the
   purposes the accessor declared there and states the mark in its own
   entity (FerroHEALTH/FerroAUDIT#48).

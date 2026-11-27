@@ -3,7 +3,8 @@
 
 //! The schema of a map declaration, as a product's configuration reference
 //! reads it: the word `none` or a non-empty list of categories, held by a
-//! JSON Schema 2020-12 validator.
+//! JSON Schema 2020-12 validator, and the schema of the regulatory metadata
+//! a deployment declares.
 
 use ehds_logging::map::{Declared, NONE};
 use serde_json::json;
@@ -46,4 +47,24 @@ fn the_schema_carries_the_description_of_the_type() {
         .expect("a description");
     assert!(description.contains("`none`"), "{description}");
     assert!(description.contains("`<system>|<code>`"), "{description}");
+}
+
+#[test]
+fn the_regulatory_schema_admits_a_declaration_and_refuses_an_unknown_point() {
+    use ehds_logging::regulatory::Regulatory;
+
+    let validator = jsonschema::draft202012::new(schemars::schema_for!(Regulatory).as_value())
+        .expect("the schema compiles");
+    let declared = json!({
+        "legal_basis": {"lawfulness": "public-task", "condition": "health-or-social-care"},
+        "controllers": ["Qz7-controller-89"],
+        "processors": ["Qz7-processor-90"],
+    });
+    assert!(validator.is_valid(&declared), "{declared} is refused");
+    for refused in [
+        json!({"legal_basis": {"lawfulness": "article-6-1-g"}}),
+        json!({"controller": "Qz7"}),
+    ] {
+        assert!(!validator.is_valid(&refused), "{refused} is accepted");
+    }
 }

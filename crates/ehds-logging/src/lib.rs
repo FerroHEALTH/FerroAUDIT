@@ -19,6 +19,9 @@
 //!   the model ids of what it reached;
 //! - [`retention`]: how long a record is kept, by its categories and its
 //!   origins, never under the three years of Art 9(2);
+//! - [`regulatory`]: the legal basis of an access and its controllers and
+//!   processors (Xt-EHR D5.2 §7.2.7), declared by the deployment and
+//!   overridden per access;
 //! - [`label`]: the security labels a record carries for its categories and
 //!   its origins, so the store that holds it can limit who reads it
 //!   (Annex II 3.4);
@@ -81,6 +84,7 @@ pub mod emergency;
 pub mod label;
 pub mod map;
 pub mod record;
+pub mod regulatory;
 pub mod retention;
 pub mod sink;
 pub mod transformation;
