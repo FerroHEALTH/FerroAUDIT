@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `ihe-atna` and `ehds-logging` build on `fhir-types` 0.4, the line the
+  family moves to with `ferrohealth-smart` 0.36. The BALP `AuditEvent` and
+  the ITI-81 searchset `Bundle` they hand a caller are `fhir-types` 0.4
+  types, so a product pins `=0.31.0` with `fhir-types` 0.4 (#320).
+
 ### Added
 
 - The README shows a Xt-EHR D5.2 badge: the logging metadata elements of
