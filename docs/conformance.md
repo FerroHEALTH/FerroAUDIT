@@ -58,6 +58,10 @@ with `Regulatory::overridden_by`, since a legal basis can differ per access
 legal ground of its federation agreement (`agreement-legal-ground` on the
 entity `ehds-relayed`). A deployment that declares none writes none.
 
+The README's D5.2 badge counts the eleven D5.2 rows of the table above,
+from Actor to Controller and processor roles: an element counts when its
+`d5_2_*` test passed in the CI `conformance` job.
+
 ### Annex II 3.3 and 3.4
 
 Annex II point 3 asks two more things of the harmonised software

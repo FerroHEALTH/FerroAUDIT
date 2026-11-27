@@ -18,6 +18,8 @@
 #   xt-ehr-d8-2.json     the six Xt-EHR D8.2 logging assertions, §5.1.8 to
 #                        §5.1.12 and log-Retention of §5.1.13, whose test
 #                        passed (d8_2_<assertion>_*)
+#   xt-ehr-d5-2.json     the eleven logging metadata elements of Xt-EHR D5.2
+#                        §7.2.7 whose test passed (d5_2_<element>_*)
 #   iti-81.json          the eleven search parameters of RESTful ATNA Rev. 3.6
 #                        §3.81.4.1.2 whose ITI-81 test passed
 #
@@ -68,6 +70,17 @@ balp::fields::d8_2_log_user_id_
 arr::search::d8_2_log_review_
 balp::fields::d8_2_log_interoperability_
 balp::fields::d8_2_log_retention_"
+readonly D5_ITEMS="balp::fields::d5_2_actor_
+balp::fields::d5_2_object_
+balp::fields::d5_2_timestamp_
+balp::fields::d5_2_action_
+balp::fields::d5_2_purpose_
+balp::fields::d5_2_context_
+balp::fields::d5_2_roles_and_policies_
+balp::fields::d5_2_event_type_
+balp::fields::d5_2_retention_policy_
+balp::fields::d5_2_legal_basis_
+balp::fields::d5_2_controller_and_processor_roles_"
 readonly ITI81_ITEMS="arr::search::date_
 arr::search::address_
 arr::search::agent_identifier_
@@ -151,6 +164,8 @@ render() {
     "$(passed "$outcomes" "$ANNEX_ITEMS")" "$(grep -c . <<< "$ANNEX_ITEMS")" eu > "$dir/ehds-annex-ii.json"
   badge "Xt-EHR D8.2 2026-05-19 logging assertions" \
     "$(passed "$outcomes" "$D8_ITEMS")" "$(grep -c . <<< "$D8_ITEMS")" eu > "$dir/xt-ehr-d8-2.json"
+  badge "Xt-EHR D5.2 2026-04-09 §7.2.7 logging metadata" \
+    "$(passed "$outcomes" "$D5_ITEMS")" "$(grep -c . <<< "$D5_ITEMS")" eu > "$dir/xt-ehr-d5-2.json"
   badge "IHE ITI-81 Retrieve (ARR) · RESTful ATNA Rev. 3.6 search parameters" \
     "$(passed "$outcomes" "$ITI81_ITEMS")" "$(grep -c . <<< "$ITI81_ITEMS")" magnifier > "$dir/iti-81.json"
 }
@@ -227,6 +242,10 @@ XML
   render "$scratch/junit.xml" "$scratch/some" "$scratch/out" "$scratch/package"
   [[ "$(jq -r .message "$scratch/out/ehds-annex-ii.json")" == "2/7" ]] || {
     echo "::error::self-test: a failed or missing test counted" >&2
+    wrong=1
+  }
+  [[ "$(jq -r .message "$scratch/out/xt-ehr-d5-2.json")" == "0/11" ]] || {
+    echo "::error::self-test: the D5.2 badge does not count its eleven metadata elements" >&2
     wrong=1
   }
   [[ "$(jq -r .message "$scratch/out/balp-1.1.4.json")" == "3/4" ]] || {
