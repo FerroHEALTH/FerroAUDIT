@@ -265,6 +265,35 @@ fn each_action_is_written_as_its_pattern() {
     }
 }
 
+/// An access whose patient the record cannot name, such as one by `ehr_id`
+/// whose patient was not found, claims the plain `RESTful` pattern of its
+/// action (BALP 1.1.4 `IHE.BasicAudit.Read`, `.Create`, `.Update` and
+/// `.Delete`, which have no `entity:patient`).
+#[test]
+fn an_access_that_names_no_patient_is_written_as_its_plain_pattern() {
+    for (action, pattern) in [
+        (Action::Read, "Read"),
+        (Action::Create, "Create"),
+        (Action::Update, "Update"),
+        (Action::Delete, "Delete"),
+    ] {
+        let mut access = read_by_ehr_id(PatientLookup::NotFound);
+        access.action = action;
+        let written = written(&access);
+        assert!(patient_values(&written).is_empty(), "{action:?}");
+        assert_eq!(
+            profile(&written),
+            Some(
+                format!(
+                    "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.{pattern}"
+                )
+                .as_str()
+            ),
+            "{action:?}"
+        );
+    }
+}
+
 #[test]
 fn a_failed_delete_claims_no_pattern() {
     let written = written(&record(Action::Delete, Outcome::MinorFailure));

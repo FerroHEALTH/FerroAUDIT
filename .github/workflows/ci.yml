@@ -320,7 +320,7 @@ jobs:
           BALP_EMIT_DIR: ${{ runner.temp }}/balp-records
         run: >-
           cargo nextest run --workspace --all-features --locked --profile conformance
-          -E '(package(ehds-logging) & test(/^balp::/)) | (package(ihe-atna) & test(/^arr::search::/))'
+          -E '(package(ehds-logging) & test(/^balp::/)) | (package(ihe-atna) & test(/^(arr::search|balp::patterns)::/))'
       - name: Validate the BALP records
         env:
           RECORDS: ${{ runner.temp }}/balp-records

@@ -21,11 +21,12 @@ use secrecy::{ExposeSecret, SecretSlice};
 
 use super::{
     APPLICATION, AuditEventResource, AuditEventValue, AuditRecord, Coded, Described, Direction,
-    Entity, Exchange, INFORMATION_RECIPIENT, NetworkAddress, OAUTH_COMPREHENSIVE, Observer,
-    Outcome, PATIENT_NAMESPACE, PATIENT_ROLE, PERSON, Peer, QUERY_ROLE, RecordError, SYSTEM_OBJECT,
-    SecurityLabel, What,
+    Entity, Exchange, INFORMATION_RECIPIENT, NetworkAddress, OAUTH_COMPREHENSIVE, OAUTH_MINIMAL,
+    OAUTH_OPAQUE, Observer, Outcome, PATIENT_NAMESPACE, PATIENT_ROLE, PERSON,
+    PROVIDER_ORGANISATION, Peer, QUERY_ROLE, RecordError, SAML_COMPREHENSIVE, SAML_MINIMAL,
+    SYSTEM_OBJECT, SecurityLabel, USER_OAUTH_AGENT, USER_SAML_AGENT, What,
 };
-use crate::user::{Code, PurposeOfUse, User};
+use crate::user::{AccessToken, Code, PurposeOfUse, User};
 
 /// The BALP extension that carries an agent's assurance level.
 const ASSURANCE_LEVEL_EXTENSION: &str =
@@ -138,29 +139,32 @@ impl Exchange {
                 other(&self.kind.client, client),
                 own(&self.kind.server, endpoint.clone()),
             ],
+            // NOTE: BALP 1.1.4 IHE.BasicAudit.AuthZconsent fixes agent:authorizer.network to 0..0.
+            Direction::Decided { client } => vec![
+                other(&self.kind.client, client),
+                AuditEventAgent {
+                    network: None,
+                    ..own(&self.kind.server, observer.host.clone())
+                },
+            ],
         };
         let mut profiles: Vec<&str> = Vec::new();
         if !self.kind.profile.is_empty() {
             profiles.push(self.kind.profile);
         }
         if let Some(user) = self.on_behalf.user() {
-            let (person, application) = user_agents(user);
-            agent.push(person);
+            let (mut person, application) = user_agents(user);
             // NOTE: BALP 1.1.4 IHE.BasicAudit.Delete admits one 110150 agent, its client, which
             // then names the user's application, so a second one is not added.
-            let named_client = match application {
-                Some(application) if self.kind.client != APPLICATION => {
-                    agent.push(application);
-                    true
+            let application = application.filter(|_| self.kind.client != APPLICATION);
+            if let Some((claim, user_type)) = token_use(user, application.is_some()) {
+                profiles.push(claim);
+                if let (Some(user_type), Some(concept)) = (user_type, person.r#type.as_mut()) {
+                    concept.coding.push(coding(&user_type));
                 }
-                _ => false,
-            };
-            // NOTE: BALP 1.1.4 OAUTHaccessTokenUse.Comprehensive fixes agent:oUser.policy 1..1
-            // (the jti) and an 110150 oClient with who.identifier.value, so only such a record
-            // claims it: one whose user names a token and no other policy.
-            if user.token_id().is_some() && user.policies().is_empty() && named_client {
-                profiles.push(OAUTH_COMPREHENSIVE);
             }
+            agent.push(person);
+            agent.extend(application);
             agent.extend(organisation_agent(user));
         }
         let purpose_of_event =
@@ -195,6 +199,39 @@ impl Exchange {
             },
             entity: self.entities.iter().map(entity).collect(),
             ..AuditEvent::default()
+        }
+    }
+}
+
+/// The BALP 1.1.4 token-use pattern a record of an exchange made for `user`
+/// claims, with the `agent:user` type coding it adds beside `IRCP`, when the
+/// user's token is the one policy they act under, as each pattern fixes the
+/// user's `policy` to `1..1`; `named_client` says whether the user's
+/// application is an agent of its own.
+fn token_use(user: &User, named_client: bool) -> Option<(&'static str, Option<Coded>)> {
+    if !user.policies().is_empty() {
+        return None;
+    }
+    match user.token()? {
+        // NOTE: BALP 1.1.4 OAUTHaccessTokenUse.Comprehensive needs an 110150 oClient with
+        // who.identifier.value; without one the jti alone is the Minimal pattern (§3:5.7.5.2).
+        AccessToken::Jwt(_) if named_client => Some((OAUTH_COMPREHENSIVE, None)),
+        AccessToken::Jwt(_) => Some((OAUTH_MINIMAL, Some(USER_OAUTH_AGENT))),
+        AccessToken::Opaque(_) => Some((OAUTH_OPAQUE, Some(USER_OAUTH_AGENT))),
+        AccessToken::Saml(_) => {
+            // NOTE: BALP 1.1.4 §3:5.7.4.3 maps the attributes Comprehensive keeps beyond Minimal;
+            // its agent:userorg needs who.display, so an organisation must carry its name.
+            let more = user.assurance().is_some()
+                || user.provider_identifier().is_some()
+                || user.person_id().is_some()
+                || user.organisation().is_some();
+            let named = user.organisation().is_none() || user.organisation_name().is_some();
+            let claim = if more && named {
+                SAML_COMPREHENSIVE
+            } else {
+                SAML_MINIMAL
+            };
+            Some((claim, Some(USER_SAML_AGENT)))
         }
     }
 }
@@ -289,7 +326,8 @@ fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
         alt_id: user.alt_id().map(escaped),
         requestor: primitives::Boolean::from(true),
         policy: user
-            .token_id()
+            .token()
+            .map(AccessToken::policy)
             .into_iter()
             .chain(user.policies().iter().map(String::as_str))
             .map(escaped)
@@ -306,18 +344,22 @@ fn user_agents(user: &User) -> (AuditEventAgent, Option<AuditEventAgent>) {
     (person, application)
 }
 
-/// The agent of the organisation `user` acts for, when one is named: `who`
-/// an `Organization` by its identifier, with no `type`, so it fills no slice
-/// a BALP pattern bounds, and not the `requestor`.
+/// The agent of the organisation `user` acts for, when one is named: the
+/// `agent:userorg` of BALP 1.1.4 (`IHE.BasicAudit.AuthZconsent`,
+/// `IHE.BasicAudit.SAMLaccessTokenUse.Comprehensive`), typed `PROV`, `who`
+/// an `Organization` by its identifier and, when known, its name, and not
+/// the `requestor`.
 fn organisation_agent(user: &User) -> Option<AuditEventAgent> {
     let organisation = user.organisation()?;
     Some(AuditEventAgent {
+        r#type: Some(concept(&PROVIDER_ORGANISATION)),
         who: Some(Reference {
             r#type: Some(escaped("Organization")),
             identifier: Some(Box::new(Identifier {
                 value: Some(escaped(organisation)),
                 ..Identifier::default()
             })),
+            display: user.organisation_name().map(escaped),
             ..Reference::default()
         }),
         requestor: primitives::Boolean::from(false),

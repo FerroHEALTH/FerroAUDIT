@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The bytes an exchange is written as, held to the bytes `ihe-atna` 0.18.0
-//! wrote for the same exchange, under `rendering/`: each exchange fills
+//! The bytes an exchange is written as, held to the bytes pinned for the
+//! same exchange under `rendering/`: each exchange fills
 //! every element a caller can, with text the escape rewrites in every value
 //! a caller supplies, so a value written around the escape changes the bytes.
 //! The written forms agree: the bytes, the JSON value, and the typed resource.
@@ -14,7 +14,7 @@ use ihe_atna::balp::{
     Described, Detail, Direction, Entity, EventKind, Exchange, NetworkAddress, OTHER, Observer,
     Outcome, Peer, READ, REST, SEARCH, SOURCE_ROLE, SecurityLabel, What,
 };
-use ihe_atna::user::{Code, OnBehalfOf, PersonId, PurposeOfUse, User};
+use ihe_atna::user::{AccessToken, Code, OnBehalfOf, PersonId, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
 
@@ -65,6 +65,7 @@ fn hostile_user() -> User {
         .with_alt_id(Some(hostile("alt-id")))
         .with_audience(Some(hostile("audience")))
         .with_organisation(Some(hostile("organisation")))
+        .with_organisation_name(Some(hostile("organisation-name")))
         .with_provider_identifier(Some(hostile("provider")))
         .with_person_id(Some(PersonId {
             system: Some(hostile("person-system")),
@@ -167,7 +168,7 @@ fn sent_search() -> Exchange {
         },
         on_behalf: OnBehalfOf::User(
             hostile_user()
-                .with_token_id(Some(hostile("token")))
+                .with_token(Some(AccessToken::Jwt(hostile("token"))))
                 .with_policies(vec![hostile("policy-a"), hostile("policy-b")]),
         ),
         entities: hostile_entities(),
@@ -199,7 +200,9 @@ fn received_read() -> Exchange {
                 &Url::parse("https://gateway.example.org/fhir").expect("a URL"),
             ),
         },
-        on_behalf: OnBehalfOf::User(hostile_user().with_token_id(Some(hostile("token")))),
+        on_behalf: OnBehalfOf::User(
+            hostile_user().with_token(Some(AccessToken::Jwt(hostile("token")))),
+        ),
         entities: hostile_entities(),
         security: Vec::new(),
     }
@@ -228,7 +231,7 @@ fn failed_delete() -> Exchange {
         on_behalf: OnBehalfOf::User(
             User::local(hostile("local-subject"))
                 .with_client_id(Some(hostile("client")))
-                .with_token_id(Some(hostile("token"))),
+                .with_token(Some(AccessToken::Jwt(hostile("token")))),
         ),
         entities: vec![Entity::Resource {
             reference: None,
@@ -239,6 +242,32 @@ fn failed_delete() -> Exchange {
             query: None,
         }],
         security: vec![hostile_label("label")],
+    }
+}
+
+/// A consent decision the recording system made for a user's request, its
+/// own agent written with no network.
+fn decided_consent() -> Exchange {
+    Exchange {
+        kind: EventKind::authz_consent(),
+        recorded: jiff::Timestamp::from_second(1_767_225_603).expect("a timestamp"),
+        outcome: Outcome::Success,
+        outcome_description: None,
+        direction: Direction::Decided {
+            client: Peer {
+                who: hostile("decided-client"),
+                network: NetworkAddress::host("192.0.2.10"),
+            },
+        },
+        on_behalf: OnBehalfOf::User(
+            User::local(hostile("decided-subject"))
+                .with_organisation(Some(hostile("decided-organisation"))),
+        ),
+        entities: vec![
+            Entity::consent(hostile("consent")),
+            Entity::token(hostile("consent-token")),
+        ],
+        security: Vec::new(),
     }
 }
 
@@ -277,11 +306,12 @@ fn plain_observer() -> Observer {
     }
 }
 
-fn cases() -> [(&'static str, Exchange, Observer); 4] {
+fn cases() -> [(&'static str, Exchange, Observer); 5] {
     [
         ("sent-search", sent_search(), hostile_observer()),
         ("received-read", received_read(), hostile_observer()),
         ("failed-delete", failed_delete(), hostile_observer()),
+        ("decided-consent", decided_consent(), hostile_observer()),
         ("system-minimal", system_minimal(), plain_observer()),
     ]
 }
@@ -294,12 +324,12 @@ fn expected(name: &str) -> Vec<u8> {
 }
 
 #[test]
-fn the_bytes_are_those_0_18_0_wrote() {
+fn the_bytes_are_the_pinned_bytes() {
     for (name, exchange, observer) in cases() {
         let record = exchange.audit_event(&observer).expect("the record");
         assert!(
             record.into_bytes().expose_secret() == expected(name).as_slice(),
-            "{name}: the bytes differ from those 0.18.0 wrote"
+            "{name}: the bytes differ from the pinned bytes"
         );
     }
 }
@@ -309,7 +339,7 @@ fn the_bytes_are_those_0_18_0_wrote() {
     clippy::disallowed_types,
     reason = "the test seam: the record as a JSON value is written as bytes"
 )]
-fn the_value_writes_the_bytes_0_18_0_wrote() {
+fn the_value_writes_the_pinned_bytes() {
     for (name, exchange, observer) in cases() {
         let value: serde_json::Value = exchange
             .audit_event_value(&observer)
@@ -317,19 +347,19 @@ fn the_value_writes_the_bytes_0_18_0_wrote() {
             .into_value();
         assert!(
             serde_json::to_vec(&value).expect("JSON") == expected(name),
-            "{name}: the value differs from the bytes 0.18.0 wrote"
+            "{name}: the value differs from the pinned bytes"
         );
     }
 }
 
 #[test]
-fn the_typed_resource_writes_the_bytes_0_18_0_wrote() {
+fn the_typed_resource_writes_the_pinned_bytes() {
     for (name, exchange, observer) in cases() {
         let resource: AuditEventResource = exchange.audit_event_resource(&observer);
         let record = resource.to_record().expect("the record");
         assert!(
             record.into_bytes().expose_secret() == expected(name).as_slice(),
-            "{name}: the typed resource differs from the bytes 0.18.0 wrote"
+            "{name}: the typed resource differs from the pinned bytes"
         );
     }
 }

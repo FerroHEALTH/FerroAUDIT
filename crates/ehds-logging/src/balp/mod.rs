@@ -223,7 +223,7 @@ use ihe_atna::balp::{
     OTHER, Peer, READ, REQUEST_ID, REST, Reserved, SEARCH, SOURCE_ROLE, SYSTEM_OBJECT,
     SecurityLabel, UPDATE, What, is_literal_reference,
 };
-use ihe_atna::user::{Code, OnBehalfOf, PersonId, PurposeOfUse, User};
+use ihe_atna::user::{AccessToken, Code, OnBehalfOf, PersonId, PurposeOfUse, User};
 use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
 
@@ -414,7 +414,7 @@ pub fn exchange_with(
     let user = User::local(accessor.subject.clone())
         .with_issuer(accessor.issuer.clone())
         .with_client_id(accessor.client_id.clone())
-        .with_token_id(accessor.token_id.clone())
+        .with_token(accessor.token_id.clone().map(AccessToken::Jwt))
         .with_policies(accessor.policies.clone())
         .with_audience(accessor.audience.clone())
         .with_purposes(

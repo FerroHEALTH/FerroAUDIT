@@ -237,11 +237,28 @@ every RESTful pattern slices `subtype` openly. The record writes the
 major-failure outcome `12` (FHIR R4 `audit-event-outcome`), `outcomeDesc`
 and the observer's `source.type` (FHIR R4 `security-source-type`, which
 RESTful ATNA Table 3.20.4.2.2.1-1 maps to `AuditSourceTypeCode`) when given,
-and the token's `jti` at `agent[user].policy` (BALP §3:5.7.5.4). A record
-that names the `jti` and an Application agent with the `client_id` claims
-`IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive` beside its RESTful
-pattern; the Minimal pattern types its user agent `UserOauthAgent`, which
-the RESTful `agent:user` is not, so no record claims it. The recording
+and the identity of the user's token (`user::AccessToken`) at
+`agent[user].policy` (BALP §3:5.7.4.3, §3:5.7.5.4). When the token is the
+user's one policy, the record claims a token-use pattern beside its event
+pattern: `IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive` for a JWT whose
+`client_id` names an Application agent, `.Minimal` for any other JWT,
+`.Opaque` for an opaque token kept by its last 32 characters (§3:5.7.5.1),
+and `SAMLaccessTokenUse.Comprehensive` or `.Minimal` for a SAML assertion,
+Comprehensive when the record keeps attributes beyond the Minimal ones and
+names the organisation by its name. The Minimal, Opaque and SAML patterns
+type the user agent `UserOauthAgent` or `UserSamlAgent`, so its `type`
+carries that coding after `IRCP` and fills both the event pattern's
+`agent:user` and the token pattern's user slice, as BALP's
+`AuditEvent-ex-auditPoke-SAML-Min` example writes it. The organisation a
+user acts for is `agent[userorg]` (§3:5.7.4.3, §3:5.7.5.4), typed `PROV` as
+the AuthZconsent and SAML Comprehensive patterns fix it.
+
+`balp::pattern` holds the event patterns beside the RESTful ones: the
+consent decision (`IHE.BasicAudit.AuthZconsent`, §3:5.7.6), whose deciding
+service is `Direction::Decided` and written with no network, the privacy
+disclosure at its source and its recipient (§3:5.7.7), and the IUA Get
+Access Token (`IHE.IUA.71`), whose one entity is the token request, since
+the profile caps `entity` at one. The recording
 system's own agent is addressed by URL, host or IP (`network-type` `5`,
 `1`, `2`). A patient identifier's namespace is `Identifier.system` only
 when it is a URI; any other namespace is a `namespace` detail of the
@@ -394,8 +411,8 @@ a Joint Action deliverable, not adopted text.
 ## 5. Whom an exchange is made for
 
 `user::OnBehalfOf` is a `User`, as a verified OAuth 2.0 access token names
-them (`iss`, `sub`, `client_id`, `aud`, `jti`, purposes of use, and the
-optional organisation, alternative id, name, provider identifier, person
+them (`iss`, `sub`, `client_id`, `aud`, the token, purposes of use, and the
+optional organisation with its name, alternative id, name, provider identifier, person
 id (`otherId` typed `PRN`), roles and assurance level, BALP §3:5.7.5.4), a `User::local` authenticated otherwise,
 with no issuer and no client, whose record writes neither, or `System`. The module compiles with no feature,
 since the identity profiles that audit name the user in their own records

@@ -35,6 +35,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::net::IpAddr;
 
+pub mod pattern;
 pub mod recording;
 mod write;
 
@@ -308,6 +309,57 @@ pub const SOURCE_OTHER: Coded = Coded::fixed(SECURITY_SOURCE_TYPE, "9", "Other")
 /// `agent:oUser.policy` to the one `jti`.
 pub const OAUTH_COMPREHENSIVE: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive";
 
+/// The BALP pattern of an OAuth access token's Minimal use.
+///
+/// The token's `jti` is the one `policy` of a user agent typed
+/// `UserOauthAgent` (BALP 1.1.4 §3:5.7.5.2); a record claims it when it
+/// names no client for [`OAUTH_COMPREHENSIVE`].
+pub const OAUTH_MINIMAL: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Minimal";
+
+/// The BALP pattern of an opaque OAuth access token's use.
+///
+/// The token's last 32 characters at most are the one `policy` of a user
+/// agent typed `UserOauthAgent` (BALP 1.1.4 §3:5.7.5.1).
+pub const OAUTH_OPAQUE: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.OAUTHaccessTokenUse.Opaque";
+
+/// The BALP pattern of a SAML assertion's Minimal use.
+///
+/// The assertion's `ID` is the one `policy` of a user agent typed
+/// `UserSamlAgent`, named by the `Issuer` and `Subject.NameID` (BALP 1.1.4
+/// §3:5.7.4.1).
+pub const SAML_MINIMAL: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.SAMLaccessTokenUse.Minimal";
+
+/// The BALP pattern of a SAML assertion's Comprehensive use.
+///
+/// It is the Minimal record with the attributes BALP 1.1.4 §3:5.7.4.3 maps
+/// beyond it: the assurance level, the other identifiers and the
+/// organisation by its identifier and name (§3:5.7.4.2).
+pub const SAML_COMPREHENSIVE: &str = "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.SAMLaccessTokenUse.Comprehensive";
+
+/// The user agent type a record adds beside `IRCP` for an OAuth token's
+/// Minimal and Opaque use (BALP `UserAgentTypes`).
+pub const USER_OAUTH_AGENT: Coded = Coded::fixed(
+    "https://profiles.ihe.net/ITI/BALP/CodeSystem/UserAgentTypes",
+    "UserOauthAgent",
+    "User OAuth Agent participant",
+);
+
+/// The user agent type a record adds beside `IRCP` for a SAML assertion's
+/// use (BALP `UserAgentTypes`).
+pub const USER_SAML_AGENT: Coded = Coded::fixed(
+    "https://profiles.ihe.net/ITI/BALP/CodeSystem/UserAgentTypes",
+    "UserSamlAgent",
+    "User SAML Agent participant",
+);
+
+/// The type of the agent of the organisation a user acts for: `PROV`
+/// (`v3-RoleClass`), as `agent:userorg` fixes it.
+pub const PROVIDER_ORGANISATION: Coded = Coded::fixed(
+    "http://terminology.hl7.org/CodeSystem/v3-RoleClass",
+    "PROV",
+    "healthcare provider",
+);
+
 /// The `detail` name of the namespace a patient identifier was issued in,
 /// when that namespace is no URI (no specification governs the name: our own
 /// design).
@@ -487,6 +539,15 @@ pub enum Direction {
         /// URL it serves, or its host or IP address when it knows only that
         /// (FHIR R4 `network-type`).
         endpoint: NetworkAddress,
+    },
+    /// The recording system decided, as an authorization service, whether
+    /// the request `client` made of another system may proceed: it is the
+    /// agent the request flows to, written with no `network`, as
+    /// `IHE.BasicAudit.AuthZconsent` fixes `agent:authorizer.network` to
+    /// `0..0`.
+    Decided {
+        /// The agent the request flows from.
+        client: Peer,
     },
 }
 
@@ -786,6 +847,9 @@ impl fmt::Debug for Exchange {
             Direction::Sent { server } => format!("sent to {:?}", RedactedUrl(&server.who)),
             Direction::Received { endpoint, .. } => {
                 format!("received at {:?}", RedactedUrl(&endpoint.address()))
+            }
+            Direction::Decided { client } => {
+                format!("decided for {:?}", RedactedUrl(&client.who))
             }
         };
         f.debug_struct("Exchange")
