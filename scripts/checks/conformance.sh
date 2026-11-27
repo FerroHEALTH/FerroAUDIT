@@ -192,6 +192,7 @@ labels() {
   badge_color_check "$BADGES"/*.json || bad=1
   badge_logo_check "$BADGES"/*.json || bad=1
   badge_logo_readme "$README" || bad=1
+  badge_length_readme "$README" || bad=1
   return "$bad"
 }
 
@@ -325,6 +326,12 @@ XML
     wrong=1
   fi
   badge_length_self_test > /dev/null || wrong=1
+  badge_count_color_self_test > /dev/null || wrong=1
+  printf '[![x](https://img.shields.io/badge/CRA-information%%20for%%20all%%20users-blue?logo=x)](x)\n' > "$scratch/long.md"
+  if badge_length_readme "$scratch/long.md" 2> /dev/null; then
+    echo "::error::self-test: a static badge past 20 characters passes" >&2
+    wrong=1
+  fi
   if ! grep -qiE "$FORBIDDEN" <<< "IHE BALP Conformant"; then
     echo "::error::self-test: the guard misses a claim" >&2
     wrong=1
