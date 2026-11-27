@@ -87,6 +87,33 @@ pinned in `docs/VERSIONS.md`). A record fails on an error, a fatal issue or
 a claimed profile the validator could not find. The job's summary and the
 `balp-validation` artifact list every issue.
 
+The README badge counts the `AuditEvent` profiles of the pinned BALP 1.1.4
+package (`docs/specs/ihe-balp/package`, 19 of them) that at least one valid
+record claims in `meta.profile`; a record that fails validation counts for
+none of its claims. Each profile and the test whose record claims it:
+
+| BALP 1.1.4 profile | Test that writes a valid record of it |
+|---|---|
+| `IHE.BasicAudit.Query` | `balp::population::a_population_access_states_its_scope_in_its_own_entity` |
+| `IHE.BasicAudit.PatientQuery` | `balp::each_action_is_written_as_its_pattern` |
+| `IHE.BasicAudit.Read` | `balp::a_patient_not_named_is_said_so_beside_the_ehr_id` |
+| `IHE.BasicAudit.PatientRead` | `balp::each_action_is_written_as_its_pattern` |
+| `IHE.BasicAudit.Create` | none |
+| `IHE.BasicAudit.PatientCreate` | `balp::each_action_is_written_as_its_pattern` |
+| `IHE.BasicAudit.Update` | none |
+| `IHE.BasicAudit.PatientUpdate` | `balp::each_action_is_written_as_its_pattern` |
+| `IHE.BasicAudit.Delete` | none |
+| `IHE.BasicAudit.PatientDelete` | `balp::each_action_is_written_as_its_pattern` |
+| `IHE.BasicAudit.OAUTHaccessTokenUse.Comprehensive` | `balp::a_data_permit_is_the_persons_policy_after_the_token` |
+| `IHE.BasicAudit.OAUTHaccessTokenUse.Minimal` | none |
+| `IHE.BasicAudit.OAUTHaccessTokenUse.Opaque` | none |
+| `IHE.BasicAudit.SAMLaccessTokenUse.Minimal` | none |
+| `IHE.BasicAudit.SAMLaccessTokenUse.Comprehensive` | none |
+| `IHE.BasicAudit.AuthZconsent` | none |
+| `IHE.BasicAudit.PrivacyDisclosure.Source` | none |
+| `IHE.BasicAudit.PrivacyDisclosure.Recipient` | none |
+| `IHE.IUA.71` | none |
+
 To run it locally, with Java 17 or later:
 
 ```sh

@@ -35,8 +35,9 @@
 #
 # RECORDS is the directory the tests wrote (BALP_EMIT_DIR), OUT the directory
 # the results go to: validation.json (the validator's output), validator.log,
-# summary.tsv, summary.md and counts (two numbers: the records that passed
-# and the records validated). --judge reads an existing validator output.
+# summary.tsv, summary.md, counts (two numbers: the records that passed
+# and the records validated) and profiles (each meta.profile a record that
+# passed claims, once, sorted). --judge reads an existing validator output.
 # Needs Java 17 or later (as $JAVA or java on PATH) for a run, and curl, jq,
 # tar and shasum. Exit 1 naming each failure; 0 otherwise.
 set -euo pipefail
@@ -135,8 +136,8 @@ issues() {
 }
 
 # judge OUTPUT RECORDS OUT: holds OUTPUT for the records in RECORDS to the
-# rules in the header, writes summary.tsv, summary.md and counts to OUT, and
-# returns 1 when the run fails.
+# rules in the header, writes summary.tsv, summary.md, counts and profiles
+# to OUT, and returns 1 when the run fails.
 judge() {
   local output="$1" records="$2" out="$3" status=0 record base n=0 outcomes failing bad
   local file severity id where text
@@ -178,6 +179,12 @@ judge() {
     status=1
   fi
   printf '%d %d\n' "$((n - bad))" "$n" > "$out/counts"
+  for record in "$records"/*.json; do
+    [[ -f "$record" ]] || continue
+    if ! cut -f1 <<< "$failing" | grep -qxF "${record##*/}"; then
+      jq -r '(.meta.profile // [])[]' "$record" 2> /dev/null || true
+    fi
+  done | LC_ALL=C sort -u > "$out/profiles"
   {
     echo "## HL7 FHIR Validator over the BALP records"
     echo
@@ -254,8 +261,8 @@ self_test() {
   # shellcheck disable=SC2064 # the path is fixed now, on purpose
   trap "rm -rf '$scratch'" EXIT
   mkdir -p "$scratch/records"
-  echo '{}' > "$scratch/records/a.json"
-  echo '{}' > "$scratch/records/b.json"
+  echo '{"meta":{"profile":["p:a","p:both"]}}' > "$scratch/records/a.json"
+  echo '{"meta":{"profile":["p:both"]}}' > "$scratch/records/b.json"
   local mid='http://hl7.org/fhir/StructureDefinition/operationoutcome-message-id'
   outcome() {
     local name="$1" severity="$2" id="$3"
@@ -267,7 +274,7 @@ self_test() {
   }
   local cases=0 wrong=0
   check() {
-    local label="$1" want="$2" counts="$3" json="$4" got=0
+    local label="$1" want="$2" counts="$3" json="$4" profiles="${5:-}" got=0
     printf '%s' "$json" > "$scratch/out.json"
     judge "$scratch/out.json" "$scratch/records" "$scratch/result" > /dev/null 2>&1 || got=1
     cases=$((cases + 1))
@@ -279,13 +286,17 @@ self_test() {
       echo "::error::self-test: $label: counted $(cat "$scratch/result/counts"), expected $counts" >&2
       wrong=1
     fi
+    if [[ -n "$profiles" ]] && [[ "$(paste -sd' ' "$scratch/result/profiles")" != "$profiles" ]]; then
+      echo "::error::self-test: $label: profiles $(paste -sd' ' "$scratch/result/profiles"), expected $profiles" >&2
+      wrong=1
+    fi
   }
   check "information alone passes" 0 "2 2" \
-    "$(bundle "$(outcome a.json information All_OK)" "$(outcome b.json information All_OK)")"
+    "$(bundle "$(outcome a.json information All_OK)" "$(outcome b.json information All_OK)")" "p:a p:both"
   check "a warning passes" 0 "2 2" \
     "$(bundle "$(outcome a.json warning UNKNOWN_CODESYSTEM)" "$(outcome b.json information All_OK)")"
-  check "an error fails its record" 1 "1 2" \
-    "$(bundle "$(outcome a.json error Validation_VAL_Profile_Minimum)" "$(outcome b.json information All_OK)")"
+  check "an error fails its record, and its profiles" 1 "1 2" \
+    "$(bundle "$(outcome a.json error Validation_VAL_Profile_Minimum)" "$(outcome b.json information All_OK)")" "p:both"
   check "a fatal issue fails" 1 "1 2" \
     "$(bundle "$(outcome a.json fatal Error_parsing_JSON)" "$(outcome b.json information All_OK)")"
   check "an unknown profile fails at any severity" 1 "1 2" \
