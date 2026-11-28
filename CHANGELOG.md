@@ -11,6 +11,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-28
+
+`ihe-atna` and `ehds-logging` build on `fhir-types` 0.6, so products pin
+`=0.33.0` with their own move to that line.
+
+### Changed
+
+- `ihe-atna` and `ehds-logging` build on `fhir-types` 0.6, so the FHIR types
+  they hand a caller (the BALP `AuditEvent` and its parts, and the ITI-81
+  searchset `Bundle`) come from that line; a product takes this release with
+  its own move to it. Neither crate builds an operation `Parameters`
+  resource, so the parts 0.6 reshapes need no change here (#332).
+
 ## [0.32.0] - 2026-11-28
 
 `ihe-atna` and `ehds-logging` build on `fhir-types` 0.5, `ferrohealth-smart`
