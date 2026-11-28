@@ -53,18 +53,15 @@ the configuration `ServerTls` builds, the syslog sender and receiver and the
 FHIR Feed agree on X25519MLKEM768, and a peer that offers only X25519 still
 connects.
 
-FerroAUDIT takes `ferrohealth-server` 0.12.4 through `ferrohealth-smart`
-0.36. The revocation check of that release, which a product may turn on,
-verifies CRLs and OCSP answers signed with RSA or ECDSA; the verification of
-revocation data an ML-DSA CA signs (RFC 9881) arrives with the next
-`ferrohealth-smart` release, the one on `ferrohealth-server` 0.13.
-
-The certificates stay classical in practice for now. The products verify
-an outbound peer through `TlsClient::platform_config`, the platform's
-verifier: on Linux that is webpki, which verifies ML-DSA certificates in
-TLS 1.3 (a Linux-only test holds the syslog transport to it), but the macOS
-verifier refuses an ML-DSA certificate (FerroHEALTH/FerroSYS#470), so the
-row counts as not safe.
+FerroAUDIT takes `ferrohealth-server` 0.14 through `ferrohealth-smart`
+0.38, whose `PlatformTls` verifies an outbound peer by its root. A chain to
+a root of `trust_roots_file` is verified by webpki on every operating
+system, ML-DSA certificates included (RFC 9881), and a connection opens
+only once a revocation check cleared it; a chain to a root of
+`trust_roots_without_revocation_file` is verified the same way with no
+revocation check. Both count as safe. Any other chain goes to the
+platform's verifier, and the macOS verifier refuses an ML-DSA certificate
+(FerroHEALTH/FerroSYS#470), so that row counts as not safe.
 
 ## Whose choice the classical rows are
 
@@ -87,7 +84,8 @@ row counts as not safe.
 |---|---|---|---|---|
 | TLS 1.3 key exchange of the syslog sender, the syslog receiver and the FHIR Feed client | X25519MLKEM768 first, then X25519, P-256 or P-384, over the configuration ferrohealth-server's TlsClient builds through ferrohealth-smart's ServerTls | yes | RFC 10024 | `crates/ihe-atna/src/atna/repository.rs, crates/ihe-atna/src/arr/syslog.rs, crates/ihe-atna/src/atna/feed.rs` |
 | TLS 1.2 key exchange where the caller's configuration allows TLS 1.2 | ECDHE over X25519, P-256 or P-384 | no | none for TLS 1.2 (RFC 9851 §2); the operator's choice, which ITI TF-2 §3.20.4.1.2.1.1 allows | `crates/ihe-atna/src/atna/repository.rs (Repository::tls)` |
-| TLS certificate authentication of the syslog and FHIR Feed connections | ML-DSA-44, ML-DSA-65 or ML-DSA-87 in TLS 1.3 where the caller's verifier is webpki, as on Linux, or ECDSA, RSA or Ed25519, as the operator's certificates hold; the macOS platform verifier refuses ML-DSA (FerroHEALTH/FerroSYS#470) | no | RFC 9881; draft-ietf-tls-mldsa-06 (IANA TLS SignatureScheme 0x0904 to 0x0906) | `crates/ihe-atna/src/atna/repository.rs, crates/ihe-atna/src/arr/syslog.rs, crates/ihe-atna/src/atna/feed.rs` |
+| TLS certificate authentication of the syslog and FHIR Feed connections, a chain to a root of trust_roots_file or trust_roots_without_revocation_file | ML-DSA-44, ML-DSA-65 or ML-DSA-87 in TLS 1.3, or ECDSA, RSA or Ed25519, as the operator's certificates hold, verified by webpki on every operating system through the PlatformTls ferrohealth-server 0.14 builds | yes | RFC 9881; draft-ietf-tls-mldsa-06 (IANA TLS SignatureScheme 0x0904 to 0x0906) | `crates/ihe-atna/src/atna/repository.rs, crates/ihe-atna/src/arr/syslog.rs, crates/ihe-atna/src/atna/feed.rs` |
+| TLS certificate authentication of the syslog and FHIR Feed connections, a chain to a platform root | ECDSA, RSA or Ed25519, or ML-DSA where the platform's verifier takes it; the macOS platform verifier refuses ML-DSA (FerroHEALTH/FerroSYS#470) | no | RFC 9881; draft-ietf-tls-mldsa-06 (IANA TLS SignatureScheme 0x0904 to 0x0906); the platform's choice | `crates/ihe-atna/src/atna/repository.rs, crates/ihe-atna/src/arr/syslog.rs, crates/ihe-atna/src/atna/feed.rs` |
 | TLS record protection | AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305 | yes | NIST IR 8547 4.1.3 | `crates/ihe-atna/src/atna/repository.rs (rustls)` |
 | OAuth client assertion of the FHIR Feed's client credentials grant | ML-DSA-44, ML-DSA-65 or ML-DSA-87 with an ML-DSA key, or RS384, ES256, ES384 or EdDSA, as the key ferrohealth-smart's outbound client is given holds | yes | RFC 9964 | `crates/ihe-atna/src/atna/feed.rs (ferrohealth-smart client)` |
 | crates.io publishing | Trusted Publishing (OIDC token from GitHub, RS256) | no | none offered: GitHub's choice (its OIDC issuer lists only RS256) | `.github/workflows/release.yml, .github/workflows/publish-crates.yml` |

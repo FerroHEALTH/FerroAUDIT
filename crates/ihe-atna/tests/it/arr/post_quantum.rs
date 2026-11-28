@@ -45,12 +45,13 @@ const BOUNDS: Bounds = Bounds {
 type Agreed = Arc<Mutex<Option<NamedGroup>>>;
 
 /// The `tls` table of an outbound connection that trusts `pki`'s CA, the CA
-/// written to `dir`.
+/// written to `dir`. The test CA publishes no revocation service, so it is
+/// trusted with no revocation check.
 fn table(pki: &Pki, dir: &tempfile::TempDir) -> TlsClientSection {
     let roots = dir.path().join("roots.pem");
     std::fs::write(&roots, &pki.ca_pem).expect("the roots are written");
     TlsClientSection {
-        trust_roots_file: Some(roots),
+        trust_roots_without_revocation_file: Some(roots),
         ..TlsClientSection::default()
     }
 }
@@ -60,7 +61,7 @@ fn table(pki: &Pki, dir: &tempfile::TempDir) -> TlsClientSection {
 fn smart_tls(key: &str, table: &TlsClientSection) -> Arc<rustls::ClientConfig> {
     Arc::clone(
         ServerTls
-            .build(key, table)
+            .build(key, table, &[])
             .expect("the table builds")
             .config(),
     )
