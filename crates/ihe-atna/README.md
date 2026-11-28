@@ -71,10 +71,14 @@ The crate depends on no application. The profiles are published at
 - `targets`: the stable `tracing` targets of the spool and the forwarder.
 
 A product builds the TLS configuration from the family's outbound TLS keys
-(`client_identity` or `client_identity_file`, and `trust_roots_file`) with
-`ferrohealth-server`'s `TlsClient::platform_config`, so the syslog
-connection trusts what the product's HTTP clients trust, and hands it to the
-repository:
+(`client_identity` or `client_identity_file`, `trust_roots_file` and
+`trust_roots_without_revocation_file`) with `ferrohealth-server`'s
+`TlsClient::platform_config`, so the syslog connection trusts what the
+product's HTTP clients trust, and hands the `PlatformTls` it returns to the
+repository as its `ClientConfig` (`PlatformTls::into_config`). A chain to a
+root of `trust_roots_file` is verified by webpki and opens only once a
+revocation check cleared it; one to a root of
+`trust_roots_without_revocation_file` is trusted with no revocation check:
 
 ```rust
 use std::sync::Arc;
@@ -84,7 +88,8 @@ use ihe_atna::atna::repository::{Repository, Timeouts};
 use rustls::ClientConfig;
 use url::Url;
 
-// `tls` is what `TlsClient::platform_config` built from `[audit.syslog]`.
+// `tls` is the configuration of the `PlatformTls` `TlsClient::platform_config`
+// built from `[audit.syslog]`.
 fn repository(tls: ClientConfig) -> Result<Repository, Box<dyn std::error::Error>> {
     let address = Url::parse("tls://arr.example.org")?;
     let timeouts = Timeouts {

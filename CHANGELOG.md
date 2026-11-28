@@ -24,9 +24,19 @@ and this project adheres to
 
 ### Changed
 
-- `ihe-atna` and `ehds-logging` build on `fhir-types` 0.5, so the FHIR types
-  they hand a caller (the BALP `AuditEvent` and its parts) come from it; a
-  product on `fhir-types` 0.4 takes this release with its own move (#329).
+- `ihe-atna` and `ehds-logging` build on `fhir-types` 0.5, `ferrohealth-smart`
+  0.38 and `ferrohealth-config` 0.5, with `ferrohealth-server` 0.14 beneath,
+  so the FHIR types they hand a caller (the BALP `AuditEvent` and its parts)
+  and the configuration types they take come from those lines; a product
+  takes this release with its own move to them (#329). `TlsBuilder::build`
+  now also takes the endpoints a connection reaches, which a builder that
+  checks revocation keeps cleared.
+- The post-quantum inventory scores the TLS certificate authentication of
+  the syslog and FHIR Feed connections by root: a chain to a root of
+  `trust_roots_file` or `trust_roots_without_revocation_file` is verified by
+  webpki on every operating system, ML-DSA included, and counts as safe; a
+  chain to a platform root goes to the platform's verifier and does not
+  (#329).
 
 ## [0.31.0] - 2026-11-27
 
