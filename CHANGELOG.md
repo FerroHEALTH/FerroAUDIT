@@ -11,6 +11,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-28
+
+`ihe-atna` and `ehds-logging` build on `fhir-types` 0.5, `ferrohealth-smart`
+0.38 and `ferrohealth-config` 0.5, the lines the family moves to with
+`ferrohealth-server` 0.14 and its split outbound TLS verification, so
+products pin `=0.32.0` with that move.
+
 ### Added
 
 - The post-quantum inventory: `docs/post-quantum.md` and
