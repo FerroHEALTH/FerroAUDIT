@@ -3,7 +3,10 @@
 
 # The release lane, dormant until a `v*` tag is pushed:
 #
-#   plan ── github-release (draft) ── crate (reusable) ── finalize-release ── crates ── milestone
+#   plan ── perf ── github-release (draft) ── crate (reusable) ── finalize-release ── crates ── milestone
+#
+# perf runs the performance gate (perf.yml) on the tagged commit, judged
+# against the previous release, so a regression is never published (#331).
 #
 # The release is created as a draft, the attested .crate is attached, and it
 # is published only once the asset set is complete; then the crates leg
@@ -112,9 +115,18 @@ jobs:
           name: release-notes
           path: release-notes.md
 
+  perf:
+    name: perf
+    needs: plan
+    permissions:
+      contents: read
+    uses: ./.github/workflows/perf.yml
+    with:
+      cache: false
+
   github-release:
     name: github release (draft)
-    needs: plan
+    needs: [plan, perf]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

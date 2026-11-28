@@ -2092,6 +2092,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "perf-arr"
+version = "0.33.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "fhir-types",
+ "ihe-atna",
+ "jiff",
+ "rcgen",
+ "rustls",
+ "secrecy",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "url",
+]
+
+[[package]]
 name = "phc"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

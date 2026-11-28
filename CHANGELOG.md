@@ -11,6 +11,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A performance gate: `tools/perf-arr` mounts `ihe-atna` as an Audit
+  Record Repository with an ITI-20 sender, and `ferrohealth-perf` 0.19.0
+  loads its FHIR Feed `create` and `batch`, ITI-81 and the ITI-20 syslog
+  path through both spools and the TLS hop. Each pull request that reaches
+  the library is judged against its base, and each release against the
+  last published release before it publishes; a regression past the
+  family's tolerances fails it. `docs/performance.md` states what is
+  measured and the latest numbers (#331).
+
 ## [0.33.0] - 2026-11-28
 
 `ihe-atna` and `ehds-logging` build on `fhir-types` 0.6, so products pin
