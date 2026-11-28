@@ -68,8 +68,20 @@ published.
 
 ## Latest numbers
 
-GitHub's hosted `ubuntu-24.04` runner, `ferrohealth-perf` 0.19.0, the base
-`ihe-atna` 0.33.0 against the head of #331. Each figure is the median over
-the pairs, in milliseconds unless named.
+Measured 2026-11-28 on GitHub's hosted `ubuntu-24.04` runner (Intel Xeon
+Platinum 8573C, 4 vCPUs, 16 GiB) with `ferrohealth-perf` 0.19.0: the base is
+`ihe-atna` 0.33.0, the head is the change that added the gate, and the gate
+passed on its first attempt. Each figure is the median
+over the pairs, in milliseconds unless the row names another unit.
 
-NUMBERS
+| Metric | Base | Head | Head over base | Threshold |
+|---|---:|---:|---:|---:|
+| throughput, requests per second | 40.0 | 40.0 | 1.00 | 32.0 |
+| peak memory, MiB | 274.2 | 273.1 | 1.00 | 329.1 |
+| CPU per request | 1.471 | 1.490 | 1.01 | 1.839 |
+| `feed-create` p50 / p95 / p99 | 0.244 / 0.354 / 0.440 | 0.260 / 0.383 / 0.453 | 1.06 / 1.08 / 1.03 | 0.306 / 0.443 / 0.550 |
+| `feed-batch` p50 / p95 / p99 | 0.597 / 0.742 / 0.795 | 0.603 / 0.742 / 0.790 | 1.01 / 1.00 / 0.99 | 0.746 / 0.927 / 0.994 |
+| `iti-81` p50 / p95 / p99 | 4.755 / 5.605 / 5.765 | 4.709 / 5.665 / 5.787 | 0.99 / 1.01 / 1.00 | 5.944 / 7.006 / 7.206 |
+| `iti-20-syslog` p50 / p95 / p99 | 0.290 / 0.355 / 0.409 | 0.295 / 0.359 / 0.439 | 1.02 / 1.01 / 1.07 | 0.363 / 0.444 / 0.512 |
+
+The head's idle CPU was 0.0 % of one core, against a limit of 2 %.
