@@ -10,6 +10,8 @@
 #[cfg(test)]
 mod feed;
 #[cfg(test)]
+mod post_quantum;
+#[cfg(test)]
 mod purposes;
 #[cfg(test)]
 mod search;

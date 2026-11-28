@@ -118,6 +118,11 @@ jobs:
       - name: No conformance badge claims a certification
         if: ${{ !cancelled() }}
         run: bash scripts/checks/conformance.sh --labels
+      - name: The post-quantum inventory, its table and its badge agree
+        if: ${{ !cancelled() }}
+        run: |
+          bash scripts/checks/post-quantum.sh --self-test
+          bash scripts/checks/post-quantum.sh --check
       # Every TODO(#N) names an open issue.
       - name: Every pending-work pointer names an open issue
         if: ${{ !cancelled() }}

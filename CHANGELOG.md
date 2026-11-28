@@ -11,6 +11,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- The post-quantum inventory: `docs/post-quantum.md` and
+  `conformance/post-quantum.tsv` list every cryptographic use of the crates
+  and their release workflows, and the README carries a post-quantum badge
+  counted from it, checked in CI. Over the TLS configuration
+  `ferrohealth-smart`'s `ServerTls` builds through `ferrohealth-server`
+  0.12.4, the syslog sender and receiver and the FHIR Feed agree on the
+  hybrid X25519MLKEM768 (RFC 10024), and a classical-only peer still
+  connects; the tests hold both transports to it (#300).
+
 ## [0.31.0] - 2026-11-27
 
 `ihe-atna` and `ehds-logging` build on `fhir-types` 0.4, the line the
