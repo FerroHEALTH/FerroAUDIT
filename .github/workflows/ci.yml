@@ -102,9 +102,13 @@ jobs:
         run: |
           bash scripts/gh/fields.sh --self-test
           bash scripts/gh/rel.sh --self-test
-      # Every section of CHANGELOG.md holds Keep a Changelog types each once, and
-      # [Unreleased] keeps the Security rules the release plan checks on the
-      # section it cuts (no specification governs the wiring: our own design).
+      # Every section of CHANGELOG.md holds Keep a Changelog types each once
+      # and its compare link, and [Unreleased] keeps the Security rules the
+      # release plan checks on the section it cuts (no specification governs
+      # the wiring: our own design).
+      - name: The changelog structure check refuses what it claims to
+        if: ${{ !cancelled() }}
+        run: bash scripts/checks/changelog-structure.sh --self-test
       - name: The changelog keeps its structure
         if: ${{ !cancelled() }}
         run: bash scripts/checks/changelog-structure.sh
