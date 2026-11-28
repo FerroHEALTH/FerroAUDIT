@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The Audit Record Repository the performance gate loads (#331): `ihe-atna`
+# mounted on an HTTP server and a syslog listener in one process, never
+# published.
+[package]
+name = "perf-arr"
+description = "The Audit Record Repository FerroAUDIT's performance gate loads"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true }
+fhir-types = { workspace = true, features = ["r4-resources"] }
+ihe-atna = { workspace = true, features = ["arr"] }
+jiff = { workspace = true }
+rcgen = { workspace = true }
+rustls = { workspace = true }
+secrecy = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "net", "rt-multi-thread", "sync", "time"] }
+tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
+url = { workspace = true }
+
+[lints]
+workspace = true

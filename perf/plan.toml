@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The plan of FerroAUDIT's performance gate (ferrohealth-perf, #331), run by
+# scripts/perf/gate.sh in the tool's A/B mode against tools/perf-arr built
+# over the base's `ihe-atna` and over the head's. The repository has no
+# database, so no transaction is counted. Every value is synthetic. No
+# specification governs this: our own design.
+
+[idle]
+duration_secs = 60
+max_cpu_percent = 2.0
+
+[load]
+rate = 40.0
+warmup_secs = 10
+duration_secs = 60
+
+# How far the head may stray from the base, beyond the noise the two arms
+# show: the family's tolerances.
+[tolerance]
+latency = 0.25
+throughput = 0.2
+memory = 0.2
+cpu = 0.25
+transactions = 0.1
+
+# The patient each arrival names, among the 1000 the corpus holds.
+[vars.patient]
+kind = "random"
+min = 0
+max = 999
+
+# The ATX: FHIR Feed `create` of one BALP patient read (ITI TF-2 §3.20.4.2).
+[[requests]]
+group = "feed-create"
+method = "POST"
+path = "/fhir/AuditEvent"
+status = 201
+body = '{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]}'
+headers = { content-type = "application/fhir+json" }
+
+# The ATX: FHIR Feed `batch` of ten records (ITI TF-2 §3.20.4.4).
+[[requests]]
+group = "feed-batch"
+method = "POST"
+path = "/fhir"
+status = 200
+body = '{"resourceType":"Bundle","type":"batch","entry":[{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}},{"resource":{"resourceType":"AuditEvent","type":{"system":"http://terminology.hl7.org/CodeSystem/audit-event-type","code":"rest"},"subtype":[{"system":"http://hl7.org/fhir/restful-interaction","code":"read"}],"action":"R","recorded":"2026-05-19T08:30:00Z","outcome":"0","agent":[{"who":{"identifier":{"system":"urn:oid:2.999.1","value":"Qz7-user"}},"requestor":true,"network":{"address":"192.0.2.10","type":"2"}}],"source":{"observer":{"identifier":{"value":"perf.example.org"}}},"entity":[{"what":{"reference":"Patient/Qz7-p-{{patient}}","identifier":{"system":"urn:oid:2.999.2","value":"Qz7-p-{{patient}}"}},"type":{"system":"http://terminology.hl7.org/CodeSystem/audit-entity-type","code":"1"},"role":{"system":"http://terminology.hl7.org/CodeSystem/object-role","code":"1"}}]},"request":{"method":"POST","url":"AuditEvent"}}]}'
+headers = { content-type = "application/fhir+json" }
+
+# ITI-81 by patient over the 10000 records of the corpus, ten matches a page
+# (ITI TF-2 §3.81.4.1).
+[[requests]]
+group = "iti-81"
+method = "GET"
+path = "/fhir/AuditEvent?patient.identifier=urn:oid:2.999.2%7CQz7-p-{{patient}}&date=ge2026-01-01&_count=10"
+status = 200
+
+# One ITI-20 DICOM audit message written, spooled on disk and forwarded over
+# RFC 5425 TLS to the repository's syslog receiver, which spools it again and
+# keeps it (ITI TF-2 §3.20.4.1); the answer comes once the sender's spool
+# stored it.
+[[requests]]
+group = "iti-20-syslog"
+method = "POST"
+path = "/syslog"
+status = 202
+body = "Qz7-p-{{patient}}"
+headers = { content-type = "text/plain" }

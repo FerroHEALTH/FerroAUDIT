@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "tools/*"]
 
 [workspace.package]
 version = "0.33.0"
@@ -96,6 +96,10 @@ ihe-atna = { path = "crates/ihe-atna", version = "=0.33.0" }
 tempfile = "3.27.0"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt"] }
 wiremock = "0.6.5"
+# Perf-only: the HTTP server of the repository the performance gate loads
+# (tools/perf-arr), the line ferrohealth-server serves on. Verified on
+# crates.io 2026-11-28 (0.8.9).
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 # Bench-only: the statistics of the record benchmarks, the line FerroEHR and
 # FerroTERM bench with, without its plots. Verified on crates.io 2026-11-15
 # (0.8.2).

@@ -202,6 +202,8 @@ exposes under "API stability" in its README.
 - The [architecture](docs/architecture.md) and the
   [pinned specifications](docs/VERSIONS.md).
 - The [release process](docs/release.md).
+- The [performance gate](docs/performance.md): what it measures and the
+  latest numbers.
 - The [FerroHEALTH book](https://ferrohealth.eu/docs/).
 
 ## Support
