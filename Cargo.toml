@@ -41,7 +41,7 @@ url = "2.5.8"
 # products build on, so a product carries one copy. Verified on crates.io
 # 2026-11-27 (0.4.0).
 async-trait = "0.1.92"
-fhir-types = { version = "0.4.0", default-features = false }
+fhir-types = { version = "0.5.0", default-features = false }
 http = "1.5.0"
 # ITI-81: RFC 3986 percent-decoding of the query string. Verified on
 # crates.io 2026-10-25 (2.3.2).

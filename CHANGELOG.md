@@ -22,6 +22,12 @@ and this project adheres to
   hybrid X25519MLKEM768 (RFC 10024), and a classical-only peer still
   connects; the tests hold both transports to it (#300).
 
+### Changed
+
+- `ihe-atna` and `ehds-logging` build on `fhir-types` 0.5, so the FHIR types
+  they hand a caller (the BALP `AuditEvent` and its parts) come from it; a
+  product on `fhir-types` 0.4 takes this release with its own move (#329).
+
 ## [0.31.0] - 2026-11-27
 
 `ihe-atna` and `ehds-logging` build on `fhir-types` 0.4, the line the
