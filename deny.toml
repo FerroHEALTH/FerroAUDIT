@@ -50,6 +50,11 @@ exceptions = [
   # The family's FHIR search value grammar, FerroBRIDGE's crate (feature
   # `retrieve`).
   { allow = ["BUSL-1.1"], crate = "fhir-search" },
+  # The family's TLS reader and what it links, which ferrohealth-smart's
+  # `server-tls` brings in (test-only): the same Licensor's code.
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-server" },
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-health" },
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-telemetry" },
 ]
 
 [bans]

@@ -37,6 +37,7 @@
 
 **Security and compliance**<br>
 [![EHDS](https://img.shields.io/badge/EHDS-logging%20component-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](crates/ehds-logging/README.md)
+[![Post-quantum safe uses, self-assessed](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroAUDIT%2Fmain%2Fconformance%2Fbadges%2Fpost-quantum.json)](docs/post-quantum.md)
 
 </div>
 

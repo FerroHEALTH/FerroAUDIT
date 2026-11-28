@@ -52,9 +52,11 @@ percent-encoding = "2.3.2"
 # Verified on crates.io 2026-11-10 (0.1.130).
 fhir-search = "0.1.130"
 # Test-only: the family's SMART crate, whose outbound client the tests write
-# the FHIR Feed's `FeedClient` over, as a product does: the same Licensor's
-# BUSL-1.1 code. Verified on crates.io 2026-11-26 (0.35.0).
-ferrohealth-smart = { version = "0.35.0", default-features = false, features = ["fetch"] }
+# the FHIR Feed's `FeedClient` over, as a product does, and whose `ServerTls`
+# builds TLS through ferrohealth-server's `TlsClient`, which offers
+# X25519MLKEM768 first: the same Licensor's BUSL-1.1 code. Verified on
+# crates.io 2026-11-28 (0.36.0).
+ferrohealth-smart = { version = "0.36.0", default-features = false, features = ["fetch", "server-tls"] }
 # The family's one mask, which `redact::REDACTED` and `redact::RedactedUrl`
 # render through: the same Licensor's BUSL-1.1 code. Verified on crates.io
 # 2026-10-26 (0.2.0).

@@ -45,7 +45,7 @@ fn retry() -> Retry {
 }
 
 /// A DICOM audit message of a patient record read by `Qz7-user`.
-fn message() -> AuditMessage {
+pub(super) fn message() -> AuditMessage {
     AuditMessage {
         event: EventIdentification {
             event_id: CodedValue::of(codes::EVENT_PATIENT_RECORD),
@@ -82,7 +82,7 @@ fn message() -> AuditMessage {
     }
 }
 
-fn frame(xml: &SecretSlice<u8>) -> SecretSlice<u8> {
+pub(super) fn frame(xml: &SecretSlice<u8>) -> SecretSlice<u8> {
     Sender::new("cdr.example.org", "ihe-atna", "4242")
         .expect("a sender")
         .frame(jiff::Timestamp::UNIX_EPOCH, xml)

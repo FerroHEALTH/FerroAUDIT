@@ -44,6 +44,11 @@ pub(crate) struct Pki {
 }
 
 pub(crate) fn pki() -> Pki {
+    pki_of(&rcgen::PKCS_ECDSA_P256_SHA256)
+}
+
+/// A CA and a `localhost` leaf it signs, every key an `algorithm` key.
+pub(crate) fn pki_of(algorithm: &'static rcgen::SignatureAlgorithm) -> Pki {
     use rcgen::{
         BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer,
         KeyPair, KeyUsagePurpose,
@@ -72,7 +77,7 @@ pub(crate) fn pki() -> Pki {
     ca.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
     ca.not_before = first;
     ca.not_after = last;
-    let ca_key = KeyPair::generate().expect("CA key");
+    let ca_key = KeyPair::generate_for(algorithm).expect("CA key");
     let ca_pem = ca.self_signed(&ca_key).expect("CA certificate").pem();
 
     let mut leaf = CertificateParams::new(vec!["localhost".to_owned()]).expect("leaf parameters");
@@ -82,7 +87,7 @@ pub(crate) fn pki() -> Pki {
     leaf.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     leaf.not_before = first;
     leaf.not_after = last;
-    let key = KeyPair::generate().expect("leaf key");
+    let key = KeyPair::generate_for(algorithm).expect("leaf key");
     let leaf = leaf
         .signed_by(&key, &Issuer::new(ca, ca_key))
         .expect("leaf certificate");
