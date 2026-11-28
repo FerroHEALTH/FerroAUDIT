@@ -21,8 +21,10 @@ On the branch `release/vX.Y.Z`:
 3. **Cut the changelog.** Rename `## [Unreleased]` to
    `## [X.Y.Z] - YYYY-MM-DD` and open a fresh, empty `## [Unreleased]` above
    it. The date is the day of the cut: the release notes count the support
-   period from it. Read the section as the release notes, and reread the
-   reason of a Security section (§ Security entries).
+   period from it. At the bottom of the file, point `[Unreleased]` at
+   `vX.Y.Z...HEAD` and add `[X.Y.Z]` comparing the previous version with
+   `vX.Y.Z`. Read the section as the release notes, and reread the reason of
+   a Security section (§ Security entries).
 4. **Move the install lines.** The `cargo add <crate>@=X.Y.Z` lines of
    `README.md` and the `ihe-atna`, `ehds-logging` row of `docs/VERSIONS.md`
    name the new version.
@@ -54,7 +56,9 @@ never checked again.
   the release rereads it.
 
 `scripts/checks/changelog-structure.sh` holds every section to the six Keep a
-Changelog types, each at most once.
+Changelog types, each at most once, and to its compare link: each release
+compares the section below it with its own tag, the oldest links its tag, and
+`[Unreleased]` compares the newest release with `HEAD`.
 
 ## Preflight
 
@@ -81,7 +85,7 @@ tracker, and the pinned `cargo-semver-checks` installed
 | The milestone titled as the tag holds no open item | `scripts/release/milestone.sh check` |
 | Each crate's public API breaks nothing the version does not allow, against its newest version on crates.io (`cargo-semver-checks` at the version `docs/VERSIONS.md` pins) | `scripts/checks/semver.sh` |
 | The `[workspace.package]` version of `Cargo.toml` names the tag's version | `plan.sh` |
-| Every section of the changelog holds Keep a Changelog types, each once | `scripts/checks/changelog-structure.sh` |
+| Every section of the changelog holds Keep a Changelog types, each once, and its compare link | `scripts/checks/changelog-structure.sh` |
 | The section being cut opens its `### Security` with the reason when it sits beside other changes, and every Security entry names a GHSA id or an existing `security/vex/` path | `scripts/checks/changelog-security.sh --section X.Y.Z` |
 | Every install line of either crate in `README.md` and the crate READMEs pins the tag's version, and `README.md` carries one for each crate | `plan.sh` |
 | The changelog section becomes the notes, with the support period appended: the month five years after the heading's date (Regulation (EU) 2024/2847 Art 13(19)) | `plan.sh notes` |
